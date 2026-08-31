@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Dashboard portal for MuSuLe HuB gym management.">
+  <title>Dashboard | MuSuLe HuB</title>
+  
+  <!-- Preconnect to Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  
+  <!-- Synchronous Route Guard -->
+  <script src="auth.js"></script>
+  <script>
+    // Enforce guard before rendering body elements
+    MuSuLeAuth.enforceRouteGuard();
+  </script>
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="dashboard.css">
+
+  <!-- Chart.js for premium interactive charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // Global error listener for client-side diagnostics
+    window.addEventListener('error', function(e) {
+      const overlay = document.getElementById('error-overlay-debug');
+      const msgEl = document.getElementById('error-overlay-msg');
+      if (overlay && msgEl) {
+        overlay.style.display = 'block';
+        msgEl.innerHTML = `<strong>Message:</strong> ${e.message}<br><strong>File:</strong> ${e.filename}<br><strong>Line:</strong> ${e.lineno}:${e.colno}`;
+      }
+    });
+  </script>
+</head>
+<body>
+
+  <div id="error-overlay-debug" style="display:none; background:rgba(220,20,60,0.95); color:white; padding:1.5rem; position:fixed; top:0; left:0; width:100%; z-index:999999; font-family:monospace; font-size:14px; border-bottom:3px solid white; box-shadow:0 5px 25px rgba(0,0,0,0.8);">
+    <h3 style="margin:0 0 0.5rem 0; color:#fff; font-weight:800;">[JavaScript Runtime Diagnostic Error]</h3>
+    <p id="error-overlay-msg" style="margin:0; line-height:1.6;"></p>
+    <button onclick="document.getElementById('error-overlay-debug').style.display='none'" style="margin-top:1rem; padding:0.4rem 1rem; background:white; color:crimson; border:none; font-weight:bold; border-radius:4px; cursor:pointer;">Dismiss Overlay</button>
+  </div>
+
+  <div class="db-layout">
+    
+    <!-- --- SIDEBAR NAVIGATION --- -->
+    <aside class="db-sidebar">
+      <div class="sidebar-header">
+        <a href="index.html" class="logo">
+          MUSULE<span>HUB</span>
+          <div class="logo-dot"></div>
+        </a>
+      </div>
+      
+      <!-- Logged User Info Card -->
+      <div class="sidebar-profile">
+        <div class="profile-avatar" id="user-avatar-initials">AA</div>
+        <div class="profile-details">
+          <h3 id="user-display-name">Loading...</h3>
+          <span class="role-badge" id="user-display-role">Member</span>
+        </div>
+      </div>
+      
+      <!-- Nav Navigation -->
+      <nav class="sidebar-nav">
+        <ul class="sidebar-nav-menu">
+          <li>
+            <a href="#" class="sidebar-nav-link active" id="nav-db-home">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z" />
+              </svg>
+              Dashboard
+            </a>
+          </li>
+          <li class="admin-only-nav">
+            <a href="#" class="sidebar-nav-link" id="nav-db-analytics">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Analytics
+            </a>
+          </li>
+          <li class="admin-only-nav">
+            <a href="#" class="sidebar-nav-link" id="nav-db-billing">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+              Payment
+            </a>
+          </li>
+          <li>
+            <a href="#" class="sidebar-nav-link" id="nav-db-equipment">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              Equipment
+            </a>
+          </li>
+          <!-- Member Specific Nav Links -->
+          <li class="member-only-nav" style="display: none;">
+            <a href="#" class="sidebar-nav-link" id="nav-db-trainer">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              Trainer
+            </a>
+          </li>
+          <li>
+            <a href="#" class="sidebar-nav-link" id="nav-db-attendance">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+              Attendance
+            </a>
+          </li>
+          <li class="member-only-nav" style="display: none;">
+            <a href="#" class="sidebar-nav-link" id="nav-db-supplements">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+              Supplements
+            </a>
+          </li>
+        </ul>
+      </nav>
+      
+      <div class="sidebar-footer">
+        <button class="outline-btn logout-btn" id="portal-logout-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          Logout Session
+        </button>
+      </div>
+    </aside>
+
+    <!-- --- MAIN WORKSPACE AREA --- -->
+    <main class="db-main-content">
+      
+      <!-- Top header bar -->
+      <header class="db-top-bar">
+        <div class="db-welcome">
+          <h4>Welcome back, <span id="welcome-user-name">Athlete</span>!</h2>
+          <p id="db-date-display"></p>
+        </div>
+        <div class="db-system-status">
+          <div class="status-indicator"></div>
+          <span>Secure Token Session Active</span>
+        </div>
+      </header>
+
+      <!-- Dynamic workspaces wrapper -->
+      <div class="db-workspace-container">
+
+        <section class="role-workspace-panel" id="panel-admin" style="display: none;">
+          
+          <!-- ADMIN SUB-VIEW 1: DASHBOARD HOME -->
+          <div class="admin-sub-view" id="admin-subview-home" style="display: block;">
+            <!-- Metrics Grid (6 cards) -->
+            <div class="metrics-grid col-6">
+              <div class="metric-card">
+                <div class="metric-icon" style="color: var(--accent-volt); background: rgba(198,255,0,0.05);">
+                  <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                </div>
+                <div class="metric-details">
+                  <h3 id="stat-total-members">1,248</h3>
+                  <p>Total Members</p>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-icon" style="color: var(--accent-cyan); background: rgba(0,240,255,0.05);">
+                  <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                </div>
+                <div class="metric-details">
+                  <h3 id="stat-active-memberships">1,180</h3>
+                  <p>Active Passes</p>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-icon" style="color: #ff9f00; background: rgba(255,159,0,0.05);">
+                  <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                </div>
+                <div class="metric-details">
+                  <h3 id="stat-trainers">15</h3>
+                  <p>Expert Coaches</p>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-icon" style="color: #00ff66; background: rgba(0,255,102,0.05);">
+                  <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M12 16v1m-4-6h8"/></svg>
+                </div>
+                <div class="metric-details">
+                  <h3 id="stat-monthly-revenue">$42,850</h3>
+                  <p>Monthly Revenue</p>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-icon" style="color: #ff3e6c; background: rgba(255,62,108,0.05);">
+                  <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+                <div class="metric-details">
+                  <h3 id="stat-attendance">342</h3>
+                  <p>Today's Checked-in</p>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-icon" style="color: #a855f7; background: rgba(168,85,247,0.05);">
+                  <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>
+                </div>
+                <div class="metric-details">
+                  <h3 id="stat-equipment">98.2%</h3>
+                  <p>Equipment Active</p>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Bottom Grid (Expiry Alerts & Recent Activities) -->
+            <div class="db-bottom-grid" style="grid-template-columns: 1.2fr 0.8fr !important; margin-top: 1.8rem;">
+              <div class="db-bottom-left">
+                <!-- Expiry Alerts Widget -->
+                <div class="db-card alert-card" style="height: 100%;">
+                  <div class="card-header-row">
+                    <div>
+                      <h4>Membership Expiry Alerts</h4>
+                      <p class="card-subtitle">Members with passes expiring within 7 days</p>
+                    </div>
+                    <span class="badge badge-warning" id="alert-count-badge">0 Alerts</span>
+                  </div>
+                  <div class="expiry-alerts-list" id="admin-expiry-alerts">
+                    <!-- Dynamic rows -->
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Recent Activities timeline -->
+              <div class="db-bottom-right">
+                <div class="db-card logs-card" style="height: 100%;">
+                  <h4>Recent Activities</h4>
+                  <p class="card-subtitle">Real-time facility logs & staff activity feed</p>
+                  <div class="activities-timeline" id="admin-activities-timeline">
+                    <!-- Dynamic timeline list -->
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ADMIN SUB-VIEW 2: ANALYTICS (CHARTS) -->
+          <div class="admin-sub-view" id="admin-subview-analytics" style="display: none;">
+            <!-- Charts Section Row (3 charts grid) -->
+            <div class="db-charts-row" style="grid-template-columns: repeat(3, 1fr) !important;">
+              <div class="db-card chart-card">
+                <div class="chart-header">
+                  <h4>Membership Growth</h4>
+                  <p class="card-subtitle">Year-to-date registration volume</p>
+                </div>
+                <div class="chart-container">
+                  <canvas id="chart-membership-growth"></canvas>
+                </div>
+              </div>
+              <div class="db-card chart-card">
+                <div class="chart-header">
+                  <h4>Revenue Streams</h4>
+                  <p class="card-subtitle">Monthly transaction values in USD</p>
+                </div>
+                <div class="chart-container">
+                  <canvas id="chart-revenue-streams"></canvas>
+                </div>
+              </div>
+              <div class="db-card chart-card">
+                <div class="chart-header">
+                  <h4>Attendance Peaks</h4>
+                  <p class="card-subtitle">Hourly gym floor headcount today</p>
+                </div>
+                <div class="chart-container">
+                  <canvas id="chart-attendance-peaks"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ADMIN SUB-VIEW 3: PAYMENTS -->
+          <div class="admin-sub-view" id="admin-subview-payments" style="display: none;">
+            <div class="db-card flex-card">
+              <div class="card-header-row">
+                <div>
+                  <h4>Latest Payments Log</h4>
+                  <p class="card-subtitle">Recent invoices & club subscription billing processing</p>
+                </div>
+                <span class="badge badge-success" id="payment-count-badge">0 Transactions</span>
+              </div>
+              <div class="table-wrapper">
+                <table class="db-table" id="admin-payments-table">
+                  <thead>
+                    <tr>
+                      <th>Transaction ID</th>
+                      <th>Member Name</th>
+                      <th>Plan Selected</th>
+                      <th>Amount Paid</th>
+                      <th>Billing Status</th>
+                      <th>Processing Date</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-payments-body">
+                    <!-- Dynamic rows -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+
+
+          <!-- ADMIN SUB-VIEW 5: EQUIPMENT -->
+          <div class="admin-sub-view" id="admin-subview-equipment" style="display: none;">
+            <div class="db-card">
+              <h4>Gym Floor Machine Diagnostics</h4>
+              <p class="card-subtitle">Real-time status metrics and service records for MuScLe HuB floor gear</p>
+              
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.2rem; margin-top: 1.5rem;">
+                <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 1.2rem; border-radius: 6px;">
+                  <h5 style="color: var(--text-white); font-weight: 700;">Treadmills Cluster</h5>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.8rem;">
+                    <span style="font-size: 0.8rem; color: var(--text-muted);">Status: <strong style="color: var(--accent-volt);">100% Active</strong></span>
+                    <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.7rem;" onclick="alert('Cardio zone diagnostics run successfully!')">Test</button>
+                  </div>
+                </div>
+                <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 1.2rem; border-radius: 6px;">
+                  <h5 style="color: var(--text-white); font-weight: 700;">Barbell Power Racks</h5>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.8rem;">
+                    <span style="font-size: 0.8rem; color: var(--text-muted);">Status: <strong style="color: var(--accent-volt);">100% Active</strong></span>
+                    <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.7rem;" onclick="alert('Strength zone diagnostics run successfully!')">Test</button>
+                  </div>
+                </div>
+                <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 1.2rem; border-radius: 6px;">
+                  <h5 style="color: var(--text-white); font-weight: 700;">Cryo Chambers</h5>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.8rem;">
+                    <span style="font-size: 0.8rem; color: var(--text-muted);">Status: <strong style="color: var(--accent-volt);">100% Active</strong></span>
+                    <button class="outline-btn" style="padding: 0.3rem 0.6rem; font-size: 0.7rem;" onclick="alert('Recovery zone diagnostics run successfully!')">Test</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ADMIN SUB-VIEW 6: ATTENDANCE MANAGEMENT -->
+          <div class="admin-sub-view" id="admin-subview-attendance" style="display: none;">
+            <div class="db-card flex-card" style="margin-bottom: 1.5rem;">
+              <h4>Master Attendance Management</h4>
+              <p class="card-subtitle">Monitor real-time gym floor logins, daily reports, monthly reports, and verify face scanner parameters</p>
+              
+              <!-- Mini metrics row -->
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2rem; margin-top: 1.2rem;">
+                <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 1rem; border-radius: 6px;">
+                  <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">Checked-In Today</span>
+                  <h3 style="color: var(--accent-volt); font-size: 1.5rem; font-weight: 800; margin-top: 0.2rem;" id="admin-att-stat-total">14</h3>
+                </div>
+                <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 1rem; border-radius: 6px;">
+                  <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">On Gym Floor Now</span>
+                  <h3 style="color: var(--accent-cyan); font-size: 1.5rem; font-weight: 800; margin-top: 0.2rem;" id="admin-att-stat-active">3</h3>
+                </div>
+                <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 1rem; border-radius: 6px;">
+                  <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">Monthly Stay Average</span>
+                  <h3 style="color: #ff9f00; font-size: 1.5rem; font-weight: 800; margin-top: 0.2rem;">1h 42m</h3>
+                </div>
+                <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 1rem; border-radius: 6px;">
+                  <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">Average Attendance Rate</span>
+                  <h3 style="color: #a855f7; font-size: 1.5rem; font-weight: 800; margin-top: 0.2rem;" id="admin-att-stat-rate">84.2%</h3>
+                </div>
+              </div>
+            </div>
+
+            <!-- Simulation Controller & Logs -->
+            <div class="db-grid-row" style="grid-template-columns: 0.8fr 1.2fr !important; gap: 1.5rem;">
+              
+              <!-- Simulation Side Card -->
+              <div class="db-card flex-card" style="height: 100%;">
+                <h4>Mock Face Check-in Terminal</h4>
+                <p class="card-subtitle">Simulate members scanning their face at the turnstiles to test dashboard reactions</p>
+                
+                <form id="admin-attendance-sim-form" style="margin-top: 1.2rem; display: flex; flex-direction: column; gap: 1rem;">
+                  <div class="form-group">
+                    <label class="form-label" for="sim-member-select">Select Gym Member</label>
+                    <select id="sim-member-select" class="form-input">
+                      <option value="Ethan Hunt">Ethan Hunt (ID: #8092-PRO)</option>
+                      <option value="Luther Stickell">Luther Stickell (ID: #5021-REG)</option>
+                      <option value="Benji Dunn">Benji Dunn (ID: #4032-HIIT)</option>
+                      <option value="Ilsa Faust">Ilsa Faust (ID: #1092-PRO)</option>
+                      <option value="William Brandt">William Brandt (ID: #6014-REG)</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="sim-member-action">Simulate Action</label>
+                    <select id="sim-member-action" class="form-input">
+                      <option value="check-in">Face Scan Check-In</option>
+                      <option value="check-out">Face Scan Check-Out</option>
+                    </select>
+                  </div>
+                  <button type="submit" class="glow-btn" style="padding: 0.75rem; font-size: 0.85rem; margin-top: 0.5rem;">Trigger Simulated Scan</button>
+                </form>
+              </div>
+
+              <!-- Report Tabs Side Card -->
+              <div class="db-card flex-card" style="height: 100%;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <h4 id="attendance-report-title" style="margin: 0; font-size: 1rem;">Daily Attendance Report</h4>
+                  <div style="display: flex; gap: 0.5rem;">
+                    <button type="button" class="outline-btn active" id="btn-report-daily" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;">Daily</button>
+                    <button type="button" class="outline-btn" id="btn-report-monthly" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;">Monthly</button>
+                  </div>
+                </div>
+                
+                <!-- Daily report block -->
+                <div id="report-daily-container" style="margin-top: 1.2rem; display: block;">
+                  <div class="table-wrapper" style="max-height: 250px; overflow-y: auto;">
+                    <table class="db-table">
+                      <thead>
+                        <tr>
+                          <th>Member</th>
+                          <th>ID Code</th>
+                          <th>Check-in</th>
+                          <th>Check-out</th>
+                          <th>Stay Duration</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody id="admin-daily-att-body">
+                        <!-- Dynamic lines -->
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <!-- Monthly report block -->
+                <div id="report-monthly-container" style="margin-top: 1.2rem; display: none;">
+                  <div class="table-wrapper" style="max-height: 250px; overflow-y: auto;">
+                    <table class="db-table">
+                      <thead>
+                        <tr>
+                          <th>Member</th>
+                          <th>Total Visits</th>
+                          <th>Average Stay</th>
+                          <th>Frequency</th>
+                          <th>Attendance Rate</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody id="admin-monthly-att-body">
+                        <!-- Dynamic lines -->
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- ==========================================
+             B. TRAINER WORKSPACE PANEL
+             ========================================== -->
+        <section class="role-workspace-panel" id="panel-trainer" style="display: none;">
+          <div class="metrics-grid col-3">
+            <div class="metric-card">
+              <div class="metric-icon" style="color: var(--accent-cyan); background: rgba(0,240,255,0.05);">
+                <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              </div>
+              <div class="metric-details">
+                <h3>28</h3>
+                <p>Assigned Client Roster</p>
+              </div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-icon" style="color: var(--accent-volt); background: rgba(198,255,0,0.05);">
+                <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+              </div>
+              <div class="metric-details">
+                <h3>6</h3>
+                <p>Appointments Scheduled Today</p>
+              </div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-icon" style="color: #ff3e6c; background: rgba(255,62,108,0.05);">
+                <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              </div>
+              <div class="metric-details">
+                <h3>32.5 hrs</h3>
+                <p>Coaching Hours Logged (Month)</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="db-grid-row">
+            <!-- Schedule Appointments -->
+            <div class="db-card flex-card">
+              <h4>Today's Client Agenda</h4>
+              <p class="card-subtitle">Detailed roster details and fitness objectives</p>
+              
+              <ul class="agenda-list">
+                <li class="agenda-item">
+                  <div class="agenda-time">08:00 AM</div>
+                  <div class="agenda-details">
+                    <h5>Ethan Hunt</h5>
+                    <p>Strength Conditioning • High-bar squats & deadlift diagnostics</p>
+                  </div>
+                  <span class="agenda-badge check">Ready</span>
+                </li>
+                <li class="agenda-item">
+                  <div class="agenda-time">10:30 AM</div>
+                  <div class="agenda-details">
+                    <h5>Sarah Connor</h5>
+                    <p>Cardio Endurance • Treadmill VO2 check & core conditioning</p>
+                  </div>
+                  <span class="agenda-badge check">Ready</span>
+                </li>
+                <li class="agenda-item">
+                  <div class="agenda-time">02:00 PM</div>
+                  <div class="agenda-details">
+                    <h5>James Logan</h5>
+                    <p>HIIT Circuits • Suspension routines & heavy bag work</p>
+                  </div>
+                  <span class="agenda-badge check">Ready</span>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Add Schedule Form -->
+            <div class="db-card">
+              <h4>Create Training Block</h4>
+              <p class="card-subtitle">Dispatch new objectives directly to a member's terminal</p>
+              
+              <form id="trainer-schedule-form" style="margin-top: 1rem;">
+                <div class="form-group">
+                  <label class="form-label" for="sched-client">Client Selector</label>
+                  <select id="sched-client" class="form-input" required>
+                    <option value="Ethan Hunt">Ethan Hunt (Member Portal)</option>
+                    <option value="Sarah Connor">Sarah Connor</option>
+                    <option value="James Logan">James Logan</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="sched-routine">Routine / Objective</label>
+                  <input type="text" id="sched-routine" class="form-input" placeholder="e.g. Chest Hypertrophy, Leg Recovery" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="sched-time">Target Time Block</label>
+                  <input type="text" id="sched-time" class="form-input" placeholder="e.g. Tomorrow 09:00 AM" required>
+                </div>
+                <button type="submit" class="glow-btn" style="width: 100%; font-size: 0.85rem; padding: 0.75rem;">
+                  Issue Training Block
+                </button>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==========================================
+             C. MEMBER WORKSPACE PANEL
+             =========================================        <!-- ==========================================
+             C. MEMBER WORKSPACE PANEL
+             ========================================== -->
+        <section class="role-workspace-panel" id="panel-member" style="display: none; padding-bottom: 8rem;">
+          
+          <!-- SUB-VIEW 1: HOME DASHBOARD -->
+          <div class="member-sub-view" id="member-subview-home">
+            <!-- Expiry Warning alert banner -->
+            <div class="db-card member-alert-card" id="member-expiry-alert-box" style="display: none; margin-bottom: 1.8rem;">
+              <div class="member-alert-content">
+                <div class="alert-icon-box">
+                  <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div class="alert-details">
+                  <h4>Membership Expiration Alert</h4>
+                  <p>Your <strong><span id="member-alert-tier">MuScLe HuB</span> Pass</strong> will expire in <span id="member-days-left">5</span> days on <span id="member-expiry-date">July 11, 2026</span>. Please renew to avoid keycard lookup lockouts.</p>
+                </div>
+                <button class="glow-btn" id="member-renew-btn" style="padding: 0.6rem 1.4rem; font-size: 0.8rem; margin-left: auto;">Renew Now</button>
+              </div>
+            </div>
+
+            <!-- Member stats cards -->
+            <div class="metrics-grid col-3">
+              <div class="metric-card">
+                <div class="metric-icon" style="color: var(--accent-volt); background: rgba(198,255,0,0.05);">
+                  <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>
+                </div>
+                <div class="metric-details">
+                  <h3 id="member-active-tier">MuScLe HuB </h3>
+                  <p>Active Pass Membership</p>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-icon" style="color: var(--accent-cyan); background: rgba(0,240,255,0.05);">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" />
+                  </svg>
+                </div>
+                <div class="metric-details">
+                  <h3 id="member-home-att-pct">87.5%</h3>
+                  <p>Attendance Consistency</p>
+                </div>
+              </div>
+              <div class="metric-card">
+                <div class="metric-icon" style="color: #ff3e6c; background: rgba(255,62,108,0.05);">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <div class="metric-details">
+                  <h3 id="member-home-att-streak">24 Days</h3>
+                  <p>Active Training Streak</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Workout Journal & Diet Macros -->
+            <div class="db-grid-row">
+              <div class="db-card flex-card">
+                <h4>Workout Training Journal</h4>
+                <p class="card-subtitle">Submit physical metrics to preserve your training streaks</p>
+                <div class="table-wrapper">
+                  <table class="db-table" id="workout-journal-table">
+                    <thead>
+                      <tr>
+                        <th>Exercise Label</th>
+                        <th>Work Load</th>
+                        <th>Repetitions</th>
+                        <th>Timestamp</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr class="empty-state-row">
+                        <td colspan="4" style="text-align: center; color: var(--text-dim); font-size: 0.85rem; padding: 1.2rem;">No exercises logged in training journal.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <form id="workout-log-form" class="inline-logger-form">
+                  <input type="text" id="log-exercise" placeholder="Exercise name..." required class="form-input">
+                  <input type="text" id="log-weight" placeholder="e.g. 150 lbs" required class="form-input">
+                  <input type="number" id="log-reps" placeholder="Reps" required class="form-input">
+                  <button type="submit" class="glow-btn" style="padding: 0 1.2rem; font-size: 0.8rem; height: 100%;">Log</button>
+                </form>
+              </div>
+
+              <div class="db-card">
+                <h4>Nutrition Macro Balance</h4>
+                <p class="card-subtitle">Real-time daily ingestion levels</p>
+                <div class="macro-ratios">
+                  <div class="macro-item">
+                    <div class="macro-circle" style="--percent: 65; --color: #ff3e6c;">
+                      <span>65%</span>
+                    </div>
+                    <h5>Protein</h5>
+                    <p>195g / 300g target</p>
+                  </div>
+                  <div class="macro-item">
+                    <div class="macro-circle" style="--percent: 45; --color: var(--accent-volt);">
+                      <span>45%</span>
+                    </div>
+                    <h5>Carbs</h5>
+                    <p>135g / 300g target</p>
+                  </div>
+                  <div class="macro-item">
+                    <div class="macro-circle" style="--percent: 80; --color: var(--accent-cyan);">
+                      <span>80%</span>
+                    </div>
+                    <h5>Fats</h5>
+                    <p>80g / 100g target</p>
+                  </div>
+                </div>
+                <button id="home-shop-supps-btn" class="glow-btn" style="width: 100%; margin-top: 1.5rem; display: flex; align-items: center; justify-content: center; gap: 0.6rem;">
+                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                  </svg>
+                  Shop Supplements & Proteins
+                </button>
+              </div>
+            </div>
+
+            <!-- Billing Row -->
+            <div class="db-grid-row" style="margin-top: 1.8rem;">
+              <div class="db-card flex-card">
+                <h4>My Invoices & Payment History</h4>
+                <p class="card-subtitle">Recent transactions and subscription billing statements</p>
+                <div class="table-wrapper">
+                  <table class="db-table" id="member-payments-table">
+                    <thead>
+                      <tr>
+                        <th>Invoice ID</th>
+                        <th>Plan Tier</th>
+                        <th>Amount Charged</th>
+                        <th>Payment Status</th>
+                        <th>Billing Date</th>
+                      </tr>
+                    </thead>
+                    <tbody id="member-payments-body">
+                      <!-- Dynamic Invoices -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Quick Status Summary Card -->
+              <div class="db-card">
+                <h4>Goal Achievements & Check-ins</h4>
+                <p class="card-subtitle">Overview of current coaching blocks & attendance status</p>
+                <div class="status-summary-widget" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 1.2rem;">
+                  <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 1rem; border-radius: 6px; display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                      <p style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">Coaching Status</p>
+                      <h5 style="color: var(--text-white); font-weight: 700; margin-top: 0.15rem;">Coach Marcus Vance (CSCS)</h5>
+                    </div>
+                    <span style="font-size: 0.72rem; color: var(--accent-volt); font-weight: 700;">1 Active Message</span>
+                  </div>
+                  <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 1rem; border-radius: 6px; display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                      <p style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">Weekly Attendance</p>
+                      <h5 style="color: var(--text-white); font-weight: 700; margin-top: 0.15rem;" id="summary-checkin-status">5 Visits / 7 Days</h5>
+                    </div>
+                    <span style="font-size: 0.72rem; color: var(--accent-cyan); font-weight: 700;">Streak: 24d</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-VIEW 2: DEDICATED TRAINER PAGE -->
+          <div class="member-sub-view" id="member-subview-trainer" style="display: none;">
+            <div class="db-grid-row">
+              <!-- Trainer Info bio card -->
+              <div class="db-card">
+                <h4>Assigned Personal Coach</h4>
+                <p class="card-subtitle">Trainer credentials & conditioning availability</p>
+                <div class="trainer-full-bio" style="margin-top: 1.5rem; text-align: center;">
+                  <div style="width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-volt) 100%); color: var(--bg-black); display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 800; font-size: 2rem; margin: 0 auto 1.5rem auto; box-shadow: var(--glow-cyan);">MV</div>
+                  <h3 style="font-family: var(--font-display); font-weight: 800; font-size: 1.3rem; color: var(--text-white);">Coach Marcus Vance</h3>
+                  <p style="color: var(--accent-volt); font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin-top: 0.2rem;">Strength & Conditioning Master</p>
+                  
+                  <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); border-radius: 6px; padding: 1rem; margin: 2rem 0; text-align: left;">
+                    <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;">Marcus holds a Master of Science in Sports Physiology and has coached Olympic powerlifters for 8+ years. Specializes in barbell biomechanics, hypertrophy, and periodized training blocks.</p>
+                  </div>
+
+                  <button class="glow-btn" id="btn-member-book-session" style="width: 100%; padding: 0.8rem; font-size: 0.85rem;">Schedule 1-on-1 Session</button>
+                  <p style="font-size: 0.72rem; color: var(--text-dim); margin-top: 0.6rem;">Bookings require 24h cancellation warnings.</p>
+                </div>
+              </div>
+
+              <!-- Dedicated Chat panel -->
+              <div class="db-card flex-card">
+                <h4>Trainer Communication Log</h4>
+                <p class="card-subtitle">Ask questions regarding exercises, targets, or custom training plans</p>
+                <div class="coach-portal-widget" style="margin-top: 1rem; display: flex; flex-direction: column; justify-content: space-between; height: 350px;">
+                  <div class="coach-chat-box" id="subview-chat-history" style="flex-grow: 1; overflow-y: auto; background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); border-radius: 6px; padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem; margin-bottom: 1rem;">
+                    <div class="chat-bubble coach" style="align-self: flex-start; max-width: 85%; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); padding: 0.7rem 0.9rem; border-radius: 8px 8px 8px 0; font-size: 0.85rem; line-height: 1.4;">
+                      <p style="color: var(--text-white);">Ethan, great work squatting 275 lbs today. Your hip drive is improving. Let's aim to test your 315 lbs 1RM next Tuesday. Keep your macros focused on 195g+ protein.</p>
+                      <span class="bubble-time" style="display: block; font-size: 0.65rem; color: var(--text-dim); margin-top: 0.4rem; text-align: right;">2 hours ago</span>
+                    </div>
+                  </div>
+                  <!-- Chat input -->
+                  <form id="subview-chat-form" style="display: flex; gap: 0.6rem;">
+                    <input type="text" id="subview-chat-input" placeholder="Type message to Coach Marcus..." required class="form-input" style="padding: 0.8rem; font-size: 0.88rem; flex-grow: 1;">
+                    <button type="submit" class="glow-btn" style="padding: 0 1.5rem; font-size: 0.85rem;">Send</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-VIEW 3: DEDICATED ATTENDANCE PAGE -->
+          <div class="member-sub-view" id="member-subview-attendance" style="display: none;">
+            <div class="db-grid-row" style="grid-template-columns: 1fr 1.2fr !important; gap: 1.5rem;">
+              
+              <!-- Face Scan gate simulator -->
+              <div class="db-card flex-card" style="height: 100%;">
+                <h4>MuScLe HuB Smart Face Check-in Terminal</h4>
+                <p class="card-subtitle">Stand in front of the biometric scanner to log your check-in or check-out</p>
+                
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; margin-top: 1.5rem;">
+                  <!-- Camera scanning viewport simulation -->
+                  <div class="camera-viewport" style="position: relative; width: 280px; height: 210px; background: #0a0a0f; border: 2px solid var(--border-color); border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                    
+                    <!-- Neon crosshair/outline simulation -->
+                    <div style="position: absolute; width: 140px; height: 140px; border: 1px dashed rgba(0, 240, 255, 0.4); border-radius: 50%; box-shadow: 0 0 15px rgba(0, 240, 255, 0.05); animation: pulse 2s infinite;"></div>
+                    <div style="position: absolute; width: 15px; height: 15px; border-left: 2px solid var(--accent-cyan); border-top: 2px solid var(--accent-cyan); top: 20px; left: 20px;"></div>
+                    <div style="position: absolute; width: 15px; height: 15px; border-right: 2px solid var(--accent-cyan); border-top: 2px solid var(--accent-cyan); top: 20px; right: 20px;"></div>
+                    <div style="position: absolute; width: 15px; height: 15px; border-left: 2px solid var(--accent-cyan); border-bottom: 2px solid var(--accent-cyan); bottom: 20px; left: 20px;"></div>
+                    <div style="position: absolute; width: 15px; height: 15px; border-right: 2px solid var(--accent-cyan); border-bottom: 2px solid var(--accent-cyan); bottom: 20px; right: 20px;"></div>
+                    
+                    <!-- Scanner Laser line -->
+                    <div class="laser-scanner" style="position: absolute; width: 100%; height: 2px; background: var(--accent-volt); box-shadow: 0 0 8px var(--accent-volt); top: 0%; z-index: 10;"></div>
+
+                    <!-- Hologram Face Mesh mock SVG -->
+                    <svg width="120" height="120" viewBox="0 0 100 100" fill="none" style="position: absolute; opacity: 0.25; color: var(--accent-cyan);" id="hologram-mesh">
+                      <path d="M50 15 C30 15, 20 28, 20 48 C20 70, 35 85, 50 85 C65 85, 80 70, 80 48 C80 28, 70 15, 50 15 Z" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3"/>
+                      <circle cx="38" cy="42" r="5" fill="currentColor"/>
+                      <circle cx="62" cy="42" r="5" fill="currentColor"/>
+                      <path d="M50 48 V60 M40 60 H60" stroke="currentColor" stroke-width="1.5"/>
+                      <path d="M35 70 Q50 78, 65 70" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                    </svg>
+
+                    <!-- Scanning text indicators -->
+                    <div id="camera-terminal-overlay" style="position: absolute; bottom: 10px; background: rgba(0,0,0,0.75); padding: 0.3rem 0.6rem; border-radius: 4px; border: 1px solid var(--border-color); font-size: 0.68rem; font-family: monospace; color: var(--text-muted); z-index: 20;">
+                      TERMINAL: STANDBY
+                    </div>
+                  </div>
+
+                  <!-- Control buttons -->
+                  <div style="display: flex; gap: 0.8rem; width: 280px; margin-top: 0.5rem;">
+                    <button class="outline-btn" id="btn-face-checkin" style="flex: 1; padding: 0.7rem; font-size: 0.8rem;">Face Check-In</button>
+                    <button class="outline-btn" id="btn-face-checkout" style="flex: 1; padding: 0.7rem; font-size: 0.8rem;">Face Check-Out</button>
+                  </div>
+                  
+                  <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; margin-top: 0.5rem;">
+                    Status: <strong id="member-attendance-status" style="color: #ff9f00;">Not Checked-in Today</strong>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Streak & Calendar logs -->
+              <div class="db-card flex-card" style="height: 100%;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                  <div>
+                    <h4>Training Consistency Calendar</h4>
+                    <p class="card-subtitle">Consistency leads to athletic outcomes</p>
+                  </div>
+                  <!-- Attendance rate gauge -->
+                  <div style="text-align: right;">
+                    <span style="font-size: 0.75rem; color: var(--text-muted);">Attendance Rate</span>
+                    <h4 style="color: var(--accent-volt); font-weight: 800; font-size: 1.15rem;" id="member-attendance-pct">87.5%</h4>
+                  </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 1.2rem; margin-top: 1.5rem;">
+                  
+                  <!-- Calendar Widget Grid -->
+                  <div>
+                    <h5 style="color: var(--text-white); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.6rem;">July 2026</h5>
+                    <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.3rem; text-align: center; font-size: 0.7rem;" id="member-attendance-calendar-grid">
+                      <!-- calendar days -->
+                    </div>
+                  </div>
+
+                  <!-- Consistency streak logs -->
+                  <div style="display: flex; flex-direction: column; gap: 0.8rem; font-size: 0.8rem;">
+                    <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 0.6rem 0.8rem; border-radius: 6px; display: flex; justify-content: space-between;">
+                      <span style="color: var(--text-muted);">Streak Duration</span>
+                      <strong style="color: var(--accent-volt);" id="member-att-streak">24 Days 🔥</strong>
+                    </div>
+                    
+                    <h5 style="color: var(--text-white); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.4rem;">Recent Sessions</h5>
+                    <div style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 105px; overflow-y: auto;" id="member-attendance-sessions-list">
+                      <!-- dynamic session list items -->
+                    </div>
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+          
+          <!-- SUB-VIEW 4: DEDICATED SUPPLEMENTS PAGE -->
+          <div class="member-sub-view" id="member-subview-supplements" style="display: none;">
+            <div class="store-wrapper">
+              
+              <!-- Store Header & Promo Banner -->
+              <div class="store-promo-banner">
+                <div class="promo-content">
+                  <span class="promo-badge">MUSCLE HUB CLUB EXCLUSIVE</span>
+                  <h2>MuScLe HuB Pro Nutrition & Supplement Store</h2>
+                  <p>Premium athletic fuels charged straight to your club membership account. Active members receive an automatic 10% discount.</p>
+                </div>
+                <div class="promo-cart-trigger" id="store-cart-trigger">
+                  <div class="cart-trigger-icon">
+                    <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    <span class="cart-badge-count" id="cart-item-count">0</span>
+                  </div>
+                  <span>My Cart</span>
+                </div>
+              </div>
+
+              <!-- Search and Filter Bar -->
+              <div class="store-filter-bar">
+                <div class="search-box">
+                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input type="text" id="store-search-input" placeholder="Search supplements, proteins, creatine..." class="form-input">
+                </div>
+                
+                <div class="filter-categories" id="store-category-filters">
+                  <button class="filter-chip active" data-category="all">All Products</button>
+                  <button class="filter-chip" data-category="protein">Proteins</button>
+                  <button class="filter-chip" data-category="strength">Strength & Creatine</button>
+                  <button class="filter-chip" data-category="energy">Energy & Focus</button>
+                </div>
+
+                <div class="sort-box">
+                  <label for="store-sort-select">Sort By:</label>
+                  <select id="store-sort-select" class="form-input">
+                    <option value="popular">Popularity</option>
+                    <option value="low-high">Price: Low to High</option>
+                    <option value="high-low">Price: High to Low</option>
+                    <option value="rating">Top Rated</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Products Grid -->
+              <div class="supp-products-grid" id="supp-products-grid">
+                <!-- Injected dynamically via dashboard.js -->
+              </div>
+            </div>
+
+            <!-- PRODUCT DETAIL MODAL -->
+            <div class="store-modal-overlay" id="product-detail-modal" style="display: none;">
+              <div class="store-modal-card">
+                <button class="modal-close-btn" id="detail-modal-close">&times;</button>
+                <div class="modal-detail-content" id="detail-modal-content">
+                  <!-- Injected dynamically -->
+                </div>
+              </div>
+            </div>
+
+            <!-- CART DRAWER -->
+            <div class="store-cart-drawer-overlay" id="cart-drawer-overlay" style="display: none;">
+              <div class="store-cart-drawer">
+                <div class="cart-drawer-header">
+                  <h3>Your Shopping Cart</h3>
+                  <button class="cart-drawer-close" id="cart-drawer-close-btn">&times;</button>
+                </div>
+                
+                <div class="cart-items-container" id="cart-items-list">
+                  <!-- Cart items injected dynamically -->
+                </div>
+
+                <div class="cart-drawer-footer">
+                  <div class="promo-code-section">
+                    <input type="text" id="promo-code-input" placeholder="Promo Code (MUSCLEHUB10)" class="form-input">
+                    <button class="outline-btn" id="apply-promo-btn">Apply</button>
+                  </div>
+                  <div id="promo-status-msg" style="font-size: 0.75rem; margin-top: 0.3rem; min-height: 1rem;"></div>
+
+                  <div class="price-breakdown">
+                    <div class="price-row">
+                      <span>Items Subtotal</span>
+                      <span id="cart-subtotal">$0.00</span>
+                    </div>
+                    <div class="price-row discount">
+                      <span>Club Member Discount (10%)</span>
+                      <span id="cart-member-discount">-$0.00</span>
+                    </div>
+                    <div class="price-row discount" id="cart-promo-row" style="display: none;">
+                      <span>Promo Code Discount</span>
+                      <span id="cart-promo-discount">-$0.00</span>
+                    </div>
+                    <div class="price-row total">
+                      <span>Total Billed Price</span>
+                      <span id="cart-total-price">$0.00</span>
+                    </div>
+                  </div>
+
+                  <button class="glow-btn checkout-btn" id="cart-checkout-btn">
+                    Place Order & Charge Account
+                  </button>
+                  <p class="checkout-note">Items will be charged to your member account profile and prepared for front desk pick-up immediately.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- ORDER SUCCESS MODAL -->
+            <div class="store-modal-overlay" id="order-success-modal" style="display: none;">
+              <div class="store-modal-card success-card" style="max-width: 450px; text-align: center; padding: 2.5rem 2rem;">
+                <div class="success-icon-box">
+                  <svg width="36" height="36" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h2>Order Placed Successfully!</h2>
+                <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.8rem; line-height: 1.5;">
+                  Your order has been billed to your club account details. A confirmation email and invoice <strong id="success-invoice-id" style="color: var(--accent-cyan);"></strong> have been generated.
+                </p>
+                <div class="success-summary" id="success-order-summary">
+                  <!-- Order summary lines -->
+                </div>
+                <p style="font-size: 0.85rem; color: var(--accent-volt); font-weight: 700; margin-top: 1rem;">
+                  Please pick up your supplements at the front desk!
+                </p>
+                <button class="glow-btn" id="success-modal-close-btn" style="width: 100%; margin-top: 1.5rem; padding: 0.8rem;">
+                  Return to Store
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-VIEW 6: MEMBER EQUIPMENT & SERVICES PAGE -->
+          <div class="member-sub-view" id="member-subview-equipment" style="display: none;">
+            <!-- Gym Equipment Status Section -->
+            <div class="db-card" style="margin-bottom: 1.8rem;">
+              <h4>Gym Floor Equipment Status</h4>
+              <p class="card-subtitle">Real-time usage and servicing updates for MuScLe HuB floor machines</p>
+              
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.2rem; margin-top: 1.2rem;">
+                <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 1rem; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <h5 style="color: var(--text-white); font-weight: 700;">Cardio Zone</h5>
+                    <p style="color: var(--text-muted); font-size: 0.72rem; margin-top: 0.15rem;">Treadmills, Bikes, Stairmasters</p>
+                  </div>
+                  <span style="font-size: 0.72rem; color: var(--accent-volt); font-weight: 800; background: rgba(198,255,0,0.08); padding: 0.2rem 0.5rem; border-radius: 4px;">18/20 Free</span>
+                </div>
+                <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 1rem; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <h5 style="color: var(--text-white); font-weight: 700;">Strength Zone</h5>
+                    <p style="color: var(--text-muted); font-size: 0.72rem; margin-top: 0.15rem;">Power racks, Barbells, Smith machines</p>
+                  </div>
+                  <span style="font-size: 0.72rem; color: var(--accent-cyan); font-weight: 800; background: rgba(0,240,255,0.08); padding: 0.2rem 0.5rem; border-radius: 4px;">4/6 Free</span>
+                </div>
+                <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 1rem; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <h5 style="color: var(--text-white); font-weight: 700;">Recovery Zone</h5>
+                    <p style="color: var(--text-muted); font-size: 0.72rem; margin-top: 0.15rem;">Cryotherapy, Saunas, Plunges</p>
+                  </div>
+                  <span style="font-size: 0.72rem; color: var(--accent-orange); font-weight: 800; background: rgba(255,94,0,0.08); padding: 0.2rem 0.5rem; border-radius: 4px;">2/3 Free</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-VIEW 5: MEMBER DEDICATED PROFILE PAGE -->
+          <div class="member-sub-view" id="member-subview-profile" style="display: none;">
+            <div class="db-grid-row">
+              <!-- Left column: Profile overview -->
+              <div class="db-card" style="text-align: center; padding: 2rem;">
+                <div class="profile-avatar" id="profile-edit-avatar-badge" style="width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-volt) 0%, var(--accent-cyan) 100%); color: var(--bg-black); display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 800; font-size: 2.2rem; margin: 0 auto 1.5rem auto; box-shadow: var(--glow-volt);">EH</div>
+                <h3 style="font-family: var(--font-display); font-weight: 800; font-size: 1.4rem; color: var(--text-white);" id="profile-display-fullname">Ethan Hunt</h3>
+                <span class="status-indicator-badge online" style="margin-top: 0.5rem; display: inline-block;">PRO MEMBER</span>
+                
+                <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); border-radius: 6px; padding: 1.2rem; margin: 2rem 0; text-align: left; display: flex; flex-direction: column; gap: 0.8rem; font-size: 0.85rem;">
+                  <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Membership Pass ID</span><strong style="color: var(--text-white);">#8092-PRO</strong></div>
+                  <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Join Date</span><strong style="color: var(--text-white);">March 15, 2024</strong></div>
+                  <div style="display: flex; justify-content: space-between;"><span style="color: var(--text-muted);">Assigned Coach</span><strong style="color: var(--accent-cyan);">Marcus Vance (CSCS)</strong></div>
+                </div>
+              </div>
+
+              <!-- Right column: Edit Details Form -->
+              <div class="db-card flex-card">
+                <h4>Edit Member Profile</h4>
+                <p class="card-subtitle">Modify contact coordinates, emergency contacts, and training objectives</p>
+                
+                <form id="member-profile-edit-form" style="margin-top: 1.5rem; display: flex; flex-direction: column; gap: 1.2rem;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem;">
+                    <div class="form-group">
+                      <label class="form-label" for="profile-edit-name">Full Name</label>
+                      <input type="text" id="profile-edit-name" class="form-input" value="Ethan Hunt" required>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="profile-edit-email">Email Address</label>
+                      <input type="email" id="profile-edit-email" class="form-input" value="member@muscleshub.com" required>
+                    </div>
+                  </div>
+
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem;">
+                    <div class="form-group">
+                      <label class="form-label" for="profile-edit-phone">Phone Number</label>
+                      <input type="text" id="profile-edit-phone" class="form-input" value="+1 (555) 902-1829" required>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="profile-edit-goal">Primary Fitness Objective</label>
+                      <select id="profile-edit-goal" class="form-input" required>
+                        <option value="strength">Barbell Strength & Conditioning</option>
+                        <option value="cardio">Cardiovascular Endurance & VO2</option>
+                        <option value="hiit">HIIT Aerobic Circuits</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; border-top: 1px solid var(--border-color); padding-top: 1.2rem;">
+                    <div class="form-group">
+                      <label class="form-label" for="profile-edit-emergency-name">Emergency Contact Name</label>
+                      <input type="text" id="profile-edit-emergency-name" class="form-input" value="Luther Stickell">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="profile-edit-emergency-phone">Emergency Contact Phone</label>
+                      <input type="text" id="profile-edit-emergency-phone" class="form-input" value="+1 (555) 304-8912">
+                    </div>
+                  </div>
+
+                  <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem;">
+                    <button type="button" class="outline-btn" id="btn-profile-edit-cancel" style="padding: 0.65rem 1.5rem; font-size: 0.85rem;">Cancel</button>
+                    <button type="submit" class="glow-btn" style="padding: 0.65rem 2rem; font-size: 0.85rem;">Save Changes</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Shared Auth script, then local controller -->
+  <script src="auth.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>

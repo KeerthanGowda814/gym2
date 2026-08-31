@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Secure portal login for members, trainers, and administrators of MuSuLe HuB.">
+  <title>Portal Access | MuSuLe HuB</title>
+  
+  <!-- Preconnect to Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="login.css">
+</head>
+<body>
+
+  <!-- Background decorative glowing rings -->
+  <div class="decor-glow ring-1"></div>
+  <div class="decor-glow ring-2"></div>
+
+  <!-- Back link to website home -->
+  <a href="index.html" class="portal-back-link">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+    </svg>
+    Return to Main Site
+  </a>
+
+  <!-- Main Login Card Container -->
+  <div class="login-wrapper">
+    <div class="login-card" id="login-card-container">
+      
+      <!-- FRONT PANEL: LOGIN FORM -->
+      <div class="card-panel panel-front" id="login-panel-front">
+        <div class="portal-header">
+          <div class="logo">
+            MUSULE<span>HUB</span>
+            <div class="logo-dot"></div>
+          </div>
+          <h2>Portal Login</h2>
+          <p>Access your training metrics and scheduling dashboard.</p>
+        </div>
+
+        <!-- Role selector tabs -->
+        <div class="role-tabs">
+          <button class="role-tab active" data-role="member" id="tab-member">Member</button>
+          <button class="role-tab" data-role="trainer" id="tab-trainer">Trainer</button>
+          <button class="role-tab" data-role="admin" id="tab-admin">Admin</button>
+        </div>
+
+        <!-- Form fields -->
+        <form id="portal-login-form" novalidate>
+          <input type="hidden" id="login-role" value="member">
+
+          <!-- Email Input -->
+          <div class="form-group">
+            <label for="login-email" class="form-label">Email Address</label>
+            <div class="input-icon-wrapper">
+              <span class="field-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
+                </svg>
+              </span>
+              <input type="email" id="login-email" class="form-input" placeholder="Enter your email" required autocomplete="email">
+            </div>
+            <div class="error-feedback" id="email-error"></div>
+          </div>
+
+          <!-- Password Input -->
+          <div class="form-group">
+            <div class="form-label-row">
+              <label for="login-password" class="form-label">Password</label>
+              <button type="button" class="forgot-link-btn" id="trigger-forgot-panel">Forgot Password?</button>
+            </div>
+            <div class="input-icon-wrapper">
+              <span class="field-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </span>
+              <input type="password" id="login-password" class="form-input" placeholder="••••••••" required autocomplete="current-password">
+              <button type="button" class="toggle-password-btn" id="toggle-password-visibility" aria-label="Toggle Password Visibility">
+                <!-- Eye Icon -->
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" class="icon-eye">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </button>
+            </div>
+            
+            <div class="error-feedback" id="password-error"></div>
+          </div>
+
+          <!-- Options row -->
+          <div class="form-options">
+            <label class="remember-me-label">
+              <input type="checkbox" id="login-remember" checked>
+              <span class="checkbox-box"></span>
+              Remember Me
+            </label>
+            
+          </div>
+
+          <!-- Login CTA -->
+          <button type="submit" class="glow-btn login-submit-btn" id="login-submit-btn">
+            Authenticate
+          </button>
+        </form>
+
+        <div class="portal-footer">
+          <p style="margin-bottom: 0.8rem;">New to MuSuLe HuB? <a href="register.html" style="color: var(--accent-cyan); font-weight: 700; text-decoration: underline;">Register here</a></p>
+          <p>MuSuLe HuB club access portals. Unauthorized entry is logged.</p>
+        </div>
+      </div>
+
+      <!-- BACK PANEL: FORGOT PASSWORD FORM -->
+      <div class="card-panel panel-back" id="login-panel-back">
+        <div class="portal-header">
+          <h2>Reset Password</h2>
+          <p>Enter your email and we'll dispatch a simulated OTP reset link to your inbox.</p>
+        </div>
+
+        <form id="portal-forgot-form" novalidate>
+          <div class="form-group">
+            <label for="forgot-email" class="form-label">Associated Email Address</label>
+            <div class="input-icon-wrapper">
+              <span class="field-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
+                </svg>
+              </span>
+              <input type="email" id="forgot-email" class="form-input" placeholder="e.g. john@muscleshub.com" required>
+            </div>
+            <div class="error-feedback" id="forgot-email-error"></div>
+          </div>
+
+          <button type="submit" class="glow-btn login-submit-btn" id="forgot-submit-btn">
+            Send Reset Instructions
+          </button>
+          
+          <button type="button" class="outline-btn login-submit-btn" id="trigger-login-panel" style="margin-top: 1rem;">
+            Back to Sign In
+          </button>
+        </form>
+
+        <!-- Simulated reset email success feedback -->
+        <div class="forgot-success-state" id="forgot-success-state">
+          <div class="success-icon-wrapper" style="border-color: var(--accent-cyan); color: var(--accent-cyan); background: rgba(0, 240, 255, 0.05); box-shadow: var(--glow-cyan);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h3>Instructions Dispatched</h3>
+          <p>A verification bypass payload has been simulated for testing. Please check console outputs for security bypass links.</p>
+          <button type="button" class="glow-btn" id="forgot-success-back-btn">Return</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Shared Auth script, then local controller -->
+  <script src="auth.js"></script>
+  <script src="login.js"></script>
+</body>
+</html>

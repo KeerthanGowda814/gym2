@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="MuScLeHuB - A premium high-performance gym and fitness management system. Certified coaches, advanced training plans, and state-of-the-art facilities.">
+  <title>MuScLe HuB | Premium Fitness & Strength Club</title>
+  
+  <!-- Preconnect to Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- --- NAVIGATION HEADER --- -->
+  <header id="header">
+    <div class="container">
+      <a href="#" class="logo" id="nav-logo">
+        MuScLe HuB
+        <div class="logo-dot"></div>
+      </a>
+      
+      <nav>
+        <ul class="nav-menu" id="nav-menu">
+          <li><a href="#hero" class="nav-link active" id="link-hero">Home</a></li>
+          <li><a href="#about" class="nav-link" id="link-about">About</a></li>
+          <li><a href="#services" class="nav-link" id="link-services">Services</a></li>
+          <li><a href="#trainers" class="nav-link" id="link-trainers">Trainers</a></li>
+          <li><a href="#membership" class="nav-link" id="link-membership">Plans</a></li>
+          <li><a href="#gallery" class="nav-link" id="link-gallery">Gallery</a></li>
+          <li><a href="#contact" class="nav-link" id="link-contact">Contact</a></li>
+          <li><a href="login.html" class="nav-link" id="link-login" style="color: var(--accent-cyan);"></a></li>
+        </ul>
+      </nav>
+      
+      <div class="nav-cta">
+        <a href="login.html" class="outline-btn" style="padding: 0.6rem 1.5rem; font-size: 0.85rem; border-color: rgba(255,255,255,0.15); margin-right: 0.8rem;" id="header-login">Portal Login</a>
+        <a href="register.html" class="glow-btn" style="padding: 0.6rem 1.6rem; font-size: 0.85rem;" id="header-cta">Join Now</a>
+      </div>
+      
+      <div class="hamburger" id="hamburger-menu" aria-label="Toggle Menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- --- HERO SECTION --- -->
+  <section class="hero" id="hero">
+    <div class="hero-bg-image">
+      <img src="assets/images/hero_bg.png" alt="MuScLe HuB Gym Interior background">
+    </div>
+    <div class="container">
+      <div class="hero-grid">
+        <div class="hero-content reveal">
+          <div class="hero-tagline">
+            <div class="hero-tagline-dot"></div>
+            Unleash Your Limits
+          </div>
+          <h1 class="hero-title">
+            Train Smarter, <br>
+            <span class="hero-title-accent text-gradient-volt"> Manage Better</span>
+          </h1>
+          <p class="hero-desc">
+            Experience the ultimate training environment with elite level coaches, state-of-the-art diagnostic equipment, and tailored nutrition plans built for results.
+          </p>
+          <div class="hero-actions">
+            <a href="register.html" class="glow-btn" id="hero-btn-primary">Start Free Trial</a>
+            <a href="#services" class="outline-btn" id="hero-btn-secondary">Explore Services</a>
+          </div>
+          <div class="hero-stats-row">
+            <div class="hero-stat-item">
+              <h3 class="stat-number" data-target="15">0<span>+</span></h3>
+              <p>Expert Coaches</p>
+            </div>
+            <div class="hero-stat-item">
+              <h3 class="stat-number" data-target="1200">0<span>+</span></h3>
+              <p>Active Members</p>
+            </div>
+            <div class="hero-stat-item">
+              <h3 class="stat-number" data-target="24">0<span>/7</span></h3>
+              <p>VIP Access Hours</p>
+            </div>
+          </div>
+        </div>
+        
+      </div>
+    </div>
+  </section>
+
+  <!-- --- ABOUT SECTION --- -->
+  <section class="about" id="about">
+    <div class="container">
+      <div class="about-grid">
+        <div class="about-image-wrapper reveal reveal-left">
+          <div class="about-border-glow"></div>
+          <div class="about-image">
+            <img src="assets/images/about_athlete.png" alt="Athlete lifting weights in gym">
+          </div>
+          <div class="about-experience-badge">
+            <h3 class="stat-number" data-target="12">0</h3>
+            <p>Years of Pride</p>
+          </div>
+        </div>
+        <div class="about-content reveal reveal-right">
+          <span class="section-tag">About MuScLe HuB</span>
+          <h2 class="section-title">We Build More Than Just <span>Physiques</span></h2>
+          <p class="section-desc">
+            At MuScLe HuB , we believe that fitness is a mental and physical transformation. Our luxury facilities host industry-leading coaching programs designed to elevate every aspect of your performance.
+          </p>
+          <div class="about-points">
+            <div class="about-point-item">
+              <div class="about-point-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div class="about-point-info">
+                <h4>Premium Conditioning Equipment</h4>
+                <p>Train on Olympic-level power cages, hammer strength plates, and customized cardio dashboards.</p>
+              </div>
+            </div>
+            <div class="about-point-item">
+              <div class="about-point-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div class="about-point-info">
+                <h4>Elite Coaching Staff</h4>
+                <p>All training staff hold active CSCS certificates, national fitness certifications, and medical degrees.</p>
+              </div>
+            </div>
+            <div class="about-point-item">
+              <div class="about-point-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div class="about-point-info">
+                <h4>Comprehensive Nutrition Support</h4>
+                <p>Personalized bi-weekly macros checks and nutritional coaching plans synced straight to your app.</p>
+              </div>
+            </div>
+          </div>
+          <a href="#contact" class="glow-btn" id="about-btn">Get In Touch</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- --- SERVICES SECTION --- -->
+  <section class="services" id="services">
+    <div class="container">
+      <span class="section-tag">Our Programs</span>
+      <h2 class="section-title">Designed to push your <span>Limits</span></h2>
+      <p class="section-desc">Choose from our curated fitness disciplines, structured for beginners and competitive athletes alike.</p>
+      
+      <div class="services-grid">
+        <!-- Service Card 1 -->
+        <div class="service-card reveal">
+          <div class="service-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+            </svg>
+          </div>
+          <h3>Strength & Power</h3>
+          <p>Master the big three lifts, build dense muscle fibers, and increase power output under heavy loads.</p>
+          <a href="#contact" class="service-link">
+            Learn More
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </a>
+        </div>
+        <!-- Service Card 2 -->
+        <div class="service-card reveal" style="transition-delay: 0.1s;">
+          <div class="service-icon" style="color: var(--accent-cyan);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <h3>HIIT & Conditioning</h3>
+          <p>Boost your cardiovascular baseline, sweat off fat storage, and increase VO2 Max with high-intensity intervals.</p>
+          <a href="#contact" class="service-link" style="color: var(--accent-cyan);">
+            Learn More
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </a>
+        </div>
+        <!-- Service Card 3 -->
+        <div class="service-card reveal" style="transition-delay: 0.2s;">
+          <div class="service-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+            </svg>
+          </div>
+          <h3>Mind & Yoga Flow</h3>
+          <p>Improve dynamic flexibility, correct postural issues, find mental clarity, and release tension.</p>
+          <a href="#contact" class="service-link">
+            Learn More
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </a>
+        </div>
+        <!-- Service Card 4 -->
+        <div class="service-card reveal" style="transition-delay: 0.3s;">
+          <div class="service-icon" style="color: var(--accent-cyan);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          </div>
+          <h3>Combat & MMA</h3>
+          <p>Develop defensive boxing, kickboxing drills, speed mechanics, core control and intense endurance.</p>
+          <a href="#contact" class="service-link" style="color: var(--accent-cyan);">
+            Learn More
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- --- MEMBERSHIP PLANS (PRICING) --- -->
+  <section class="membership" id="membership">
+    <div class="container">
+      <div class="pricing-header">
+        <span class="section-tag">Pricing Plans</span>
+        <h2 class="section-title">Elevate Your <span>Experience</span></h2>
+        <p class="section-desc">Choose a tier that matches your goals. No hidden fees. Cancel anytime.</p>
+        
+        <div class="pricing-switch-container">
+          <button class="switch-label active" id="pricing-monthly-btn">Monthly</button>
+          <button class="switch-label" id="pricing-annual-btn">
+            Annual <span class="discount-tag">Save 20%</span>
+          </button>
+        </div>
+      </div>
+      
+      <div class="pricing-grid">
+        <!-- Basic Plan Card -->
+        <div class="pricing-card reveal">
+          <h3 class="plan-name">MaSuLe  Core</h3>
+          <p class="plan-desc">Essential access for structured lifters.</p>
+          <div class="plan-price-wrapper">
+            <span class="plan-currency"></span>
+            <span class="plan-price" id="price-core" data-monthly="600" data-annual="31">600</span>
+            <span class="plan-period" id="period-core">/mo</span>
+          </div>
+          <ul class="plan-features">
+            <li class="plan-feature-item">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              All gym gym floors access
+            </li>
+            <li class="plan-feature-item">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Locker room & shower use
+            </li>
+            <li class="plan-feature-item">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Complimentary Wi-Fi
+            </li>
+            <li class="plan-feature-item muted">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Group classes inclusion
+            </li>
+            <li class="plan-feature-item muted">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              1-on-1 personal coach
+            </li>
+          </ul>
+          <a href="register.html?plan=core" class="outline-btn" style="width: 100%;">Select Plan</a>
+        </div>
+        
+        <!-- Popular Plan Card -->
+        <div class="pricing-card popular reveal">
+          <h3 class="plan-name">MaSuLe Pro</h3>
+          <p class="plan-desc">For driven members looking to accelerate.</p>
+          <div class="plan-price-wrapper">
+            <span class="plan-currency"></span>
+            <span class="plan-price" id="price-pro" data-monthly="700" data-annual="63">700</span>
+            <span class="plan-period" id="period-pro">/mo</span>
+          </div>
+          <ul class="plan-features">
+            <li class="plan-feature-item">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              All core services & gym floor
+            </li>
+            <li class="plan-feature-item">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Unlimited group classes (HIIT/Yoga)
+            </li>
+            <li class="plan-feature-item">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Sauna & cold plunge access
+            </li>
+            <li class="plan-feature-item">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Bi-weekly nutrition checkins
+            </li>
+            <li class="plan-feature-item muted">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              1-on-1 personal coach
+            </li>
+          </ul>
+          <a href="register.html?plan=pro" class="glow-btn" style="width: 100%;">Select Plan</a>
+        </div>
+        
+        <!-- Premium Plan Card -->
+        <div class="pricing-card reveal">
+          <h3 class="plan-name">MaSuLe Elite</h3>
+          <p class="plan-desc">Complete bespoke training & nutrition program.</p>
+          <div class="plan-price-wrapper">
+            <span class="plan-currency"></span>
+            <span class="plan-price" id="price-elite" data-monthly="900" data-annual="119">900</span>
+            <span class="plan-period" id="period-elite">/mo</span>
+          </div>
+          <ul class="plan-features">
+            <li class="plan-feature-item">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              24/7 keycard VIP facility access
+            </li>
+            <li class="plan-feature-item">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Unlimited groups + guest passes
+            </li>
+            <li class="plan-feature-item">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Dedicated elite master coach (4 sessions/mo)
+            </li>
+            <li class="plan-feature-item">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Physiotherapist assessments
+            </li>
+            <li class="plan-feature-item">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              Apex custom energy drinks bar free
+            </li>
+          </ul>
+          <a href="register.html?plan=elite" class="outline-btn" style="width: 100%;">Select Plan</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- --- TRAINERS --- -->
+  <section class="trainers" id="trainers">
+    <div class="container">
+      <span class="section-tag">Elite Coaches</span>
+      <h2 class="section-title">Meet Your <span>Coaches</span></h2>
+      <p class="section-desc">Train with certified athletes, champions, and sports science specialists dedicated to your goals.</p>
+      
+      <div class="trainers-grid">
+        <!-- Trainer 1 -->
+        <div class="trainer-card reveal">
+          <div class="trainer-image-container">
+            <img src="assets/images/trainer_male.png" alt="Strength Coach Marcus Vance">
+            <div class="trainer-overlay-info">
+              <h3>Marcus Vance</h3>
+              <h4>Strength & Power Coach</h4>
+              <div class="trainer-socials">
+                <a href="#" class="trainer-social-link" aria-label="Marcus Facebook">
+                  <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z"/></svg>
+                </a>
+                <a href="#" class="trainer-social-link" aria-label="Marcus Instagram">
+                  <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Trainer 2 -->
+        <div class="trainer-card reveal" style="transition-delay: 0.1s;">
+          <div class="trainer-image-container">
+            <img src="assets/images/trainer_female.png" alt="Yoga coach Sofia Chen">
+            <div class="trainer-overlay-info">
+              <h3>Sofia Chen</h3>
+              <h4>Yoga & Mobility Coach</h4>
+              <div class="trainer-socials">
+                <a href="#" class="trainer-social-link" aria-label="Sofia Facebook">
+                  <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z"/></svg>
+                </a>
+                <a href="#" class="trainer-social-link" aria-label="Sofia Instagram">
+                  <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Trainer 3 -->
+        <div class="trainer-card reveal" style="transition-delay: 0.2s;">
+          <div class="trainer-image-container">
+            <img src="assets/images/trainer_combat.png" alt="HIIT Coach Damian Vance">
+            <div class="trainer-overlay-info">
+              <h3>Damian Vance</h3>
+              <h4>Combat & MMA Specialist</h4>
+              <div class="trainer-socials">
+                <a href="#" class="trainer-social-link" aria-label="Damian Facebook">
+                  <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z"/></svg>
+                </a>
+                <a href="#" class="trainer-social-link" aria-label="Damian Instagram">
+                  <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- --- GALLERY SECTION --- -->
+  <section class="gallery" id="gallery">
+    <div class="container">
+      <span class="section-tag">Inside Apex</span>
+      <h2 class="section-title">Explore Our <span>Spaces</span></h2>
+      <p class="section-desc">Take a visual tour of our professional training rooms, high-energy classes, and recovery zones.</p>
+      
+      <div class="gallery-filters">
+        <button class="filter-btn active" data-filter="all">All Zones</button>
+        <button class="filter-btn" data-filter="cardio">Cardio</button>
+        <button class="filter-btn" data-filter="strength">Strength</button>
+        <button class="filter-btn" data-filter="yoga">Yoga & Mobility</button>
+        <button class="filter-btn" data-filter="hiit">HIIT & Combat</button>
+      </div>
+      
+      <div class="gallery-grid">
+        <!-- Item 1 -->
+        <div class="gallery-item reveal" data-category="cardio">
+          <img src="assets/images/gallery_cardio.png" alt="Cardio Zone treadmills facing skyline">
+          <div class="gallery-item-overlay">
+            <div class="gallery-item-info">
+              <h4>Apex Cardio Suite</h4>
+              <p>Cardio Zone</p>
+            </div>
+          </div>
+        </div>
+        <!-- Item 2 -->
+        <div class="gallery-item reveal" data-category="strength" style="transition-delay: 0.05s;">
+          <img src="assets/images/gallery_weights.png" alt="Heavy power cages and dumbbells">
+          <div class="gallery-item-overlay">
+            <div class="gallery-item-info">
+              <h4>Hammer Strength Rig</h4>
+              <p>Strength Zone</p>
+            </div>
+          </div>
+        </div>
+        <!-- Item 3 -->
+        <div class="gallery-item reveal" data-category="yoga" style="transition-delay: 0.1s;">
+          <img src="assets/images/gallery_yoga.png" alt="Rolled yoga mats and ambient light">
+          <div class="gallery-item-overlay">
+            <div class="gallery-item-info">
+              <h4>Zen Yoga Studio</h4>
+              <p>Yoga & Mobility</p>
+            </div>
+          </div>
+        </div>
+        <!-- Item 4 -->
+        <div class="gallery-item reveal" data-category="hiit" style="transition-delay: 0.15s;">
+          <img src="assets/images/gallery_hiit.png" alt="TRX cables and kettlebells turf area">
+          <div class="gallery-item-overlay">
+            <div class="gallery-item-info">
+              <h4>High Octane Turf</h4>
+              <p>HIIT & Combat</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- --- CONTACT SECTION --- -->
+  <section class="contact" id="contact">
+    <div class="container">
+      <div class="contact-grid">
+        <!-- Info column -->
+        <div class="contact-info-column reveal reveal-left">
+          <span class="section-tag">Reach Us</span>
+          <h2 class="section-title">We'd love to <span>Hear</span> from you</h2>
+          <p class="section-desc">Ready to take the next step? Get in touch, or stop by for a personal walkthrough of our facility.</p>
+          
+          <div class="contact-info-cards">
+            <!-- Card 1 -->
+            <div class="contact-info-card" id="contact-card-phone">
+              <div class="contact-icon-box">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+              </div>
+              <div class="contact-card-text">
+                <p>Phone Number</p>
+                <p id="phone-text">+1 (555) 348-9321</p>
+              </div>
+              <div class="contact-copy-btn" data-copy-target="phone-text" title="Copy to clipboard">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                </svg>
+              </div>
+            </div>
+            <!-- Card 2 -->
+            <div class="contact-info-card" id="contact-card-email">
+              <div class="contact-icon-box">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div class="contact-card-text">
+                <p>Email Address</p>
+                <p id="email-text">join@apexathletics.com</p>
+              </div>
+              <div class="contact-copy-btn" data-copy-target="email-text" title="Copy to clipboard">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                </svg>
+              </div>
+            </div>
+            <!-- Card 3 -->
+            <div class="contact-info-card" id="contact-card-address">
+              <div class="contact-icon-box">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <div class="contact-card-text">
+                <p>Location Address</p>
+                <p id="address-text">782 Cyber Boulevard, NY 10012</p>
+              </div>
+              <div class="contact-copy-btn" data-copy-target="address-text" title="Copy to clipboard">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Form column -->
+        <div class="contact-form-card reveal reveal-right">
+          <h3 class="form-title">Start your Journey</h3>
+          <p class="form-desc">Fill in the fields below. Our fitness advisor will reach out within 24 hours.</p>
+          
+          <form id="contact-form">
+            <div class="form-group-row">
+              <div class="form-group">
+                <label for="form-name" class="form-label">Full Name</label>
+                <input type="text" id="form-name" class="form-input" placeholder="name" required>
+              </div>
+              <div class="form-group">
+                <label for="form-email" class="form-label">Email Address</label>
+                <input type="email" id="form-email" class="form-input" placeholder="name@example.com" required>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="form-program" class="form-label">Primary Fitness Goal</label>
+              <select id="form-program" class="form-input" required>
+                <option value="" disabled selected>Select your goal...</option>
+                <option value="strength">Strength & Power Conditioning</option>
+                <option value="hiit">HIIT & Cardiovascular Fat Loss</option>
+                <option value="yoga">Mobility & Yoga Wellness</option>
+                <option value="combat">Combat & Boxing Endurance</option>
+                <option value="other">General Physical Fitness</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="form-message" class="form-label">Special Notes / Medical History</label>
+              <textarea id="form-message" class="form-input" rows="4" placeholder="Tell us about your fitness history or injuries (optional)..."></textarea>
+            </div>
+            
+            <button type="submit" class="glow-btn form-submit-btn" id="form-submit-btn">Send Message</button>
+          </form>
+          
+          <!-- Successful submission window -->
+          <div class="form-success-overlay" id="form-success-overlay">
+            <div class="success-icon-wrapper">
+              <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h3 class="success-title">Message Received</h3>
+            <p class="success-message">Thank you! Your details have been transmitted. Our team will contact you very soon.</p>
+            <button class="outline-btn" id="success-close-btn">Done</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- --- FOOTER --- -->
+  <footer>
+    <div class="container">
+      <div class="footer-grid">
+        <!-- Brand column -->
+        <div class="footer-brand-column">
+          <a href="#" class="logo" style="margin-bottom: 1.5rem;">
+            MaSuLe<span>HUB</span>
+          </a>
+          <p>
+            Premium strength club, high-performance training rooms, and state-of-the-art diagnostic equipment. Built to crush limits.
+          </p>
+          <div class="footer-socials">
+            <a href="#" class="footer-social-link" aria-label="Facebook handle">
+              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z"/></svg>
+            </a>
+            <a href="#" class="footer-social-link" aria-label="Instagram handle">
+              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+            </a>
+            <a href="#" class="footer-social-link" aria-label="Twitter handle">
+              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/></svg>
+            </a>
+            <a href="#" class="footer-social-link" aria-label="Youtube handle">
+              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.163c-.272-1.022-1.074-1.824-2.096-2.096C19.548 3.5 12 3.5 12 3.5s-7.548 0-9.402.567c-1.022.272-1.824 1.074-2.096 2.096C0 8.017 0 12 0 12s0 3.983.502 5.837c.272 1.022 1.074 1.824 2.096 2.096C4.452 20.5 12 20.5 12 20.5s7.548 0 9.402-.567c1.022-.272 1.824-1.074 2.096-2.096C24 15.983 24 12 24 12s0-3.983-.502-5.837zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+            </a>
+          </div>
+        </div>
+        <!-- Column 2 -->
+        <div class="footer-grid-column">
+          <h4 class="footer-column-title">Explore</h4>
+          <ul class="footer-links">
+            <li><a href="#hero">Home</a></li>
+            <li><a href="#about">About</a></li>
+            <li><a href="#services">Services</a></li>
+            <li><a href="#trainers">Coaches</a></li>
+            <li><a href="#membership">Pricing</a></li>
+          </ul>
+        </div>
+        <!-- Column 3 -->
+        <div class="footer-grid-column">
+          <h4 class="footer-column-title">Club Hours</h4>
+          <ul class="footer-links" style="gap: 0.8rem;">
+            <li style="color: var(--text-muted); font-size: 0.95rem;">
+              Weekdays: <span style="color: var(--text-white); font-weight:600; display:block;">5:00 AM - 11:00 PM</span>
+            </li>
+            <li style="color: var(--text-muted); font-size: 0.95rem;">
+              Saturdays: <span style="color: var(--text-white); font-weight:600; display:block;">6:00 AM - 10:00 PM</span>
+            </li>
+            <li style="color: var(--text-muted); font-size: 0.95rem;">
+              Sundays: <span style="color: var(--text-white); font-weight:600; display:block;">8:00 AM - 8:00 PM</span>
+            </li>
+          </ul>
+        </div>
+        <!-- Column 4 -->
+        <div class="footer-grid-column">
+          <h4 class="footer-column-title">Club Contact</h4>
+          <div class="footer-contact-item">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+            </svg>
+            <span>0000000000</span>
+          </div>
+          <div class="footer-contact-item">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <span>join@musulehub.com</span>
+          </div>
+          <div class="footer-contact-item">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span>782 Cyber Boulevard, NY 10012</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="footer-bottom">
+        <p class="footer-copy">
+          2026 MuSuLe HuB. All Rights Reserved. Designed by Antigravity.
+        </p>
+        <div class="footer-bottom-links">
+          <a href="#">Privacy Policy</a>
+          <a href="#">Terms & Conditions</a>
+          <a href="#">Sitemap</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- --- LIGHTBOX POPUP MODAL --- -->
+  <div class="lightbox" id="gallery-lightbox">
+    <div class="lightbox-close" id="lightbox-close-btn">&times;</div>
+    <div class="lightbox-nav lightbox-prev" id="lightbox-prev-btn">&#10094;</div>
+    
+    <div class="lightbox-content-wrapper">
+      <img src="" alt="" class="lightbox-img" id="lightbox-image">
+      <div class="lightbox-caption" id="lightbox-caption">Caption Title</div>
+    </div>
+    
+    <div class="lightbox-nav lightbox-next" id="lightbox-next-btn">&#10095;</div>
+  </div>
+
+  <!-- JS Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
