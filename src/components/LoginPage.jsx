@@ -62,6 +62,44 @@ export default function LoginPage({ navigate }) {
     return regex.test(val);
   };
 
+  const handleEmailChange = (val) => {
+    setEmail(val);
+    if (!val.trim()) {
+      setEmailError('Email address is required.');
+    } else if (!isValidEmail(val.trim())) {
+      setEmailError('Invalid email syntax.');
+    } else {
+      setEmailError('');
+    }
+  };
+
+  const handleEmailBlur = () => {
+    if (!email.trim()) {
+      setEmailError('Email address is required.');
+    } else if (!isValidEmail(email.trim())) {
+      setEmailError('Invalid email syntax.');
+    }
+  };
+
+  const handlePasswordChange = (val) => {
+    setPassword(val);
+    if (!val) {
+      setPasswordError('Password is required.');
+    } else if (val.length < 6) {
+      setPasswordError('Password must be at least 6 characters.');
+    } else {
+      setPasswordError('');
+    }
+  };
+
+  const handlePasswordBlur = () => {
+    if (!password) {
+      setPasswordError('Password is required.');
+    } else if (password.length < 6) {
+      setPasswordError('Password must be at least 6 characters.');
+    }
+  };
+
   const handleLoginSubmit = (e) => {
     e.preventDefault();
     let isFormValid = true;
@@ -81,13 +119,16 @@ export default function LoginPage({ navigate }) {
     if (!password) {
       setPasswordError('Password is required.');
       isFormValid = false;
+    } else if (password.length < 6) {
+      setPasswordError('Password must be at least 6 characters.');
+      isFormValid = false;
     }
 
     if (!isFormValid) return;
 
     setIsLoggingIn(true);
 
-    const performLocalAuthCheck = () => {
+    const performLocalAuthCheck = (errorMessage = 'Invalid email or password.') => {
       const mockUser = mockDatabases[activeRole] || mockDatabases.trainer;
       const registeredUsers = JSON.parse(localStorage.getItem('apex_registered_users')) || [];
 
@@ -102,45 +143,30 @@ export default function LoginPage({ navigate }) {
       let authenticatedUser = null;
 
       // 1. Check exact mock database match
-      if (cleanEmail === mockUser.email.toLowerCase() && (cleanPass === mockUser.password || cleanPass.toLowerCase().includes('trainer') || cleanPass === '123456' || cleanPass === 'password')) {
+      if (cleanEmail === mockUser.email.toLowerCase() && cleanPass === mockUser.password) {
         authenticatedUser = {
           email: mockUser.email,
           name: mockUser.name,
           role: activeRole
         };
       }
-      // 2. Trainer role specific fallback check
-      else if (activeRole === 'trainer' || cleanEmail.includes('trainer') || cleanEmail.includes('coach')) {
-        authenticatedUser = {
-          email: cleanEmail.includes('@') ? cleanEmail : 'trainer@apex.com',
-          name: matchedRegisteredUser ? matchedRegisteredUser.name : (mockDatabases.trainer.name || 'Coach Marcus Vance'),
-          role: 'trainer'
-        };
-      }
-      // 3. Registered users match
-      else if (matchedRegisteredUser && (matchedRegisteredUser.password === cleanPass || cleanPass.length > 0)) {
+      // 2. Registered users match (strictly matching password)
+      else if (matchedRegisteredUser && matchedRegisteredUser.password === cleanPass) {
         authenticatedUser = {
           email: matchedRegisteredUser.email,
           name: matchedRegisteredUser.name,
           role: matchedRegisteredUser.role || activeRole
         };
       }
-      // 4. Fallback check against other role's mock database
+      // 3. Check alternative role's mock database
       else {
         const altRole = activeRole === 'trainer' ? 'member' : 'trainer';
         const altMockUser = mockDatabases[altRole];
-        if (cleanEmail === altMockUser.email.toLowerCase()) {
+        if (cleanEmail === altMockUser.email.toLowerCase() && cleanPass === altMockUser.password) {
           authenticatedUser = {
             email: altMockUser.email,
             name: altMockUser.name,
             role: altRole
-          };
-        } else {
-          // General fallback for demo testing
-          authenticatedUser = {
-            email: cleanEmail,
-            name: activeRole === 'trainer' ? 'Coach Marcus Vance' : 'Ethan Hunt',
-            role: activeRole
           };
         }
       }
@@ -151,7 +177,7 @@ export default function LoginPage({ navigate }) {
         navigate('dashboard');
       } else {
         setIsLoggingIn(false);
-        setPasswordError('Invalid email or password.');
+        setPasswordError(errorMessage);
       }
     };
 
@@ -171,7 +197,7 @@ export default function LoginPage({ navigate }) {
           setIsLoggingIn(false);
           navigate('dashboard');
         } else {
-          performLocalAuthCheck();
+          performLocalAuthCheck(data.message || 'Invalid email or password.');
         }
       })
       .catch(() => {
@@ -211,6 +237,7 @@ export default function LoginPage({ navigate }) {
     setForgotEmailError('');
     setShowForgotSuccess(false);
   };
+
 
   const currentHelper = mockDatabases[activeRole];
 
@@ -310,13 +337,14 @@ export default function LoginPage({ navigate }) {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
                     </svg>
                   </span>
-                  <input
+                                  <input
                     type="email"
                     id="login-email"
                     className={`form-input ${emailError ? 'invalid' : ''}`}
                     placeholder="Enter your email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => handleEmailChange(e.target.value)}
+                    onBlur={handleEmailBlur}
                   />
                 </div>
                 {emailError && <div className="error-feedback" id="email-error" style={{ display: 'block' }}>{emailError}</div>}
@@ -347,7 +375,8 @@ export default function LoginPage({ navigate }) {
                     className={`form-input ${passwordError ? 'invalid' : ''}`}
                     placeholder="••••••••"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => handlePasswordChange(e.target.value)}
+                    onBlur={handlePasswordBlur}
                   />
                   <button
                     type="button"
@@ -433,7 +462,7 @@ export default function LoginPage({ navigate }) {
                 <label className="form-label" htmlFor="forgot-email">Associated Email Address</label>
                 <div className="input-icon-wrapper">
                   <span className="field-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
                     </svg>
                   </span>

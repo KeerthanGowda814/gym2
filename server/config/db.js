@@ -101,7 +101,7 @@ const initialData = {
     isCheckedIn: false,
     checkInTime: null,
     streakDays: 0,
-    attendanceRate: 100,
+    attendanceRate: 0,
     activeDaysInMonth: [],
     sessions: []
   },
@@ -111,8 +111,8 @@ const initialData = {
         id: "whey-isolate",
         name: "Apex Whey Protein Isolate",
         category: "protein",
-        price: 59.99,
-        origPrice: 74.99,
+        price: 2999.00,
+        origPrice: 3799.00,
         rating: 4.8,
         reviews: 1248,
         tag: "Best Seller",
@@ -131,8 +131,8 @@ const initialData = {
         id: "creatine-mono",
         name: "Apex Micronized Creatine",
         category: "strength",
-        price: 24.99,
-        origPrice: 32.99,
+        price: 1199.00,
+        origPrice: 1599.00,
         rating: 4.9,
         reviews: 842,
         tag: "ATP Power",
@@ -151,8 +151,8 @@ const initialData = {
         id: "pre-ignite",
         name: "Apex Pre-Workout Ignite",
         category: "energy",
-        price: 34.99,
-        origPrice: 45.99,
+        price: 1699.00,
+        origPrice: 2199.00,
         rating: 4.7,
         reviews: 612,
         tag: "High Energy",
@@ -172,8 +172,8 @@ const initialData = {
         id: "mass-gainer",
         name: "Apex Hydro Mass Gainer",
         category: "protein",
-        price: 69.99,
-        origPrice: 89.99,
+        price: 3499.00,
+        origPrice: 4299.00,
         rating: 4.6,
         reviews: 340,
         tag: "Mass Builder",
@@ -192,8 +192,8 @@ const initialData = {
         id: "bcaa-recovery",
         name: "Apex BCAA Recovery",
         category: "energy",
-        price: 29.99,
-        origPrice: 37.99,
+        price: 1399.00,
+        origPrice: 1799.00,
         rating: 4.8,
         reviews: 480,
         tag: "Intra-Workout",
@@ -212,8 +212,8 @@ const initialData = {
         id: "multivitamin",
         name: "Apex Sports Multivitamin",
         category: "strength",
-        price: 19.99,
-        origPrice: 24.99,
+        price: 799.00,
+        origPrice: 999.00,
         rating: 4.5,
         reviews: 215,
         tag: "Daily Health",
@@ -384,6 +384,15 @@ export async function syncWithMongoDB() {
     if (existingDoc && existingDoc.data) {
       console.log('📦 HYDRATING APEX ATHLETICS DATABASE STATE FROM MONGODB ATLAS...');
       cachedData = existingDoc.data;
+      // Reset legacy dummy attendance data in hydrated state
+      cachedData.attendance = {
+        isCheckedIn: false,
+        checkInTime: null,
+        streakDays: 0,
+        attendanceRate: 0,
+        activeDaysInMonth: [],
+        sessions: []
+      };
     } else {
       console.log('🌱 INITIALIZING BRAND NEW MONGODB ATLAS DATABASE COLLECTIONS...');
     }
@@ -568,6 +577,17 @@ export async function syncWithMongoDB() {
         { upsert: true, returnDocument: 'after' }
       ).catch(() => {});
     }
+
+    // Purge legacy dummy attendance records from MongoDB Atlas
+    await Attendance.deleteMany({
+      $or: [
+        { memberName: 'Ethan Hunt' },
+        { date: 'Jul 22, 2026' },
+        { date: 'July 11, 2026' },
+        { date: 'July 10, 2026' },
+        { date: 'July 09, 2026' }
+      ]
+    }).catch(() => {});
 
     // Write back and save
     fs.writeFileSync(DATA_FILE, JSON.stringify(cachedData, null, 2), 'utf-8');

@@ -8,8 +8,8 @@ const DEFAULT_PRODUCTS = [
     id: "muscleblaze-biozyme",
     name: "MuscleBlaze Biozyme Performance Whey",
     category: "protein",
-    price: 54.99,
-    origPrice: 69.99,
+    price: 2799,
+    origPrice: 3499,
     rating: 4.9,
     reviews: 2450,
     tag: "50% Absorbability",
@@ -28,8 +28,8 @@ const DEFAULT_PRODUCTS = [
     id: "gnc-whey-pro",
     name: "GNC Pro Performance 100% Whey",
     category: "protein",
-    price: 62.99,
-    origPrice: 79.99,
+    price: 3199,
+    origPrice: 3999,
     rating: 4.8,
     reviews: 1890,
     tag: "Official Brand",
@@ -48,8 +48,8 @@ const DEFAULT_PRODUCTS = [
     id: "wellcore-creatine",
     name: "Wellcore Pure Micronized Creatine Powder",
     category: "strength",
-    price: 22.99,
-    origPrice: 29.99,
+    price: 1299,
+    origPrice: 1699,
     rating: 4.9,
     reviews: 3120,
     tag: "Best Seller",
@@ -68,8 +68,8 @@ const DEFAULT_PRODUCTS = [
     id: "whey-isolate",
     name: "Apex Whey Protein Isolate",
     category: "protein",
-    price: 59.99,
-    origPrice: 74.99,
+    price: 2999,
+    origPrice: 3799,
     rating: 4.8,
     reviews: 1248,
     tag: "Pure Isolate",
@@ -88,8 +88,8 @@ const DEFAULT_PRODUCTS = [
     id: "creatine-mono",
     name: "Apex Micronized Creatine",
     category: "strength",
-    price: 24.99,
-    origPrice: 32.99,
+    price: 1199,
+    origPrice: 1599,
     rating: 4.9,
     reviews: 842,
     tag: "ATP Power",
@@ -108,8 +108,8 @@ const DEFAULT_PRODUCTS = [
     id: "pre-ignite",
     name: "Apex Pre-Workout Ignite",
     category: "energy",
-    price: 34.99,
-    origPrice: 45.99,
+    price: 1699,
+    origPrice: 2199,
     rating: 4.7,
     reviews: 612,
     tag: "High Energy",
@@ -127,7 +127,7 @@ const DEFAULT_PRODUCTS = [
   }
 ];
 
-export default function SupplementShop({ onCheckoutSuccess, isAdmin = false }) {
+export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, currentUser = null, onViewOrders = null }) {
   const [storeProducts, setStoreProducts] = useState(DEFAULT_PRODUCTS);
   const [lastCheckoutDetail, setLastCheckoutDetail] = useState(null);
 
@@ -175,7 +175,7 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false }) {
     city: 'Bangalore',
     state: 'Karnataka',
     pincode: '560001',
-    deliveryType: 'standard' // 'standard' (Free) | 'express' (₹4.99)
+    deliveryType: 'standard' // 'standard' (Free) | 'express' (₹49)
   });
 
   // Payment Form State
@@ -293,19 +293,89 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false }) {
   const processCheckoutInDB = async (customTxId) => {
     const cartItems = cart.map((item) => ({ productId: item.product.id, qty: item.qty }));
     
+    const uEmail = currentUser?.email || 'member@apex.com';
+    const uName = currentUser?.name || shippingInfo.fullName || 'Registered Member';
+    const uPhone = shippingInfo.phone || '+91 98765 43210';
+
     // Call Node.js Express backend API
-    const backendRes = await memberApi.checkoutSupplements(cartItems, promoInput);
+    const backendRes = await memberApi.checkoutSupplements(
+      cartItems,
+      promoInput,
+      shippingInfo,
+      paymentInfo.method,
+      uEmail,
+      uName,
+      uPhone
+    );
 
     const txId = customTxId || backendRes?.txId || ('TX-' + Math.floor(1000 + Math.random() * 9000));
     const finalTotal = backendRes?.totalBilled !== undefined ? backendRes.totalBilled : totalPrice;
+    const orderId = backendRes?.order?.orderId || `ORD-${Date.now()}`;
+    const orderDate = new Date().toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    const fullOrderObj = backendRes?.order || {
+      orderId,
+      txId,
+      userEmail: uEmail,
+      userName: uName,
+      userPhone: uPhone,
+      items: cart.map((item) => ({
+        id: item.product.id,
+        name: item.product.name,
+        price: item.product.price,
+        quantity: item.qty,
+        image: item.product.image,
+        category: item.product.category
+      })),
+      itemsSummary: cart.map((item) => `${item.qty}x ${item.product.name}`).join(', '),
+      subtotal,
+      memberDiscount,
+      promoDiscount,
+      shippingFee,
+      total: finalTotal,
+      totalAmount: finalTotal,
+      shippingInfo: { ...shippingInfo },
+      paymentMethod: paymentInfo.method,
+      paymentStatus: paymentInfo.method === 'cod' ? 'Pending (COD)' : 'Paid',
+      courierName: 'Apex Express Logistics',
+      trackingNumber: '',
+      estimatedDelivery: shippingInfo.deliveryType === 'express' ? '24 Hours Priority' : '2-3 Business Days',
+      status: 'Pending Confirmation',
+      statusTimeline: [
+        {
+          status: 'Pending Confirmation',
+          timestamp: orderDate,
+          note: 'Order submitted by user and pending admin confirmation.'
+        }
+      ],
+      date: orderDate
+    };
+
+    // Sync client-side localStorage fallback for instant cross-tab reactivity
+    try {
+      const existingOrders = JSON.parse(localStorage.getItem('apex_supplement_orders') || '[]');
+      existingOrders.unshift(fullOrderObj);
+      localStorage.setItem('apex_supplement_orders', JSON.stringify(existingOrders));
+      window.dispatchEvent(new Event('storage'));
+    } catch (err) {
+      console.warn("Error updating localStorage orders:", err);
+    }
 
     const detail = {
       txId,
+      orderId,
       itemsSummary: cart.map((item) => `${item.qty}x ${item.product.name}`).join(', '),
       total: finalTotal,
       cartSnapshot: [...cart],
       shippingInfo: { ...shippingInfo },
-      paymentMethod: paymentInfo.method
+      paymentMethod: paymentInfo.method,
+      orderObj: fullOrderObj
     };
 
     setLastCheckoutDetail(detail);
@@ -470,6 +540,29 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false }) {
               <span style={{ fontSize: '1.2rem', lineHeight: 1, fontWeight: 900 }}>+</span> Add Product
             </button>
           )}
+          {onViewOrders && (
+            <button
+              type="button"
+              className="outline-btn"
+              onClick={onViewOrders}
+              style={{
+                padding: '0.65rem 1.2rem',
+                fontSize: '0.82rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                borderRadius: '6px',
+                height: '42px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                color: 'var(--accent-cyan)',
+                borderColor: 'rgba(0, 240, 255, 0.4)',
+                background: 'rgba(0, 240, 255, 0.08)'
+              }}
+            >
+              <span>🚚</span> Track Orders
+            </button>
+          )}
           <button
             className="promo-cart-trigger"
             onClick={() => {
@@ -631,8 +724,8 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false }) {
                   ))}
                 </div>
                 <div className="product-pricing">
-                  <span className="current-price">${p.price}</span>
-                  <span className="original-price">${p.origPrice}</span>
+                  <span className="current-price">₹{p.price}</span>
+                  <span className="original-price">₹{p.origPrice}</span>
                   <span className="discount-pct">{discountPercentage}% OFF</span>
                 </div>
                 
@@ -748,8 +841,8 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false }) {
                 </div>
 
                 <div className="product-pricing">
-                  <span className="current-price">${selectedProduct.price}</span>
-                  <span className="original-price">${selectedProduct.origPrice}</span>
+                  <span className="current-price">₹{selectedProduct.price}</span>
+                  <span className="original-price">₹{selectedProduct.origPrice}</span>
                   <span className="discount-pct">
                     {Math.round(((selectedProduct.origPrice - selectedProduct.price) / selectedProduct.origPrice) * 100)}% OFF
                   </span>
@@ -822,7 +915,7 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false }) {
                     </div>
                     <div className="cart-item-info">
                       <h5 className="cart-item-title">{item.product.name}</h5>
-                      <div className="cart-item-price">${item.product.price} each</div>
+                      <div className="cart-item-price">₹{item.product.price} each</div>
                     </div>
                     <div className="cart-item-actions">
                       <div className="qty-selector">
@@ -889,24 +982,24 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false }) {
                   <div className="price-breakdown">
                     <div className="price-row">
                       <span>Cart Subtotal</span>
-                      <span id="cart-subtotal">${subtotal.toFixed(2)}</span>
+                      <span id="cart-subtotal">₹{subtotal.toFixed(2)}</span>
                     </div>
                     
                     <div className="price-row discount">
                       <span>10% VIP Member Discount</span>
-                      <span id="cart-member-discount">-${memberDiscount.toFixed(2)}</span>
+                      <span id="cart-member-discount">-₹{memberDiscount.toFixed(2)}</span>
                     </div>
 
                     {promoApplied && (
                       <div className="price-row discount" id="cart-promo-row">
                         <span>Promo Code Discount (10%)</span>
-                        <span id="cart-promo-discount">-${promoDiscount.toFixed(2)}</span>
+                        <span id="cart-promo-discount">-₹{promoDiscount.toFixed(2)}</span>
                       </div>
                     )}
 
                     <div className="price-row total">
                       <span>Subtotal Payable</span>
-                      <span id="cart-total-price">${totalPrice.toFixed(2)}</span>
+                      <span id="cart-total-price">₹{totalPrice.toFixed(2)}</span>
                     </div>
                   </div>
 
@@ -1097,7 +1190,7 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false }) {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <strong style={{ color: 'var(--text-white)', fontSize: '0.85rem' }}>VIP Fast-Track ⚡</strong>
-                    <span style={{ color: 'var(--accent-volt)', fontWeight: 800, fontSize: '0.78rem' }}>+₹4.99</span>
+                    <span style={{ color: 'var(--accent-volt)', fontWeight: 800, fontSize: '0.78rem' }}>+₹49</span>
                   </div>
                   <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Guaranteed 24-Hour Priority Delivery</span>
                 </div>
@@ -1106,7 +1199,7 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false }) {
               {/* Order Summary Pill */}
               <div style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.8rem 1rem', marginBottom: '1.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Order Total ({totalQty} item{totalQty > 1 ? 's' : ''}):</span>
-                <span style={{ color: 'var(--accent-volt)', fontWeight: 800, fontSize: '1rem' }}>${totalPrice.toFixed(2)}</span>
+                <span style={{ color: 'var(--accent-volt)', fontWeight: 800, fontSize: '1rem' }}>₹{totalPrice.toFixed(2)}</span>
               </div>
 
               {/* Action buttons */}
@@ -1317,13 +1410,13 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false }) {
 
               {paymentInfo.method === 'account' && (
                 <div style={{ background: 'rgba(0, 240, 255, 0.05)', border: '1px solid rgba(0, 240, 255, 0.2)', borderRadius: '8px', padding: '1rem', marginBottom: '1.5rem', color: 'var(--accent-cyan)', fontSize: '0.8rem', lineHeight: 1.4 }}>
-                  ⚡ <strong>Member Direct Billing Active:</strong> Purchase total of <strong>${totalPrice.toFixed(2)}</strong> will be charged to your active account invoice (Receipt ID will be generated upon confirmation).
+                  ⚡ <strong>Member Direct Billing Active:</strong> Purchase total of <strong>₹{totalPrice.toFixed(2)}</strong> will be charged to your active account invoice (Receipt ID will be generated upon confirmation).
                 </div>
               )}
 
               {paymentInfo.method === 'cod' && (
                 <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem', marginBottom: '1.5rem', color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: 1.4 }}>
-                  💵 <strong>Cash on Delivery:</strong> Please keep exact change of <strong>${totalPrice.toFixed(2)}</strong> ready upon delivery by courier.
+                  💵 <strong>Cash on Delivery:</strong> Please keep exact change of <strong>₹{totalPrice.toFixed(2)}</strong> ready upon delivery by courier.
                 </div>
               )}
 
@@ -1331,16 +1424,16 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false }) {
               <div className="price-breakdown" style={{ marginBottom: '1.8rem', background: 'rgba(0,0,0,0.2)', padding: '0.8rem 1rem', borderRadius: '6px' }}>
                 <div className="price-row">
                   <span>Items Subtotal</span>
-                  <span>${subtotal.toFixed(2)}</span>
+                  <span>₹{subtotal.toFixed(2)}</span>
                 </div>
                 <div className="price-row discount">
                   <span>10% VIP Member Discount</span>
-                  <span>-${memberDiscount.toFixed(2)}</span>
+                  <span>-₹{memberDiscount.toFixed(2)}</span>
                 </div>
                 {promoApplied && (
                   <div className="price-row discount">
                     <span>Promo Discount (APEX10)</span>
-                    <span>-${promoDiscount.toFixed(2)}</span>
+                    <span>-₹{promoDiscount.toFixed(2)}</span>
                   </div>
                 )}
                 <div className="price-row">
@@ -1349,7 +1442,7 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false }) {
                 </div>
                 <div className="price-row total" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.5rem', marginTop: '0.3rem' }}>
                   <span>Total Amount Payable</span>
-                  <span style={{ color: 'var(--accent-volt)', fontSize: '1.15rem' }}>${totalPrice.toFixed(2)}</span>
+                  <span style={{ color: 'var(--accent-volt)', fontSize: '1.15rem' }}>₹{totalPrice.toFixed(2)}</span>
                 </div>
               </div>
 
@@ -1406,12 +1499,12 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false }) {
               {lastCheckoutDetail.cartSnapshot.map((item) => (
                 <div key={item.product.id} className="success-summary-line" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                   <span>{item.qty}x {item.product.name}</span>
-                  <span>${(item.product.price * item.qty).toFixed(2)}</span>
+                  <span>₹{(item.product.price * item.qty).toFixed(2)}</span>
                 </div>
               ))}
               <div className="success-summary-line" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: '0.4rem', paddingTop: '0.4rem', color: 'var(--accent-volt)', display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '0.85rem' }}>
                 <span>Billed Total</span>
-                <span>${lastCheckoutDetail.total.toFixed(2)}</span>
+                <span>₹{lastCheckoutDetail.total.toFixed(2)}</span>
               </div>
             </div>
 

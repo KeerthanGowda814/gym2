@@ -229,8 +229,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
       duration: 'Active',
       date: 'Today',
       status: 'active',
-      scanMethod: 'AI Face Biometrics',
-      confidence: '99.4%'
+      scanMethod: 'Manual Keycard'
     },
     {
       name: 'Sarah Connor',
@@ -240,8 +239,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
       duration: '1h 30m',
       date: 'Today',
       status: 'done',
-      scanMethod: 'AI Face Biometrics',
-      confidence: '98.9%'
+      scanMethod: 'Manual Keycard'
     },
     {
       name: 'John Wick',
@@ -251,8 +249,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
       duration: 'Active',
       date: 'Today',
       status: 'active',
-      scanMethod: 'AI Face Biometrics',
-      confidence: '99.7%'
+      scanMethod: 'Manual Entry (Trainer)'
     }
   ];
 

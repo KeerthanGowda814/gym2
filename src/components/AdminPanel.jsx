@@ -357,7 +357,7 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
             email: u.email,
             phone: u.phone || '+1 (555) 019-2831',
             plan: u.plan || 'Pro Apex Tier',
-            price: u.price || '₹79/mo',
+            price: u.price || '₹2,999/mo',
             status: 'Active',
             joinDate: new Date().toISOString().split('T')[0],
             trainer: memberTrainer,
@@ -437,7 +437,7 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
               email: u.email,
               phone: u.phone || '+1 (555) 019-2831',
               plan: u.membershipTier || 'Pro Apex Tier',
-              price: u.price || '₹79/mo',
+              price: u.price || '₹2,999/mo',
               status: u.status || 'Active',
               joinDate: u.joinedDate || new Date().toISOString().split('T')[0],
               trainer: u.trainer || u.coachingTrainer || u.assignedTrainer || 'No Trainer Assigned',
@@ -534,9 +534,9 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
     }
 
     const priceMap = {
-      'Pro Apex Tier': '₹79/mo',
-      'Basic Gym Tier': '₹39/mo',
-      'VIP Elite Athlete': '₹129/mo'
+      'Pro Apex Tier': '₹2,999/mo',
+      'Basic Gym Tier': '₹1,499/mo',
+      'VIP Elite Athlete': '₹4,999/mo'
     };
 
     const newMember = {
@@ -545,7 +545,7 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
       email: newMemEmail.trim(),
       phone: newMemPhone.trim() || '+1 (555) 000-0000',
       plan: newMemPlan,
-      price: priceMap[newMemPlan] || '₹79/mo',
+      price: priceMap[newMemPlan] || '₹2,999/mo',
       status: newMemStatus,
       joinDate: new Date().toISOString().split('T')[0],
       trainer: newMemTrainer,
@@ -711,6 +711,112 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
       addActivity(`Withdrew broadcast alert <strong>${title}</strong>`, 'orange');
       alert("Alert successfully withdrawn.");
     }
+  };
+
+  // Supplement Orders Management States (Admin)
+  const [adminOrders, setAdminOrders] = useState([]);
+  const [adminOrderFilter, setAdminOrderFilter] = useState('All');
+  const [adminOrderSearch, setAdminOrderSearch] = useState('');
+  const [selectedAdminOrder, setSelectedAdminOrder] = useState(null);
+  const [editingOrderModal, setEditingOrderModal] = useState(null);
+  const [editStatus, setEditStatus] = useState('Confirmed');
+  const [editCourier, setEditCourier] = useState('Apex Express Logistics');
+  const [editTracking, setEditTracking] = useState('');
+  const [editEstDelivery, setEditEstDelivery] = useState('2-3 Business Days');
+  const [editNote, setEditNote] = useState('');
+
+  const fetchAdminOrders = async () => {
+    try {
+      const serverOrders = await memberApi.getSupplementOrders();
+      let localOrders = [];
+      try {
+        localOrders = JSON.parse(localStorage.getItem('apex_supplement_orders') || '[]');
+      } catch (e) {}
+
+      const map = new Map();
+      [...(localOrders || []), ...(serverOrders || [])].forEach((o) => {
+        if (o && (o.orderId || o.txId)) {
+          map.set(o.orderId || o.txId, o);
+        }
+      });
+      setAdminOrders(Array.from(map.values()));
+    } catch (err) {
+      console.warn("Error fetching admin orders:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAdminOrders();
+    window.addEventListener('storage', fetchAdminOrders);
+    return () => window.removeEventListener('storage', fetchAdminOrders);
+  }, []);
+
+  const handleAdminConfirmOrder = async (order) => {
+    await memberApi.updateSupplementOrderStatus(order.orderId, {
+      status: 'Confirmed',
+      note: 'Order confirmed by Admin'
+    });
+
+    try {
+      const localOrders = JSON.parse(localStorage.getItem('apex_supplement_orders') || '[]');
+      const idx = localOrders.findIndex(o => o.orderId === order.orderId || o.txId === order.txId);
+      if (idx !== -1) {
+        localOrders[idx].status = 'Confirmed';
+        if (!localOrders[idx].statusTimeline) localOrders[idx].statusTimeline = [];
+        localOrders[idx].statusTimeline.push({
+          status: 'Confirmed',
+          timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          note: 'Order confirmed by Admin'
+        });
+        localStorage.setItem('apex_supplement_orders', JSON.stringify(localOrders));
+        window.dispatchEvent(new Event('storage'));
+      }
+    } catch (e) {}
+
+    await fetchAdminOrders();
+    if (addActivity) {
+      addActivity(`Admin confirmed supplement order <strong>${order.orderId}</strong> (${order.userName})`, 'green');
+    }
+    alert(`Order ${order.orderId} confirmed successfully!`);
+  };
+
+  const handleAdminSaveOrderStatus = async (e) => {
+    e.preventDefault();
+    if (!editingOrderModal) return;
+
+    await memberApi.updateSupplementOrderStatus(editingOrderModal.orderId, {
+      status: editStatus,
+      courierName: editCourier,
+      trackingNumber: editTracking,
+      estimatedDelivery: editEstDelivery,
+      note: editNote || `Status updated to ${editStatus} by Admin`
+    });
+
+    try {
+      const localOrders = JSON.parse(localStorage.getItem('apex_supplement_orders') || '[]');
+      const idx = localOrders.findIndex(o => o.orderId === editingOrderModal.orderId || o.txId === editingOrderModal.txId);
+      if (idx !== -1) {
+        localOrders[idx].status = editStatus;
+        if (editCourier) localOrders[idx].courierName = editCourier;
+        if (editTracking) localOrders[idx].trackingNumber = editTracking;
+        if (editEstDelivery) localOrders[idx].estimatedDelivery = editEstDelivery;
+        if (!localOrders[idx].statusTimeline) localOrders[idx].statusTimeline = [];
+        localOrders[idx].statusTimeline.push({
+          status: editStatus,
+          timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          note: editNote || `Status updated to ${editStatus} by Admin`
+        });
+        localStorage.setItem('apex_supplement_orders', JSON.stringify(localOrders));
+        window.dispatchEvent(new Event('storage'));
+      }
+    } catch (e) {}
+
+    await fetchAdminOrders();
+    if (addActivity) {
+      addActivity(`Admin updated order <strong>${editingOrderModal.orderId}</strong> status to ${editStatus}`, 'volt');
+    }
+    alert(`Order ${editingOrderModal.orderId} updated to ${editStatus}!`);
+    setEditingOrderModal(null);
   };
 
   // Handle Notify Expiry
@@ -1066,8 +1172,27 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
     };
   }, [activeView, membersList]);
 
-  // RFID Attendance Card Scan Simulator Submit
-  const handleSimulateScanSubmit = (e) => {
+  const fetchAdminAttendanceLogs = async () => {
+    try {
+      const data = await memberApi.getAdminAttendanceLogs();
+      if (data && data.success) {
+        if (Array.isArray(data.records)) setDailyAttendance(data.records);
+        if (data.checkedInCount !== undefined) setCheckedInCount(data.checkedInCount);
+        if (data.onFloorCount !== undefined) setOnFloorCount(data.onFloorCount);
+      }
+    } catch (e) {
+      console.warn("Error fetching admin attendance logs:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (activeView === 'attendance') {
+      fetchAdminAttendanceLogs();
+    }
+  }, [activeView]);
+
+  // Handle Mock RFID Gate Scan Simulation Submit
+  const handleSimulateScanSubmit = async (e) => {
     e.preventDefault();
 
     const memberIds = {
@@ -1079,45 +1204,35 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
     };
 
     const code = memberIds[simMember] || '#0000-MOCK';
-    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const email = `${simMember.toLowerCase().replace(/\s+/g, '')}@apex.com`;
 
     if (simAction === 'check-in') {
-      const isAlreadyOnsite = dailyAttendance.some((u) => u.name === simMember && u.outTime === '--');
-      if (isAlreadyOnsite) {
-        alert(`${simMember} is already checked-in and active on the gym floor.`);
-        return;
+      const res = await memberApi.checkIn({
+        userEmail: email,
+        memberName: simMember,
+        scanMethod: 'RFID Turnstile Gate',
+        code
+      });
+
+      if (res && res.success) {
+        addActivity(`Member <strong>${simMember}</strong> checked in via RFID Card Scan`, 'volt');
+        fetchAdminAttendanceLogs();
+      } else {
+        alert(res?.message || `${simMember} check-in failed.`);
       }
-
-      // Add to daily log list
-      const newScan = {
-        name: simMember,
-        code,
-        inTime: nowTime,
-        outTime: '--',
-        duration: '--',
-        status: 'active'
-      };
-
-      setDailyAttendance((prev) => [newScan, ...prev]);
-      setCheckedInCount((prev) => prev + 1);
-      setOnFloorCount((prev) => prev + 1);
-      addActivity(`Member <strong>${simMember}</strong> checked in via RFID Card Scan`, 'volt');
     } else {
       // Check-out
-      const activeIdx = dailyAttendance.findIndex((u) => u.name === simMember && u.outTime === '--');
-      if (activeIdx === -1) {
-        alert(`${simMember} is not currently active on the gym floor.`);
-        return;
+      const res = await memberApi.checkOut({
+        userEmail: email,
+        memberName: simMember
+      });
+
+      if (res && res.success) {
+        addActivity(`Member <strong>${simMember}</strong> checked out via RFID Card Scan`, 'orange');
+        fetchAdminAttendanceLogs();
+      } else {
+        alert(res?.message || `${simMember} check-out failed.`);
       }
-
-      setDailyAttendance((prev) =>
-        prev.map((item, idx) =>
-          idx === activeIdx ? { ...item, outTime: nowTime, duration: '1h 30m', status: 'done' } : item
-        )
-      );
-
-      setOnFloorCount((prev) => Math.max(0, prev - 1));
-      addActivity(`Member <strong>${simMember}</strong> checked out via RFID Card Scan`, 'orange');
     }
   };
 
@@ -1426,7 +1541,7 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                         <td style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--accent-cyan)', fontSize: '0.85rem' }}>{pay.txId}</td>
                         <td><strong>{pay.name}</strong></td>
                         <td>{pay.plan}</td>
-                        <td><strong>${pay.amount.toFixed(2)}</strong></td>
+                        <td><strong>₹{pay.amount.toFixed(2)}</strong></td>
                         <td><span className={`status-badge ${pay.status}`}>{pay.status}</span></td>
                         <td>{pay.date}</td>
                       </tr>
@@ -1436,6 +1551,425 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
               </table>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 3.5 ADMIN SUPPLEMENT ORDERS MANAGEMENT VIEW */}
+      {(activeView === 'orders' || activeView === 'supplement-orders') && (
+        <div className="admin-sub-view" id="admin-subview-orders" style={{ display: 'block' }}>
+          {/* Header Banner */}
+          <div className="db-card" style={{ marginBottom: '1.5rem', background: 'linear-gradient(135deg, rgba(20, 20, 28, 0.95) 0%, rgba(10, 10, 15, 0.95) 100%)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '1.5rem 1.8rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <span style={{ fontSize: '1.5rem' }}>🛒</span>
+                  <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.3rem', color: 'var(--text-white)', margin: 0, textTransform: 'uppercase' }}>
+                    Supplement Orders & Fulfillment Management
+                  </h3>
+                </div>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: '0.3rem 0 0 0' }}>
+                  Review member purchases, confirm pending orders, assign courier tracking numbers, and update delivery status.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.8rem' }}>
+                <button
+                  type="button"
+                  className="glow-btn"
+                  onClick={fetchAdminOrders}
+                  style={{ padding: '0.5rem 1.1rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                >
+                  🔄 Refresh Orders
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Metrics */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total Orders</span>
+              <h4 style={{ color: 'var(--text-white)', margin: '0.3rem 0 0 0', fontWeight: 800, fontSize: '1.25rem' }}>{adminOrders.length}</h4>
+            </div>
+
+            <div style={{ background: 'rgba(255, 159, 0, 0.08)', border: '1px solid rgba(255, 159, 0, 0.3)', borderRadius: '8px', padding: '1rem', boxShadow: '0 0 15px rgba(255, 159, 0, 0.1)' }}>
+              <span style={{ fontSize: '0.72rem', color: '#ff9f00', textTransform: 'uppercase', fontWeight: 700 }}>Pending Confirmation ⚡</span>
+              <h4 style={{ color: '#ff9f00', margin: '0.3rem 0 0 0', fontWeight: 800, fontSize: '1.3rem' }}>
+                {adminOrders.filter(o => o.status === 'Pending Confirmation').length}
+              </h4>
+            </div>
+
+            <div style={{ background: 'rgba(0, 240, 255, 0.05)', border: '1px solid rgba(0, 240, 255, 0.2)', borderRadius: '8px', padding: '1rem' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', textTransform: 'uppercase' }}>Confirmed & In-Transit</span>
+              <h4 style={{ color: 'var(--accent-cyan)', margin: '0.3rem 0 0 0', fontWeight: 800, fontSize: '1.25rem' }}>
+                {adminOrders.filter(o => ['Confirmed', 'Processing', 'Out for Delivery'].includes(o.status)).length}
+              </h4>
+            </div>
+
+            <div style={{ background: 'rgba(0, 255, 102, 0.05)', border: '1px solid rgba(0, 255, 102, 0.2)', borderRadius: '8px', padding: '1rem' }}>
+              <span style={{ fontSize: '0.72rem', color: '#00ff66', textTransform: 'uppercase' }}>Delivered</span>
+              <h4 style={{ color: '#00ff66', margin: '0.3rem 0 0 0', fontWeight: 800, fontSize: '1.25rem' }}>
+                {adminOrders.filter(o => o.status === 'Delivered').length}
+              </h4>
+            </div>
+          </div>
+
+          {/* Filter Chips and Search Bar */}
+          <div className="store-filter-bar" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div className="filter-categories">
+              {['All', 'Pending Confirmation', 'Confirmed', 'Processing', 'Out for Delivery', 'Delivered', 'Cancelled'].map((st) => (
+                <button
+                  key={st}
+                  className={`filter-chip ${adminOrderFilter === st ? 'active' : ''}`}
+                  onClick={() => setAdminOrderFilter(st)}
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.8rem' }}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
+
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Search Order ID, Member Name, Email..."
+              value={adminOrderSearch}
+              onChange={(e) => setAdminOrderSearch(e.target.value)}
+              style={{ width: '250px', padding: '0.45rem 0.8rem', fontSize: '0.78rem' }}
+            />
+          </div>
+
+          {/* Orders Management Table */}
+          <div className="db-card flex-card">
+            <div className="table-wrapper">
+              <table className="db-table">
+                <thead>
+                  <tr>
+                    <th>Order ID / TxID</th>
+                    <th>Customer Member</th>
+                    <th>Items Summary</th>
+                    <th>Billed Total</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(() => {
+                    const filtered = adminOrders.filter((o) => {
+                      const matchesFilter = adminOrderFilter === 'All' || o.status === adminOrderFilter;
+                      const q = adminOrderSearch.toLowerCase();
+                      const matchesSearch = !q ||
+                        (o.orderId && o.orderId.toLowerCase().includes(q)) ||
+                        (o.txId && o.txId.toLowerCase().includes(q)) ||
+                        (o.userName && o.userName.toLowerCase().includes(q)) ||
+                        (o.userEmail && o.userEmail.toLowerCase().includes(q)) ||
+                        (o.itemsSummary && o.itemsSummary.toLowerCase().includes(q));
+                      return matchesFilter && matchesSearch;
+                    });
+
+                    if (filtered.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan="7" style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '2.5rem', fontSize: '0.85rem' }}>
+                            No supplement orders found matching criteria.
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return filtered.map((order) => {
+                      const isPending = order.status === 'Pending Confirmation';
+                      const isCancelled = order.status === 'Cancelled';
+
+                      return (
+                        <tr key={order.orderId || order.txId}>
+                          <td>
+                            <strong style={{ fontFamily: 'monospace', color: 'var(--accent-cyan)', display: 'block' }}>{order.orderId}</strong>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>Tx: {order.txId}</span>
+                          </td>
+                          <td>
+                            <strong style={{ color: 'var(--text-white)', display: 'block' }}>{order.userName || 'Member'}</strong>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{order.userEmail}</span>
+                          </td>
+                          <td style={{ maxWidth: '200px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                            {order.itemsSummary}
+                          </td>
+                          <td>
+                            <strong style={{ color: 'var(--accent-volt)', fontSize: '0.9rem' }}>₹{Number(order.total || order.totalAmount || 0).toFixed(2)}</strong>
+                            <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)', display: 'block', textTransform: 'uppercase' }}>{order.paymentMethod || 'card'}</span>
+                          </td>
+                          <td style={{ fontSize: '0.78rem' }}>{order.date}</td>
+                          <td>
+                            <span style={{
+                              padding: '0.25rem 0.6rem',
+                              borderRadius: '12px',
+                              fontWeight: 800,
+                              fontSize: '0.68rem',
+                              textTransform: 'uppercase',
+                              background: isCancelled
+                                ? 'rgba(255, 62, 108, 0.15)'
+                                : order.status === 'Delivered'
+                                ? 'rgba(0, 255, 102, 0.15)'
+                                : isPending
+                                ? 'rgba(255, 159, 0, 0.15)'
+                                : 'rgba(0, 240, 255, 0.15)',
+                              color: isCancelled
+                                ? '#ff3e6c'
+                                : order.status === 'Delivered'
+                                ? '#00ff66'
+                                : isPending
+                                ? '#ff9f00'
+                                : 'var(--accent-cyan)',
+                              border: `1px solid ${
+                                isCancelled
+                                  ? '#ff3e6c'
+                                  : order.status === 'Delivered'
+                                  ? '#00ff66'
+                                  : isPending
+                                  ? '#ff9f00'
+                                  : 'var(--accent-cyan)'
+                              }`
+                            }}>
+                              {order.status}
+                            </span>
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                              {isPending && (
+                                <button
+                                  type="button"
+                                  className="glow-btn"
+                                  onClick={() => handleAdminConfirmOrder(order)}
+                                  style={{ padding: '0.25rem 0.6rem', fontSize: '0.7rem', background: '#00ff66', color: '#000', fontWeight: 800, border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                >
+                                  ✓ Confirm Order
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                className="outline-btn"
+                                onClick={() => {
+                                  setEditingOrderModal(order);
+                                  setEditStatus(order.status || 'Confirmed');
+                                  setEditCourier(order.courierName || 'Apex Express Logistics');
+                                  setEditTracking(order.trackingNumber || '');
+                                  setEditEstDelivery(order.estimatedDelivery || '2-3 Business Days');
+                                  setEditNote('');
+                                }}
+                                style={{ padding: '0.25rem 0.6rem', fontSize: '0.7rem', color: 'var(--accent-volt)', borderColor: 'rgba(198, 255, 0, 0.4)' }}
+                              >
+                                ⚙ Update Status
+                              </button>
+
+                              <button
+                                type="button"
+                                className="outline-btn"
+                                onClick={() => setSelectedAdminOrder(order)}
+                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}
+                              >
+                                🔍 Details
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* EDIT STATUS & COURIER MODAL */}
+          {editingOrderModal && (
+            <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.88)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div className="db-card" style={{ maxWidth: '540px', width: '90%', background: 'var(--bg-card)', border: '1px solid var(--accent-volt)', borderRadius: '10px', padding: '1.8rem', position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={() => setEditingOrderModal(null)}
+                  style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}
+                >
+                  &times;
+                </button>
+
+                <h4 style={{ color: 'var(--text-white)', margin: '0 0 0.3rem 0', fontSize: '1.15rem', fontWeight: 800 }}>
+                  Update Order Fulfillment Status
+                </h4>
+                <p style={{ color: 'var(--accent-cyan)', fontFamily: 'monospace', fontSize: '0.8rem', margin: '0 0 1.2rem 0' }}>
+                  {editingOrderModal.orderId} — Customer: {editingOrderModal.userName}
+                </p>
+
+                <form onSubmit={handleAdminSaveOrderStatus} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-white)', display: 'block', marginBottom: '0.3rem', fontWeight: 700 }}>
+                      Order Status *
+                    </label>
+                    <select
+                      value={editStatus}
+                      onChange={(e) => setEditStatus(e.target.value)}
+                      className="form-input"
+                      style={{ background: 'var(--bg-black)', border: '1px solid var(--border-color)', color: '#fff', width: '100%', padding: '0.6rem' }}
+                    >
+                      <option value="Pending Confirmation">Pending Confirmation</option>
+                      <option value="Confirmed">Confirmed (Order Approved)</option>
+                      <option value="Processing">Processing (Packing Parcel)</option>
+                      <option value="Out for Delivery">Out for Delivery (Dispatched to Courier)</option>
+                      <option value="Delivered">Delivered (Handed to Customer)</option>
+                      <option value="Cancelled">Cancelled / Refunded</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: 'var(--text-white)', display: 'block', marginBottom: '0.3rem', fontWeight: 700 }}>
+                        Courier Logistics Name
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={editCourier}
+                        onChange={(e) => setEditCourier(e.target.value)}
+                        placeholder="e.g. Apex Express, BlueDart, FedEx"
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: 'var(--text-white)', display: 'block', marginBottom: '0.3rem', fontWeight: 700 }}>
+                        Tracking Number
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={editTracking}
+                        onChange={(e) => setEditTracking(e.target.value)}
+                        placeholder="e.g. APX-98214-IN"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-white)', display: 'block', marginBottom: '0.3rem', fontWeight: 700 }}>
+                      Estimated Delivery Window
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={editEstDelivery}
+                      onChange={(e) => setEditEstDelivery(e.target.value)}
+                      placeholder="e.g. 2-3 Business Days or Tomorrow 4 PM"
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-white)', display: 'block', marginBottom: '0.3rem', fontWeight: 700 }}>
+                      Admin Audit Note (Visible in User Status Timeline)
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={editNote}
+                      onChange={(e) => setEditNote(e.target.value)}
+                      placeholder="e.g. Verified payment & packed with fragile bubble wrap"
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.8rem', marginTop: '0.5rem' }}>
+                    <button
+                      type="button"
+                      className="outline-btn"
+                      onClick={() => setEditingOrderModal(null)}
+                      style={{ padding: '0.6rem 1.2rem', fontSize: '0.8rem' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="glow-btn"
+                      style={{ padding: '0.6rem 1.5rem', fontSize: '0.8rem' }}
+                    >
+                      Save Status Update ✓
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ADMIN ORDER FULL DETAILS MODAL */}
+          {selectedAdminOrder && (
+            <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.88)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div className="db-card" style={{ maxWidth: '600px', width: '90%', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1.8rem', position: 'relative', maxHeight: '90vh', overflowY: 'auto' }}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedAdminOrder(null)}
+                  style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}
+                >
+                  &times;
+                </button>
+
+                <h4 style={{ color: 'var(--text-white)', margin: '0 0 0.3rem 0', fontSize: '1.2rem', fontWeight: 800 }}>
+                  Order Detailed Inspection
+                </h4>
+                <p style={{ color: 'var(--accent-cyan)', fontFamily: 'monospace', fontSize: '0.82rem', margin: '0 0 1.2rem 0' }}>
+                  {selectedAdminOrder.orderId} (Tx: {selectedAdminOrder.txId})
+                </p>
+
+                {/* Customer & Shipping Summary */}
+                <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.9rem', marginBottom: '1rem', fontSize: '0.8rem' }}>
+                  <strong style={{ color: 'var(--accent-volt)', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', marginBottom: '0.3rem' }}>Customer & Delivery Info:</strong>
+                  <div style={{ color: 'var(--text-white)' }}><strong>{selectedAdminOrder.userName}</strong> ({selectedAdminOrder.userPhone || 'N/A'}) — {selectedAdminOrder.userEmail}</div>
+                  {selectedAdminOrder.shippingInfo && (
+                    <div style={{ color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                      Address: {selectedAdminOrder.shippingInfo.address}, {selectedAdminOrder.shippingInfo.city}, {selectedAdminOrder.shippingInfo.state} - {selectedAdminOrder.shippingInfo.pincode}
+                    </div>
+                  )}
+                </div>
+
+                {/* Items List */}
+                <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.9rem', marginBottom: '1rem' }}>
+                  <strong style={{ color: 'var(--accent-cyan)', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Purchased Items List:</strong>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {selectedAdminOrder.items && selectedAdminOrder.items.length > 0 ? (
+                      selectedAdminOrder.items.map((item, iIdx) => (
+                        <div key={iIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
+                          <span style={{ color: 'var(--text-white)' }}>{item.quantity}x {item.name}</span>
+                          <span style={{ color: 'var(--accent-volt)', fontWeight: 700 }}>₹{(Number(item.price) * Number(item.quantity)).toFixed(2)}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <span style={{ color: 'var(--text-white)', fontSize: '0.8rem' }}>{selectedAdminOrder.itemsSummary}</span>
+                    )}
+                  </div>
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: '0.5rem', paddingTop: '0.5rem', display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: 'var(--accent-volt)', fontSize: '0.9rem' }}>
+                    <span>Billed Total</span>
+                    <span>₹{Number(selectedAdminOrder.total || selectedAdminOrder.totalAmount || 0).toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {/* Status Timeline */}
+                <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.9rem', marginBottom: '1.2rem' }}>
+                  <strong style={{ color: 'var(--text-white)', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Status History Timeline:</strong>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '180px', overflowY: 'auto' }}>
+                    {(selectedAdminOrder.statusTimeline || []).map((tl, tIdx) => (
+                      <div key={tIdx} style={{ fontSize: '0.75rem', borderLeft: '2px solid var(--accent-cyan)', paddingLeft: '0.6rem' }}>
+                        <span style={{ color: 'var(--accent-cyan)', fontWeight: 700 }}>{tl.status}</span> <span style={{ color: 'var(--text-dim)', fontSize: '0.68rem' }}>({tl.timestamp})</span>
+                        <div style={{ color: 'var(--text-muted)' }}>{tl.note}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  className="outline-btn"
+                  onClick={() => setSelectedAdminOrder(null)}
+                  style={{ width: '100%', padding: '0.6rem' }}
+                >
+                  Close Inspection
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1642,13 +2176,13 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                         ) : (
                           dailyAttendance.map((item, idx) => (
                             <tr key={idx}>
-                              <td><strong>{item.name}</strong></td>
-                              <td style={{ fontFamily: 'monospace' }}>{item.code}</td>
-                              <td>{item.inTime}</td>
-                              <td>{item.outTime}</td>
-                              <td>{item.duration}</td>
+                              <td><strong>{item.memberName || item.name}</strong></td>
+                              <td style={{ fontFamily: 'monospace' }}>{item.code || item.id}</td>
+                              <td>{item.inTime || item.time}</td>
+                              <td>{item.outTime || '--'}</td>
+                              <td>{item.hoursLogged || item.duration || '--'}</td>
                               <td>
-                                <span className={`status-badge ${item.status === 'active' ? 'pending' : 'paid'}`}>
+                                <span className={`status-badge ${item.status === 'Active' || item.status === 'active' ? 'pending' : 'paid'}`}>
                                   {item.status}
                                 </span>
                               </td>
@@ -2754,9 +3288,9 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                   }}
                 >
                   <option value="All">All Membership Tiers</option>
-                  <option value="Pro Apex Tier">Pro Apex Tier (₹79/mo)</option>
-                  <option value="VIP Elite Athlete">VIP Elite Athlete (₹129/mo)</option>
-                  <option value="Basic Gym Tier">Basic Gym Tier (₹39/mo)</option>
+                  <option value="Pro Apex Tier">Pro Apex Tier (₹2,999/mo)</option>
+                  <option value="VIP Elite Athlete">VIP Elite Athlete (₹4,999/mo)</option>
+                  <option value="Basic Gym Tier">Basic Gym Tier (₹1,499/mo)</option>
                 </select>
               </div>
             </div>
@@ -3309,9 +3843,9 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                     onChange={(e) => setNewMemPlan(e.target.value)}
                     style={{ width: '100%', background: '#12121a', border: '1px solid var(--border-color)', color: '#fff', padding: '0.6rem 0.8rem', borderRadius: '6px', fontSize: '0.85rem' }}
                   >
-                    <option value="Pro Apex Tier">Pro Apex Tier (₹79/mo)</option>
-                    <option value="VIP Elite Athlete">VIP Elite Athlete (₹129/mo)</option>
-                    <option value="Basic Gym Tier">Basic Gym Tier (₹39/mo)</option>
+                    <option value="Pro Apex Tier">Pro Apex Tier (₹2,999/mo)</option>
+                    <option value="VIP Elite Athlete">VIP Elite Athlete (₹4,999/mo)</option>
+                    <option value="Basic Gym Tier">Basic Gym Tier (₹1,499/mo)</option>
                   </select>
                 </div>
                 <div>

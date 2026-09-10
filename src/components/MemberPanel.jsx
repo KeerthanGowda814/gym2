@@ -148,9 +148,58 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
   const [isShoulderFullScreen, setIsShoulderFullScreen] = useState(false);
   const [legsPhotoIndex, setLegsPhotoIndex] = useState(0);
   const [isLegsFullScreen, setIsLegsFullScreen] = useState(false);
-  const [logExercise, setLogExercise] = useState('');
-  const [logWeight, setLogWeight] = useState('');
-  const [logReps, setLogReps] = useState('');
+  // Supplement Orders & Tracking states
+  const [memberOrders, setMemberOrders] = useState([]);
+  const [selectedOrderTracking, setSelectedOrderTracking] = useState(null);
+  const [orderSearchQuery, setOrderSearchQuery] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState('All');
+
+  const loadMemberOrders = async () => {
+    const userEmail = currentUser?.email || profileData?.email || 'member@apex.com';
+    const userName = currentUser?.name || profileData?.name || '';
+    try {
+      const serverOrders = await memberApi.getSupplementOrders(userEmail);
+      const allServerOrders = await memberApi.getSupplementOrders();
+      let localOrders = [];
+      try {
+        localOrders = JSON.parse(localStorage.getItem('apex_supplement_orders') || '[]');
+      } catch (e) {}
+
+      const rawCombined = [...(localOrders || []), ...(serverOrders || []), ...(allServerOrders || [])];
+      
+      const matched = rawCombined.filter((o) => {
+        if (!o) return false;
+        if (!userEmail && !userName) return true;
+        const oEmail = (o.userEmail || '').toLowerCase();
+        const oName = (o.userName || '').toLowerCase();
+        const curEmail = (userEmail || '').toLowerCase();
+        const curName = (userName || '').toLowerCase();
+
+        return (
+          (curEmail && oEmail === curEmail) ||
+          (curName && oName.includes(curName)) ||
+          (curEmail && curEmail.includes('keerthan') && oEmail.includes('keerthan')) ||
+          curEmail === 'member@apex.com'
+        );
+      });
+
+      const map = new Map();
+      (matched.length > 0 ? matched : rawCombined).forEach((o) => {
+        if (o && (o.orderId || o.txId)) {
+          map.set(o.orderId || o.txId, o);
+        }
+      });
+      setMemberOrders(Array.from(map.values()));
+    } catch (err) {
+      console.warn("Error loading member orders:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadMemberOrders();
+    window.addEventListener('storage', loadMemberOrders);
+    return () => window.removeEventListener('storage', loadMemberOrders);
+  }, [currentUser]);
 
   // Billing states
   const [membershipTier, setMembershipTier] = useState('Muscle Pro');
@@ -451,46 +500,25 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
   // Attendance states
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [checkInTime, setCheckInTime] = useState('');
-  const [attendanceStreak, setAttendanceStreak] = useState(14);
-  const [sessions, setSessions] = useState([
-    { date: 'July 12, 2026', time: '08:30 AM', type: 'AI Face Check-in' },
-    { date: 'July 11, 2026', time: '09:15 AM', type: 'Check-in Gate Entry' },
-    { date: 'July 10, 2026', time: '08:00 AM', type: 'Check-in Gate Entry' },
-    { date: 'July 09, 2026', time: '05:45 PM', type: 'Check-out Exit' },
-    { date: 'July 07, 2026', time: '08:15 AM', type: 'Check-in Gate Entry' },
-    { date: 'July 06, 2026', time: '07:30 AM', type: 'AI Face Check-in' },
-    { date: 'July 05, 2026', time: '06:00 PM', type: 'Check-in Gate Entry' },
-    { date: 'July 03, 2026', time: '08:45 AM', type: 'Check-in Gate Entry' },
-    { date: 'July 02, 2026', time: '09:00 AM', type: 'AI Face Check-in' },
-    { date: 'July 01, 2026', time: '07:15 AM', type: 'Check-in Gate Entry' }
-  ]);
-  const [attendanceRate, setAttendanceRate] = useState(92);
-  const [activeDays, setActiveDays] = useState([2, 3, 5, 6, 7, 9, 10, 11]);
+  const [attendanceStreak, setAttendanceStreak] = useState(0);
+  const [sessions, setSessions] = useState([]);
+  const [attendanceRate, setAttendanceRate] = useState(0);
+  const [activeDays, setActiveDays] = useState([]);
+  const [totalHoursLogged, setTotalHoursLogged] = useState('0.0 Hrs');
 
   // --- ATTENDANCE MODULE DETAILED RECORDS, SUMMARY, REPORT & HISTORY STATES ---
-  const [selectedAttMonth, setSelectedAttMonth] = useState('August 2026');
+  const [selectedAttMonth, setSelectedAttMonth] = useState(() => new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }));
   const [attRecordSearch, setAttRecordSearch] = useState('');
   const [attRecordFilter, setAttRecordFilter] = useState('all');
   const [attRecordPage, setAttRecordPage] = useState(1);
-  const [attendanceRecords, setAttendanceRecords] = useState([
-    { id: 'ATT-1092', memberName: currentUser?.name || 'Member Athlete', date: 'July 12, 2026', time: '08:30 AM', scanMethod: 'AI Face Biometrics', gateAction: 'Gate Entry Check-in', status: 'Active', hoursLogged: '1h 45m', photo: null },
-    { id: 'ATT-1091', memberName: currentUser?.name || 'Member Athlete', date: 'July 11, 2026', time: '09:15 AM', scanMethod: 'RFID Turnstile Gate', gateAction: 'Gate Entry Check-in', status: 'Completed', hoursLogged: '2h 10m', photo: null },
-    { id: 'ATT-1090', memberName: currentUser?.name || 'Member Athlete', date: 'July 10, 2026', time: '08:00 AM', scanMethod: 'AI Face Biometrics', gateAction: 'Gate Entry Check-in', status: 'Completed', hoursLogged: '1h 50m', photo: null },
-    { id: 'ATT-1089', memberName: currentUser?.name || 'Member Athlete', date: 'July 09, 2026', time: '05:45 PM', scanMethod: 'RFID Turnstile Gate', gateAction: 'Gate Exit Check-out', status: 'Completed', hoursLogged: '1h 30m', photo: null },
-    { id: 'ATT-1088', memberName: currentUser?.name || 'Member Athlete', date: 'July 07, 2026', time: '08:15 AM', scanMethod: 'AI Face Biometrics', gateAction: 'Gate Entry Check-in', status: 'Completed', hoursLogged: '2h 00m', photo: null },
-    { id: 'ATT-1087', memberName: currentUser?.name || 'Member Athlete', date: 'July 06, 2026', time: '07:30 AM', scanMethod: 'AI Face Biometrics', gateAction: 'Gate Entry Check-in', status: 'Completed', hoursLogged: '1h 40m', photo: null },
-    { id: 'ATT-1086', memberName: currentUser?.name || 'Member Athlete', date: 'July 05, 2026', time: '06:00 PM', scanMethod: 'RFID Turnstile Gate', gateAction: 'Gate Entry Check-in', status: 'Completed', hoursLogged: '1h 20m', photo: null },
-    { id: 'ATT-1085', memberName: currentUser?.name || 'Member Athlete', date: 'July 03, 2026', time: '08:45 AM', scanMethod: 'AI Face Biometrics', gateAction: 'Gate Entry Check-in', status: 'Completed', hoursLogged: '2h 15m', photo: null },
-    { id: 'ATT-1084', memberName: currentUser?.name || 'Member Athlete', date: 'July 02, 2026', time: '09:00 AM', scanMethod: 'AI Face Biometrics', gateAction: 'Gate Entry Check-in', status: 'Completed', hoursLogged: '1h 35m', photo: null },
-    { id: 'ATT-1083', memberName: currentUser?.name || 'Member Athlete', date: 'July 01, 2026', time: '07:15 AM', scanMethod: 'RFID Turnstile Gate', gateAction: 'Gate Entry Check-in', status: 'Completed', hoursLogged: '2h 05m', photo: null }
-  ]);
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
 
   const handleDownloadAttReport = (format) => {
     if (CustomSwal) {
       CustomSwal.fire({
         icon: 'success',
         title: `Generating ${format.toUpperCase()} Attendance Report 📄`,
-        html: `<p style="font-size:0.9rem;color:#fff;">Downloading official biometric attendance summary report for <strong>${currentUser?.name || 'Member'}</strong> (${selectedAttMonth}).</p><div style="margin-top:0.8rem;padding:0.6rem;background:rgba(0,255,102,0.06);border:1px solid #00ff66;border-radius:6px;font-family:monospace;font-size:0.82rem;color:#00ff66;">Report Reference: REP-ATT-${Math.floor(1000 + Math.random() * 9000)}<br/>Period: ${selectedAttMonth}<br/>Format: ${format.toUpperCase()} Document</div>`
+        html: `<p style="font-size:0.9rem;color:#fff;">Downloading official attendance summary report for <strong>${currentUser?.name || 'Member'}</strong> (${selectedAttMonth}).</p><div style="margin-top:0.8rem;padding:0.6rem;background:rgba(0,255,102,0.06);border:1px solid #00ff66;border-radius:6px;font-family:monospace;font-size:0.82rem;color:#00ff66;">Report Reference: REP-ATT-${Math.floor(1000 + Math.random() * 9000)}<br/>Period: ${selectedAttMonth}<br/>Format: ${format.toUpperCase()} Document</div>`
       });
     }
   };
@@ -563,11 +591,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
     return localStorage.getItem(`apex_face_date_${memberKey}`) || 'July 2026';
   });
 
-  const [isRegistrationFormHidden, setIsRegistrationFormHidden] = useState(() => {
-    const savedByKey = localStorage.getItem(`apex_face_registered_${memberKey}`);
-    const savedByName = localStorage.getItem(`apex_face_registered_${currentUser?.name || ''}`);
-    return savedByKey === 'true' || savedByName === 'true';
-  });
+  const [isRegistrationFormHidden, setIsRegistrationFormHidden] = useState(true);
   const [showCandidateTrainerSelection, setShowCandidateTrainerSelection] = useState(false);
 
   const handleCandidateSelectTrainer = async (trainer) => {
@@ -768,7 +792,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
       CustomSwal.fire({
         icon: 'success',
         title: 'Registration Submitted! 🎉',
-        html: `<p style="color:#fff;">Candidate <strong>${candidateName}</strong> biometrics registered successfully!</p><p style="color:#c6ff00;font-size:0.88rem;margin-top:0.5rem;font-weight:bold;">Step 2: Select your Personal Trainer below to open your Trainer Page.</p>`
+        html: `<p style="color:#fff;">Candidate <strong>${candidateName}</strong> registered for manual attendance successfully!</p><p style="color:#c6ff00;font-size:0.88rem;margin-top:0.5rem;font-weight:bold;">Step 2: Select your Personal Trainer below to open your Trainer Page.</p>`
       });
     }
   };
@@ -850,40 +874,24 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
       // 4. Attendance
       try {
-        const attStatus = await memberApi.getAttendanceStatus();
+        const userEmail = currentUser?.email || currentUser?.sub || profileData?.email || 'gkeerthan583@gmail.com';
+        const attStatus = await memberApi.getAttendanceStatus(userEmail);
         if (attStatus) {
           setIsCheckedIn(attStatus.isCheckedIn || false);
           setCheckInTime(attStatus.checkInTime || '');
           setAttendanceStreak(attStatus.streakDays || 0);
-          setAttendanceRate(attStatus.attendanceRate || 100);
+          setAttendanceRate(attStatus.attendanceRate || 0);
+          if (attStatus.totalHoursLogged) setTotalHoursLogged(attStatus.totalHoursLogged);
         }
 
-        const attHistory = await memberApi.getAttendanceHistory();
+        const attHistory = await memberApi.getAttendanceHistory(userEmail, selectedAttMonth);
         if (attHistory) {
-          if (Array.isArray(attHistory.sessions)) {
-            setSessions(attHistory.sessions);
-
-            const mappedRecords = attHistory.sessions.map((sess, idx) => {
-              const isCheckIn = sess.type && sess.type.toLowerCase().includes('check-in');
-              const isManual = sess.type && sess.type.toLowerCase().includes('manual');
-              const scanMethodStr = isManual ? "Manual (Trainer)" : (sess.type && sess.type.toLowerCase().includes('face') ? "AI Face Biometrics" : "RFID Turnstile Gate");
-              return {
-                id: `ATT-${1092 + idx}`,
-                memberName: currentUser?.name || 'Ethan Hunt',
-                date: sess.date,
-                time: sess.time,
-                scanMethod: scanMethodStr,
-                gateAction: isCheckIn ? 'Gate Entry Check-in' : 'Gate Exit Check-out',
-                status: isCheckIn ? 'Active' : 'Completed',
-                hoursLogged: isCheckIn ? '--' : '1h 30m',
-                photo: null
-              };
-            });
-            setAttendanceRecords(mappedRecords);
-          }
-          if (Array.isArray(attHistory.activeDaysInMonth)) {
-            setActiveDays(attHistory.activeDaysInMonth);
-          }
+          if (Array.isArray(attHistory.records)) setAttendanceRecords(attHistory.records);
+          if (Array.isArray(attHistory.sessions)) setSessions(attHistory.sessions);
+          if (Array.isArray(attHistory.activeDaysInMonth)) setActiveDays(attHistory.activeDaysInMonth);
+          if (attHistory.streakDays !== undefined) setAttendanceStreak(attHistory.streakDays);
+          if (attHistory.attendanceRate !== undefined) setAttendanceRate(attHistory.attendanceRate);
+          if (attHistory.totalHoursLogged) setTotalHoursLogged(attHistory.totalHoursLogged);
         }
       } catch (err) {
         console.warn("Error loading attendance statistics:", err);
@@ -981,6 +989,67 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
     return () => clearInterval(interval);
   }, [memberKey, currentUser]);
+
+  // Refetch attendance when selected month changes
+  useEffect(() => {
+    const fetchAttForMonth = async () => {
+      try {
+        const userEmail = currentUser?.email || currentUser?.sub || profileData?.email || 'gkeerthan583@gmail.com';
+        const attHistory = await memberApi.getAttendanceHistory(userEmail, selectedAttMonth);
+        if (attHistory) {
+          if (Array.isArray(attHistory.records)) setAttendanceRecords(attHistory.records);
+          if (Array.isArray(attHistory.sessions)) setSessions(attHistory.sessions);
+          if (Array.isArray(attHistory.activeDaysInMonth)) setActiveDays(attHistory.activeDaysInMonth);
+          if (attHistory.streakDays !== undefined) setAttendanceStreak(attHistory.streakDays);
+          if (attHistory.attendanceRate !== undefined) setAttendanceRate(attHistory.attendanceRate);
+          if (attHistory.totalHoursLogged) setTotalHoursLogged(attHistory.totalHoursLogged);
+        }
+      } catch (e) {}
+    };
+    fetchAttForMonth();
+  }, [selectedAttMonth, currentUser]);
+
+  const handleGateCheckIn = async () => {
+    const userEmail = currentUser?.email || currentUser?.sub || profileData?.email || 'gkeerthan583@gmail.com';
+    const memberName = profileData?.name || currentUser?.name || 'keerthan';
+    const res = await memberApi.checkIn({ userEmail, memberName, scanMethod: 'Manual Keycard' });
+    if (res && res.success) {
+      if (CustomSwal) CustomSwal.fire({ icon: 'success', title: 'Check-In Success! 🔑', text: res.message || 'Facility entry granted.' });
+      setIsCheckedIn(true);
+      const attHistory = await memberApi.getAttendanceHistory(userEmail, selectedAttMonth);
+      if (attHistory) {
+        if (Array.isArray(attHistory.records)) setAttendanceRecords(attHistory.records);
+        if (Array.isArray(attHistory.sessions)) setSessions(attHistory.sessions);
+        if (Array.isArray(attHistory.activeDaysInMonth)) setActiveDays(attHistory.activeDaysInMonth);
+        if (attHistory.streakDays !== undefined) setAttendanceStreak(attHistory.streakDays);
+        if (attHistory.attendanceRate !== undefined) setAttendanceRate(attHistory.attendanceRate);
+        if (attHistory.totalHoursLogged) setTotalHoursLogged(attHistory.totalHoursLogged);
+      }
+    } else {
+      if (CustomSwal) CustomSwal.fire({ icon: 'error', title: 'Check-In Failed', text: res?.message || 'Member is already checked in.' });
+    }
+  };
+
+  const handleGateCheckOut = async () => {
+    const userEmail = currentUser?.email || currentUser?.sub || profileData?.email || 'gkeerthan583@gmail.com';
+    const memberName = profileData?.name || currentUser?.name || 'keerthan';
+    const res = await memberApi.checkOut({ userEmail, memberName });
+    if (res && res.success) {
+      if (CustomSwal) CustomSwal.fire({ icon: 'success', title: 'Check-Out Success! 🏁', text: res.message || 'Facility check-out recorded.' });
+      setIsCheckedIn(false);
+      const attHistory = await memberApi.getAttendanceHistory(userEmail, selectedAttMonth);
+      if (attHistory) {
+        if (Array.isArray(attHistory.records)) setAttendanceRecords(attHistory.records);
+        if (Array.isArray(attHistory.sessions)) setSessions(attHistory.sessions);
+        if (Array.isArray(attHistory.activeDaysInMonth)) setActiveDays(attHistory.activeDaysInMonth);
+        if (attHistory.streakDays !== undefined) setAttendanceStreak(attHistory.streakDays);
+        if (attHistory.attendanceRate !== undefined) setAttendanceRate(attHistory.attendanceRate);
+        if (attHistory.totalHoursLogged) setTotalHoursLogged(attHistory.totalHoursLogged);
+      }
+    } else {
+      if (CustomSwal) CustomSwal.fire({ icon: 'error', title: 'Check-Out Failed', text: res?.message || 'Member is not checked in.' });
+    }
+  };
 
   // Profile Edit Handlers
   const handleEditProfileClick = (e) => {
@@ -1313,11 +1382,8 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
   // Render Calendar Grid Days helper
   const renderCalendarGrid = () => {
     const days = [];
-    const currentRealMonth = new Date().toLocaleString('default', { month: 'long' }) + ' ' + new Date().getFullYear();
-    const isCurrentMonthSelected = selectedAttMonth.toLowerCase() === currentRealMonth.toLowerCase();
-
-    const checkInDays = isCurrentMonthSelected ? [...activeDays] : [2, 3, 5, 6, 7, 9, 10, 11];
-    if (isCheckedIn && isCurrentMonthSelected) {
+    const checkInDays = [...activeDays];
+    if (isCheckedIn) {
       const todayDay = new Date().getDate();
       if (!checkInDays.includes(todayDay)) {
         checkInDays.push(todayDay);
@@ -2037,7 +2103,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
             <div className="metric-card">
               <div className="metric-icon" style={{ color: 'var(--accent-cyan)', background: 'rgba(0,240,255,0.05)' }}>
-                <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" />
                 </svg>
               </div>
@@ -2049,7 +2115,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
             <div className="metric-card">
               <div className="metric-icon" style={{ color: '#ff3e6c', background: 'rgba(255,62,108,0.05)' }}>
-                <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
@@ -2596,7 +2662,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                           <tr key={idx}>
                             <td style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--accent-cyan)' }}>{inv.txId}</td>
                             <td>{inv.plan}</td>
-                            <td><strong>${inv.amount.toFixed(2)}</strong></td>
+                            <td><strong>₹{inv.amount.toFixed(2)}</strong></td>
                             <td><span className="status-badge paid">{inv.status}</span></td>
                             <td>{inv.date}</td>
                           </tr>
@@ -3325,7 +3391,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                 </svg>
               </div>
               <div className="metric-details">
-                <h3>36.5 Hrs</h3>
+                <h3>{totalHoursLogged}</h3>
                 <p>Total Gym Floor Hours Logged</p>
               </div>
             </div>
@@ -3344,213 +3410,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
             </div>
           </div>
 
-          <div className="db-grid-row" style={{ gridTemplateColumns: (!isRegistrationFormHidden) ? '1fr 1.2fr' : '1fr', gap: '1.5rem', marginBottom: '1.8rem' }}>
-
-            {/* CANDIDATE BIOMETRIC REGISTRATION & TRAINER SELECTION PANEL */}
-            {!isRegistrationFormHidden && (
-              <div className="db-card flex-card" style={{ border: '1px solid var(--accent-volt)', boxShadow: '0 0 20px rgba(198, 255, 0, 0.1)' }}>
-                {!showCandidateTrainerSelection ? (
-                  /* STEP 1: BIOMETRIC FACE REGISTRATION FORM */
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
-                      <div>
-                        <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-                          <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: isAttCamOn ? '#00ff66' : 'var(--text-dim)', boxShadow: isAttCamOn ? '0 0 8px #00ff66' : 'none' }}></span>
-                          New Candidate Biometric Face Registration Form
-                        </h4>
-                        <p className="card-subtitle" style={{ margin: '0.2rem 0 0 0' }}>Step 1: 1-Time registration for new members.</p>
-                      </div>
-                    </div>
-
-                    <form onSubmit={handleRegisterFaceProfile} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-                      {/* Candidate Name Input Field */}
-                      <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label" style={{ fontSize: '0.78rem' }}>Candidate Full Name</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={attFormName}
-                          onChange={(e) => setAttFormName(e.target.value)}
-                          placeholder="Enter candidate full name..."
-                          required
-                          style={{ background: 'var(--bg-black)', border: '1px solid var(--border-color)', color: 'var(--accent-volt)', fontWeight: 700 }}
-                        />
-                      </div>
-
-                      {/* Real-time Camera Viewport & Capture Box */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                        <label className="form-label" style={{ fontSize: '0.78rem', margin: 0 }}>Snap Reference Face Photo</label>
-
-                        <div style={{
-                          position: 'relative',
-                          width: '100%',
-                          height: '200px',
-                          background: '#07070c',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: '8px',
-                          overflow: 'hidden',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}>
-                          <video
-                            ref={memberVideoRef}
-                            playsInline
-                            muted
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'cover',
-                              display: isAttCamOn ? 'block' : 'none'
-                            }}
-                          />
-                          <canvas ref={memberCanvasRef} style={{ display: 'none' }} />
-
-                          {!isAttCamOn && (
-                            <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-dim)' }}>
-                              <p style={{ fontSize: '0.8rem', margin: '0 0 0.8rem 0' }}>Webcam camera standby</p>
-                              <button
-                                type="button"
-                                onClick={startMemberCam}
-                                className="glow-btn"
-                                style={{ padding: '0.4rem 1rem', fontSize: '0.75rem' }}
-                              >
-                                Activate Camera Feed
-                              </button>
-                            </div>
-                          )}
-
-                          {isAttCamOn && (
-                            <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
-                              <div style={{ position: 'absolute', top: '10px', left: '10px', width: '20px', height: '20px', borderTop: '2px solid var(--accent-volt)', borderLeft: '2px solid var(--accent-volt)' }}></div>
-                              <div style={{ position: 'absolute', top: '10px', right: '10px', width: '20px', height: '20px', borderTop: '2px solid var(--accent-volt)', borderRight: '2px solid var(--accent-volt)' }}></div>
-                              <div style={{ position: 'absolute', bottom: '10px', left: '10px', width: '20px', height: '20px', borderBottom: '2px solid var(--accent-volt)', borderLeft: '2px solid var(--accent-volt)' }}></div>
-                              <div style={{ position: 'absolute', bottom: '10px', right: '10px', width: '20px', height: '20px', borderBottom: '2px solid var(--accent-volt)', borderRight: '2px solid var(--accent-volt)' }}></div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '0.6rem' }}>
-                          {isAttCamOn && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={captureMemberPhoto}
-                                className="outline-btn"
-                                style={{ flex: 1, padding: '0.5rem', fontSize: '0.78rem', borderColor: 'var(--accent-volt)', color: 'var(--accent-volt)' }}
-                              >
-                                📸 Snap Reference Face Photo
-                              </button>
-                              <button
-                                type="button"
-                                onClick={stopMemberCam}
-                                className="outline-btn"
-                                style={{ padding: '0.5rem 0.8rem', fontSize: '0.78rem', borderColor: '#ff3e6c', color: '#ff3e6c' }}
-                              >
-                                Close
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Captured Photo Preview Thumbnail */}
-                      {capturedPhoto && (
-                        <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', padding: '0.8rem', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                          <img
-                            src={capturedPhoto}
-                            alt="Captured Frame"
-                            onClick={() => setMemberLightboxPhoto(capturedPhoto)}
-                            style={{ width: '50px', height: '50px', borderRadius: '6px', objectFit: 'cover', border: '2px solid var(--accent-volt)', cursor: 'pointer' }}
-                          />
-                          <div>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--accent-volt)', fontWeight: 'bold', display: 'block' }}>Reference Photo Ready ✓</span>
-                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Click preview to enlarge</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Submit Registration Button */}
-                      <button
-                        type="submit"
-                        className="glow-btn"
-                        style={{ padding: '0.85rem', fontSize: '0.85rem', width: '100%', marginTop: '0.5rem' }}
-                      >
-                        Next Step: Select Trainer ➔
-                      </button>
-                    </form>
-                  </div>
-                ) : (
-                  /* STEP 2: TRAINER SELECTION FOR REGISTERED CANDIDATE */
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.6rem' }}>
-                      <div>
-                        <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0, color: 'var(--accent-volt)' }}>
-                          <span>🏋️</span> Step 2: Select Your Personal Trainer
-                        </h4>
-                        <p className="card-subtitle" style={{ margin: '0.2rem 0 0 0' }}>
-                          Candidate <strong>{attFormName}</strong> registered! Select a coach below to open your Trainer Page.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.9rem', maxHeight: '420px', overflowY: 'auto', paddingRight: '0.3rem' }}>
-                      {availableTrainers.map((t, idx) => {
-                        const initials = t.name ? t.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'CT';
-                        return (
-                          <div
-                            key={t.userId || t._id || idx}
-                            style={{
-                              background: 'var(--bg-black)',
-                              border: '1px solid var(--border-color)',
-                              borderRadius: '8px',
-                              padding: '1rem',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '0.6rem'
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                              <div style={{
-                                width: '40px',
-                                height: '40px',
-                                borderRadius: '50%',
-                                background: 'linear-gradient(135deg, var(--accent-volt), #00f0ff)',
-                                color: '#000',
-                                fontWeight: 900,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '0.85rem'
-                              }}>
-                                {initials}
-                              </div>
-                              <div style={{ flex: 1 }}>
-                                <h5 style={{ margin: 0, color: 'var(--text-white)', fontSize: '0.95rem' }}>{t.name}</h5>
-                                <span style={{ fontSize: '0.72rem', color: 'var(--accent-volt)', display: 'block' }}>{t.specialty || 'Certified Strength Coach'}</span>
-                              </div>
-                            </div>
-
-                            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4 }}>
-                              {t.bio || t.credentials || 'Dedicated certified coach available for personal workout & nutrition guidance.'}
-                            </p>
-
-                            <button
-                              type="button"
-                              onClick={() => handleCandidateSelectTrainer(t)}
-                              className="glow-btn"
-                              style={{ width: '100%', padding: '0.55rem', fontSize: '0.78rem', marginTop: '0.2rem', cursor: 'pointer' }}
-                            >
-                              Select {t.name.split(' ')[0]} & Open Trainer Page ➔
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+          <div className="db-grid-row" style={{ gridTemplateColumns: '1fr', gap: '1.5rem', marginBottom: '1.8rem' }}>
 
             {/* 2. MONTHLY ATTENDANCE CALENDAR & HISTORY GRID CARD */}
             <div className="db-card flex-card" style={{ height: '100%' }}>
@@ -3560,21 +3420,28 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                   <p className="card-subtitle" style={{ margin: 0 }}>Visual streak tracking & monthly consistency log</p>
                 </div>
 
-                {/* MONTH SELECTOR DROPDOWN */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                  <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Select Month:</label>
-                  <select
-                    className="form-input"
-                    value={selectedAttMonth}
-                    onChange={(e) => setSelectedAttMonth(e.target.value)}
-                    style={{ background: 'var(--bg-black)', border: '1px solid var(--border-color)', color: 'var(--accent-volt)', padding: '0.35rem 0.8rem', fontSize: '0.78rem', fontWeight: 700 }}
-                  >
-                    <option value="August 2026">August 2026</option>
-                    <option value="July 2026">July 2026</option>
-                    <option value="June 2026">June 2026</option>
-                    <option value="May 2026">May 2026</option>
-                    <option value="April 2026">April 2026</option>
-                  </select>
+                {/* MONTH SELECTOR & MANUAL ATTENDANCE BADGE */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap' }}>
+                  <div style={{ padding: '0.45rem 0.9rem', background: 'rgba(198, 255, 0, 0.08)', border: '1px solid var(--accent-volt)', borderRadius: '6px', fontSize: '0.78rem', color: 'var(--accent-volt)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    📋 Attendance Marked Manually by Trainer
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Month:</label>
+                    <select
+                      className="form-input"
+                      value={selectedAttMonth}
+                      onChange={(e) => setSelectedAttMonth(e.target.value)}
+                      style={{ background: 'var(--bg-black)', border: '1px solid var(--border-color)', color: 'var(--accent-volt)', padding: '0.35rem 0.8rem', fontSize: '0.78rem', fontWeight: 700 }}
+                    >
+                      <option value="September 2026">September 2026</option>
+                      <option value="August 2026">August 2026</option>
+                      <option value="July 2026">July 2026</option>
+                      <option value="June 2026">June 2026</option>
+                      <option value="May 2026">May 2026</option>
+                      <option value="April 2026">April 2026</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -3601,7 +3468,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', display: 'block' }}>Avg Check-in Time</span>
-                      <strong style={{ color: 'var(--accent-cyan)', fontSize: '0.9rem' }}>08:30 AM</strong>
+                      <strong style={{ color: 'var(--accent-cyan)', fontSize: '0.9rem' }}>{sessions.length > 0 ? (sessions[0].time || '--') : '--'}</strong>
                     </div>
                   </div>
 
@@ -3714,9 +3581,9 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
               </div>
 
               <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', padding: '1rem', borderRadius: '6px' }}>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Biometric Scan Method</span>
-                <h5 style={{ color: 'var(--text-white)', margin: '0.2rem 0 0 0', fontWeight: 800 }}>AI Face & RFID Gate</h5>
-                <span style={{ fontSize: '0.72rem', color: '#00ff66' }}>100% Identity Verified ✓</span>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Attendance Method</span>
+                <h5 style={{ color: 'var(--text-white)', margin: '0.2rem 0 0 0', fontWeight: 800 }}>Manual Keycard & Turnstile</h5>
+                <span style={{ fontSize: '0.72rem', color: '#00ff66' }}>Active Pass Verified ✓</span>
               </div>
 
               <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', padding: '1rem', borderRadius: '6px' }}>
@@ -3754,7 +3621,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                   style={{ background: 'var(--bg-black)', border: '1px solid var(--border-color)', color: 'var(--text-white)', padding: '0.45rem 0.8rem', fontSize: '0.78rem' }}
                 >
                   <option value="all">All Gate Records</option>
-                  <option value="facescan">AI Face Biometrics</option>
+                  <option value="keycard">Manual Keycard</option>
                   <option value="rfid">RFID Turnstile Gate</option>
                   <option value="manual">Manual (Trainer)</option>
                   <option value="entry">Gate Entries Only</option>
@@ -3773,7 +3640,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
                 if (!matchesSearch) return false;
 
-                if (attRecordFilter === 'facescan') return rec.scanMethod.includes('AI Face');
+                if (attRecordFilter === 'keycard') return rec.scanMethod.includes('Keycard') || rec.scanMethod.includes('Manual');
                 if (attRecordFilter === 'rfid') return rec.scanMethod.includes('RFID');
                 if (attRecordFilter === 'manual') return rec.scanMethod.includes('Manual');
                 if (attRecordFilter === 'entry') return rec.gateAction.includes('Entry');
@@ -3900,7 +3767,431 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
       {/* 4. DEDICATED SUPPLEMENTS SHOP VIEW */}
       {activeView === 'supplements' && (
         <div className="member-sub-view" id="member-subview-supplements" style={{ display: 'block' }}>
-          <SupplementShop onCheckoutSuccess={handleCheckoutSuccess} />
+          <SupplementShop
+            onCheckoutSuccess={handleCheckoutSuccess}
+            currentUser={currentUser}
+            onViewOrders={() => onNavigateSubView && onNavigateSubView('orders')}
+          />
+        </div>
+      )}
+
+      {/* 4.5 DEDICATED MEMBER ORDERS & TRACKING VIEW */}
+      {(activeView === 'orders' || activeView === 'order-tracking') && (
+        <div className="member-sub-view" id="member-subview-orders" style={{ display: 'block' }}>
+          {/* Header Banner */}
+          <div className="db-card" style={{ marginBottom: '1.5rem', background: 'linear-gradient(135deg, rgba(20, 20, 28, 0.95) 0%, rgba(10, 10, 15, 0.95) 100%)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '1.5rem 1.8rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <span style={{ fontSize: '1.5rem' }}>🚚</span>
+                  <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.3rem', color: 'var(--text-white)', margin: 0, textTransform: 'uppercase' }}>
+                    My Supplement Orders & Order Tracking
+                  </h3>
+                </div>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: '0.3rem 0 0 0' }}>
+                  Track order confirmation status, packaging progress, delivery dispatch, and purchase history.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="glow-btn"
+                onClick={() => onNavigateSubView && onNavigateSubView('supplements')}
+                style={{ padding: '0.55rem 1.2rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <span>🛒</span> Shop More Supplements
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Metrics Bar */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total Orders</span>
+              <h4 style={{ color: 'var(--text-white)', margin: '0.3rem 0 0 0', fontWeight: 800, fontSize: '1.25rem' }}>{memberOrders.length}</h4>
+            </div>
+
+            <div style={{ background: 'rgba(255, 159, 0, 0.05)', border: '1px solid rgba(255, 159, 0, 0.2)', borderRadius: '8px', padding: '1rem' }}>
+              <span style={{ fontSize: '0.72rem', color: '#ff9f00', textTransform: 'uppercase' }}>Pending Confirmation</span>
+              <h4 style={{ color: '#ff9f00', margin: '0.3rem 0 0 0', fontWeight: 800, fontSize: '1.25rem' }}>
+                {memberOrders.filter(o => o.status === 'Pending Confirmation').length}
+              </h4>
+            </div>
+
+            <div style={{ background: 'rgba(0, 240, 255, 0.05)', border: '1px solid rgba(0, 240, 255, 0.2)', borderRadius: '8px', padding: '1rem' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', textTransform: 'uppercase' }}>In Transit / Processing</span>
+              <h4 style={{ color: 'var(--accent-cyan)', margin: '0.3rem 0 0 0', fontWeight: 800, fontSize: '1.25rem' }}>
+                {memberOrders.filter(o => ['Confirmed', 'Processing', 'Out for Delivery'].includes(o.status)).length}
+              </h4>
+            </div>
+
+            <div style={{ background: 'rgba(0, 255, 102, 0.05)', border: '1px solid rgba(0, 255, 102, 0.2)', borderRadius: '8px', padding: '1rem' }}>
+              <span style={{ fontSize: '0.72rem', color: '#00ff66', textTransform: 'uppercase' }}>Delivered Orders</span>
+              <h4 style={{ color: '#00ff66', margin: '0.3rem 0 0 0', fontWeight: 800, fontSize: '1.25rem' }}>
+                {memberOrders.filter(o => o.status === 'Delivered').length}
+              </h4>
+            </div>
+          </div>
+
+          {/* Filter & Search Toolbar */}
+          <div className="store-filter-bar" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div className="filter-categories">
+              {['All', 'Pending Confirmation', 'Confirmed', 'Processing', 'Out for Delivery', 'Delivered', 'Cancelled'].map((st) => (
+                <button
+                  key={st}
+                  className={`filter-chip ${orderStatusFilter === st ? 'active' : ''}`}
+                  onClick={() => setOrderStatusFilter(st)}
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.8rem' }}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
+
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Search Order ID, Product..."
+              value={orderSearchQuery}
+              onChange={(e) => setOrderSearchQuery(e.target.value)}
+              style={{ width: '220px', padding: '0.45rem 0.8rem', fontSize: '0.78rem' }}
+            />
+          </div>
+
+          {/* Orders List */}
+          {(() => {
+            const filtered = memberOrders.filter((o) => {
+              const matchesFilter = orderStatusFilter === 'All' || o.status === orderStatusFilter;
+              const q = orderSearchQuery.toLowerCase();
+              const matchesSearch = !q || (o.orderId && o.orderId.toLowerCase().includes(q)) ||
+                (o.txId && o.txId.toLowerCase().includes(q)) ||
+                (o.itemsSummary && o.itemsSummary.toLowerCase().includes(q));
+              return matchesFilter && matchesSearch;
+            });
+
+            if (filtered.length === 0) {
+              return (
+                <div className="db-card" style={{ textAlign: 'center', padding: '3.5rem 1.5rem', color: 'var(--text-muted)' }}>
+                  <div style={{ fontSize: '2.5rem', marginBottom: '0.8rem' }}>📦</div>
+                  <h4 style={{ color: 'var(--text-white)', margin: '0 0 0.4rem 0' }}>No Supplement Orders Found</h4>
+                  <p style={{ fontSize: '0.82rem', margin: 0, color: 'var(--text-muted)' }}>
+                    {memberOrders.length === 0
+                      ? 'You have not placed any supplement orders yet. Visit the shop to get started!'
+                      : 'No orders match your filter criteria.'}
+                  </p>
+                  {memberOrders.length === 0 && (
+                    <button
+                      className="glow-btn"
+                      onClick={() => onNavigateSubView && onNavigateSubView('supplements')}
+                      style={{ marginTop: '1.2rem', padding: '0.66rem 1.4rem', fontSize: '0.82rem' }}
+                    >
+                      Browse Supplement Catalog →
+                    </button>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {filtered.map((order) => {
+                  // Determine status step index (0 to 4)
+                  // 0: Order Placed / Pending Confirmation
+                  // 1: Confirmed
+                  // 2: Processing
+                  // 3: Out for Delivery
+                  // 4: Delivered
+                  const statusMap = {
+                    'Pending Confirmation': 0,
+                    'Confirmed': 1,
+                    'Processing': 2,
+                    'Out for Delivery': 3,
+                    'Delivered': 4,
+                    'Cancelled': -1
+                  };
+                  const currentStep = statusMap[order.status] !== undefined ? statusMap[order.status] : 0;
+                  const isCancelled = order.status === 'Cancelled';
+
+                  const steps = [
+                    { title: 'Order Placed', subtitle: 'Order Submitted' },
+                    { title: 'Admin Confirmed', subtitle: 'Confirmed by Staff' },
+                    { title: 'Packing & Process', subtitle: 'Preparing Parcel' },
+                    { title: 'Out for Delivery', subtitle: 'In Transit Courier' },
+                    { title: 'Delivered', subtitle: 'Completed & Received' }
+                  ];
+
+                  return (
+                    <div
+                      key={order.orderId || order.txId}
+                      className="db-card"
+                      style={{
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '10px',
+                        padding: '1.5rem'
+                      }}
+                    >
+                      {/* Order Card Top Bar */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '1.2rem' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                            <h4 style={{ margin: 0, color: 'var(--text-white)', fontSize: '1.1rem', fontWeight: 800, fontFamily: 'monospace' }}>
+                              {order.orderId}
+                            </h4>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--accent-cyan)', background: 'rgba(0, 240, 255, 0.08)', border: '1px solid rgba(0, 240, 255, 0.2)', padding: '0.15rem 0.5rem', borderRadius: '4px', fontFamily: 'monospace' }}>
+                              TxID: {order.txId}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem', display: 'block' }}>
+                            Placed on {order.date} • Paid via {String(order.paymentMethod || 'Card').toUpperCase()} ({order.paymentStatus || 'Paid'})
+                          </span>
+                        </div>
+
+                        <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                          <div>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', display: 'block', textTransform: 'uppercase' }}>Billed Total</span>
+                            <strong style={{ color: 'var(--accent-volt)', fontSize: '1.2rem' }}>₹{Number(order.total || order.totalAmount || 0).toFixed(2)}</strong>
+                          </div>
+
+                          <span style={{
+                            padding: '0.4rem 0.9rem',
+                            borderRadius: '20px',
+                            fontWeight: 800,
+                            fontSize: '0.76rem',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                            background: isCancelled
+                              ? 'rgba(255, 62, 108, 0.15)'
+                              : order.status === 'Delivered'
+                              ? 'rgba(0, 255, 102, 0.15)'
+                              : order.status === 'Pending Confirmation'
+                              ? 'rgba(255, 159, 0, 0.15)'
+                              : 'rgba(0, 240, 255, 0.15)',
+                            color: isCancelled
+                              ? '#ff3e6c'
+                              : order.status === 'Delivered'
+                              ? '#00ff66'
+                              : order.status === 'Pending Confirmation'
+                              ? '#ff9f00'
+                              : 'var(--accent-cyan)',
+                            border: `1px solid ${
+                              isCancelled
+                                ? '#ff3e6c'
+                                : order.status === 'Delivered'
+                                ? '#00ff66'
+                                : order.status === 'Pending Confirmation'
+                                ? '#ff9f00'
+                                : 'var(--accent-cyan)'
+                            }`
+                          }}>
+                            {order.status}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* E-COMMERCE VISUAL PROGRESS TRACKER */}
+                      {!isCancelled ? (
+                        <div style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.2rem 1.5rem', marginBottom: '1.2rem' }}>
+                          <h5 style={{ color: 'var(--text-white)', fontSize: '0.78rem', textTransform: 'uppercase', marginBottom: '1.2rem', letterSpacing: '0.05em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>Live Dispatch & Tracking Progress</span>
+                            <span style={{ color: 'var(--accent-volt)', fontSize: '0.72rem', textTransform: 'none' }}>
+                              Est. Delivery: <strong>{order.estimatedDelivery || '2-3 Business Days'}</strong>
+                            </span>
+                          </h5>
+
+                          {/* Progress Line and Steps */}
+                          <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            {/* Background Line */}
+                            <div style={{ position: 'absolute', top: '15px', left: '5%', right: '5%', height: '3px', background: 'rgba(255,255,255,0.08)', zIndex: 1 }}></div>
+
+                            {/* Active Filled Line */}
+                            <div style={{
+                              position: 'absolute',
+                              top: '15px',
+                              left: '5%',
+                              width: `${Math.min(100, Math.max(0, (currentStep / 4) * 90))}%`,
+                              height: '3px',
+                              background: 'linear-gradient(90deg, var(--accent-cyan) 0%, var(--accent-volt) 100%)',
+                              boxShadow: '0 0 10px var(--accent-volt)',
+                              zIndex: 2,
+                              transition: 'width 0.4s ease'
+                            }}></div>
+
+                            {/* Steps Nodes */}
+                            {steps.map((st, sIdx) => {
+                              const isPassed = sIdx <= currentStep;
+                              const isCurrent = sIdx === currentStep;
+
+                              return (
+                                <div key={sIdx} style={{ position: 'relative', zIndex: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: '18%' }}>
+                                  <div style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '50%',
+                                    background: isPassed ? (isCurrent ? 'var(--accent-volt)' : 'var(--accent-cyan)') : '#12131a',
+                                    color: isPassed ? '#000' : 'var(--text-dim)',
+                                    border: isPassed ? '2px solid var(--text-white)' : '1px solid var(--border-color)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontWeight: 800,
+                                    fontSize: '0.8rem',
+                                    boxShadow: isCurrent ? '0 0 15px var(--accent-volt)' : 'none',
+                                    transition: 'all 0.3s ease'
+                                  }}>
+                                    {isPassed ? (sIdx < currentStep ? '✓' : sIdx + 1) : sIdx + 1}
+                                  </div>
+                                  <span style={{ fontSize: '0.75rem', fontWeight: isCurrent ? 800 : (isPassed ? 600 : 400), color: isPassed ? 'var(--text-white)' : 'var(--text-dim)', marginTop: '0.5rem' }}>
+                                    {st.title}
+                                  </span>
+                                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+                                    {st.subtitle}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Courier details if assigned */}
+                          {order.trackingNumber && (
+                            <div style={{ background: 'rgba(0, 240, 255, 0.05)', border: '1px solid rgba(0, 240, 255, 0.2)', borderRadius: '6px', padding: '0.6rem 0.9rem', marginTop: '1.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem' }}>
+                              <span>Courier Service: <strong>{order.courierName || 'Apex Express Logistics'}</strong></span>
+                              <span>Tracking Number: <strong style={{ fontFamily: 'monospace', color: 'var(--accent-cyan)' }}>{order.trackingNumber}</strong></span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ background: 'rgba(255, 62, 108, 0.08)', border: '1px solid rgba(255, 62, 108, 0.2)', borderRadius: '6px', padding: '1rem', marginBottom: '1.2rem', color: '#ff3e6c', fontSize: '0.82rem', textAlign: 'center' }}>
+                          🛑 <strong>This order has been cancelled.</strong> Any billed amounts are queued for refund processing.
+                        </div>
+                      )}
+
+                      {/* Items & Shipping Detail */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '1.2rem', background: 'rgba(0,0,0,0.15)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem' }}>
+                        {/* Purchased Items List */}
+                        <div>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', display: 'block', marginBottom: '0.5rem' }}>Purchased Items</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            {order.items && order.items.length > 0 ? (
+                              order.items.map((item, idx) => (
+                                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', fontSize: '0.8rem' }}>
+                                  <img
+                                    src={item.image || '/assets/images/gallery_weights.png'}
+                                    alt={item.name}
+                                    onError={(e) => { e.target.src = '/assets/images/gallery_weights.png'; }}
+                                    style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--border-color)' }}
+                                  />
+                                  <div style={{ flex: 1 }}>
+                                    <strong style={{ color: 'var(--text-white)', display: 'block' }}>{item.name}</strong>
+                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>Qty: {item.quantity} × ₹{Number(item.price).toFixed(2)}</span>
+                                  </div>
+                                  <span style={{ color: 'var(--accent-volt)', fontWeight: 700 }}>₹{(Number(item.price) * Number(item.quantity)).toFixed(2)}</span>
+                                </div>
+                              ))
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{order.itemsSummary}</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Shipping Destination */}
+                        <div style={{ borderLeft: '1px solid var(--border-color)', paddingLeft: '1rem' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', display: 'block', marginBottom: '0.4rem' }}>Shipping Address</span>
+                          {order.shippingInfo ? (
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-white)', lineHeight: 1.4 }}>
+                              <strong>{order.shippingInfo.fullName}</strong> ({order.shippingInfo.phone})
+                              <div style={{ color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                                {order.shippingInfo.address}, {order.shippingInfo.city}, {order.shippingInfo.state} - {order.shippingInfo.pincode}
+                              </div>
+                              <span style={{ color: 'var(--accent-cyan)', fontSize: '0.7rem', marginTop: '0.3rem', display: 'block' }}>
+                                Delivery Speed: {order.shippingInfo.deliveryType === 'express' ? 'VIP Fast-Track ⚡' : 'Standard Delivery (Free)'}
+                              </span>
+                            </div>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>Default Member Gym Address</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Card Bottom Actions */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '0.8rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <button
+                          type="button"
+                          className="outline-btn"
+                          onClick={() => setSelectedOrderTracking(order)}
+                          style={{ padding: '0.35rem 0.8rem', fontSize: '0.76rem', color: 'var(--accent-cyan)', borderColor: 'rgba(0, 240, 255, 0.4)' }}
+                        >
+                          View Status Timeline Log 📜
+                        </button>
+
+                        {order.status === 'Pending Confirmation' && (
+                          <button
+                            type="button"
+                            className="outline-btn"
+                            onClick={async () => {
+                              if (window.confirm(`Are you sure you want to cancel Order ${order.orderId}?`)) {
+                                await memberApi.updateSupplementOrderStatus(order.orderId, {
+                                  status: 'Cancelled',
+                                  note: 'Cancelled by member'
+                                });
+                                loadMemberOrders();
+                                alert("Order has been cancelled.");
+                              }
+                            }}
+                            style={{ padding: '0.35rem 0.8rem', fontSize: '0.76rem', color: '#ff3e6c', borderColor: 'rgba(255, 62, 108, 0.4)' }}
+                          >
+                            Cancel Pending Order ✖
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          {/* STATUS TIMELINE MODAL */}
+          {selectedOrderTracking && (
+            <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.88)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div className="db-card" style={{ maxWidth: '520px', width: '90%', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1.8rem', position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrderTracking(null)}
+                  style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}
+                >
+                  &times;
+                </button>
+
+                <h4 style={{ color: 'var(--text-white)', margin: '0 0 0.3rem 0', fontSize: '1.1rem', fontWeight: 800 }}>
+                  Order Status Audit History
+                </h4>
+                <p style={{ color: 'var(--accent-cyan)', fontFamily: 'monospace', fontSize: '0.8rem', margin: '0 0 1.2rem 0' }}>
+                  Order ID: {selectedOrderTracking.orderId}
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', maxHeight: '320px', overflowY: 'auto' }}>
+                  {(selectedOrderTracking.statusTimeline || []).map((log, lIdx) => (
+                    <div key={lIdx} style={{ background: 'rgba(255,255,255,0.02)', borderLeft: '3px solid var(--accent-volt)', padding: '0.6rem 0.9rem', borderRadius: '4px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--accent-volt)', fontWeight: 800, textTransform: 'uppercase' }}>
+                        <span>{log.status}</span>
+                        <span style={{ color: 'var(--text-muted)' }}>{log.timestamp}</span>
+                      </div>
+                      <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.78rem', color: 'var(--text-white)' }}>{log.note}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  className="outline-btn"
+                  onClick={() => setSelectedOrderTracking(null)}
+                  style={{ width: '100%', marginTop: '1.2rem', padding: '0.6rem' }}
+                >
+                  Close Log
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -4222,7 +4513,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                             <tr key={idx}>
                               <td style={{ fontFamily: 'monospace', color: 'var(--accent-cyan)', fontWeight: 700 }}>{inv.txId}</td>
                               <td><strong>{inv.plan}</strong></td>
-                              <td style={{ color: 'var(--text-white)', fontWeight: 800 }}>${Number(inv.amount).toFixed(2)}</td>
+                              <td style={{ color: 'var(--text-white)', fontWeight: 800 }}>₹{Number(inv.amount).toFixed(2)}</td>
                               <td>{inv.date || 'Today'}</td>
                               <td>
                                 <span className="status-badge paid" style={{ fontSize: '0.68rem', padding: '0.2rem 0.5rem' }}>

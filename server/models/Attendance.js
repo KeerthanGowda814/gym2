@@ -2,15 +2,21 @@ import mongoose from 'mongoose';
 
 const AttendanceSchema = new mongoose.Schema({
   id: { type: String },
-  name: { type: String, required: true },
+  userId: { type: String },
+  userEmail: { type: String, required: true, index: true },
+  memberName: { type: String, required: true },
   code: { type: String },
-  scanMethod: { type: String, default: 'AI Face Biometrics' },
+  scanMethod: { type: String, default: 'Manual Keycard' },
+  gateAction: { type: String, default: 'Gate Entry Check-in' },
   inTime: { type: String },
   outTime: { type: String, default: '--' },
   duration: { type: String, default: '--' },
-  date: { type: String, default: 'Today' },
-  status: { type: String, default: 'active' },
-  confidence: { type: String, default: '98.8%' },
+  hoursLogged: { type: String, default: '--' },
+  date: { type: String },
+  monthYear: { type: String },
+  dayOfMonth: { type: Number },
+  status: { type: String, default: 'Active' },
+  confidence: { type: String },
   faceImage: { type: String, default: null },
   refImage: { type: String, default: null }
 }, { timestamps: true });

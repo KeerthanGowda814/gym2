@@ -59,6 +59,7 @@ app.use('/api/member/workouts', authMiddleware, workoutRoutes);
 app.use('/api/member/nutrition', authMiddleware, nutritionRoutes);
 app.use('/api/member', authMiddleware, membershipRoutes);
 app.use('/api/member/trainer', authMiddleware, trainerRoutes);
+app.use('/api/member/trainers', authMiddleware, trainerRoutes);
 app.use('/api/member/attendance', authMiddleware, attendanceRoutes);
 app.use('/api/member/supplements', authMiddleware, supplementRoutes);
 app.use('/api/member/equipment', authMiddleware, equipmentRoutes);

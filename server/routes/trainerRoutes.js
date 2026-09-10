@@ -7,10 +7,10 @@ import User from '../models/User.js';
 import { isMongoConnected } from '../config/mongodb.js';
 
 /**
- * GET /api/member/trainers
+ * GET /api/member/trainers & GET /api/member/trainer
  * Retrieve list of all registered trainers stored in MongoDB Atlas
  */
-router.get('/trainers', async (req, res) => {
+const getTrainersHandler = async (req, res) => {
   try {
     const db = getDB();
     let trainersList = (db.users || []).filter(u => u.role === 'trainer');
@@ -55,7 +55,10 @@ router.get('/trainers', async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, message: 'Error fetching trainers from MongoDB', error: err.message });
   }
-});
+};
+
+router.get('/', getTrainersHandler);
+router.get('/trainers', getTrainersHandler);
 
 /**
  * POST /api/member/trainer/select

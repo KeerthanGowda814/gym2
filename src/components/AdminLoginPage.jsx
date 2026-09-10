@@ -43,6 +43,44 @@ export default function AdminLoginPage({ navigate }) {
     return regex.test(val);
   };
 
+  const handleEmailChange = (val) => {
+    setEmail(val);
+    if (!val.trim()) {
+      setEmailError('Email address is required.');
+    } else if (!isValidEmail(val.trim())) {
+      setEmailError('Invalid email syntax.');
+    } else {
+      setEmailError('');
+    }
+  };
+
+  const handleEmailBlur = () => {
+    if (!email.trim()) {
+      setEmailError('Email address is required.');
+    } else if (!isValidEmail(email.trim())) {
+      setEmailError('Invalid email syntax.');
+    }
+  };
+
+  const handlePasswordChange = (val) => {
+    setPassword(val);
+    if (!val) {
+      setPasswordError('Password is required.');
+    } else if (val.length < 6) {
+      setPasswordError('Password must be at least 6 characters.');
+    } else {
+      setPasswordError('');
+    }
+  };
+
+  const handlePasswordBlur = () => {
+    if (!password) {
+      setPasswordError('Password is required.');
+    } else if (password.length < 6) {
+      setPasswordError('Password must be at least 6 characters.');
+    }
+  };
+
   const handleLoginSubmit = (e) => {
     e.preventDefault();
     let isFormValid = true;
@@ -62,13 +100,16 @@ export default function AdminLoginPage({ navigate }) {
     if (!password) {
       setPasswordError('Password is required.');
       isFormValid = false;
+    } else if (password.length < 6) {
+      setPasswordError('Password must be at least 6 characters.');
+      isFormValid = false;
     }
 
     if (!isFormValid) return;
 
     setIsLoggingIn(true);
 
-    const performLocalAuthCheck = () => {
+    const performLocalAuthCheck = (errorMessage = 'Invalid admin credentials. Access denied.') => {
       const cleanEmail = email.trim().toLowerCase();
       const cleanPass = password.trim();
 
@@ -89,7 +130,7 @@ export default function AdminLoginPage({ navigate }) {
         navigate('dashboard');
       } else {
         setIsLoggingIn(false);
-        setPasswordError('Invalid admin credentials. Access denied.');
+        setPasswordError(errorMessage);
       }
     };
 
@@ -109,7 +150,7 @@ export default function AdminLoginPage({ navigate }) {
           setIsLoggingIn(false);
           navigate('dashboard');
         } else {
-          performLocalAuthCheck();
+          performLocalAuthCheck(data.message || 'Invalid admin credentials. Access denied.');
         }
       })
       .catch(() => {
@@ -233,7 +274,8 @@ export default function AdminLoginPage({ navigate }) {
                     className={`form-input ${emailError ? 'invalid' : ''}`}
                     placeholder="admin@apex.com"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => handleEmailChange(e.target.value)}
+                    onBlur={handleEmailBlur}
                   />
                 </div>
                 {emailError && <div className="error-feedback" id="email-error" style={{ display: 'block' }}>{emailError}</div>}
@@ -264,7 +306,8 @@ export default function AdminLoginPage({ navigate }) {
                     className={`form-input ${passwordError ? 'invalid' : ''}`}
                     placeholder="••••••••"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => handlePasswordChange(e.target.value)}
+                    onBlur={handlePasswordBlur}
                   />
                   <button
                     type="button"
@@ -342,7 +385,7 @@ export default function AdminLoginPage({ navigate }) {
                 <label className="form-label" htmlFor="forgot-email">Associated Admin Email</label>
                 <div className="input-icon-wrapper">
                   <span className="field-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
                     </svg>
                   </span>

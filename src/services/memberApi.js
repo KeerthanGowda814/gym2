@@ -238,9 +238,10 @@ export const memberApi = {
   },
 
   // --- 5. ATTENDANCE & KEYCARD ENDPOINTS ---
-  async getAttendanceStatus() {
+  async getAttendanceStatus(email) {
     try {
-      const res = await fetch(`${API_BASE_URL}/member/attendance/status`, { headers: getHeaders() });
+      const url = email ? `${API_BASE_URL}/member/attendance/status?email=${encodeURIComponent(email)}` : `${API_BASE_URL}/member/attendance/status`;
+      const res = await fetch(url, { headers: getHeaders() });
       if (!res.ok) throw new Error('Failed to fetch attendance status');
       const data = await res.json();
       return data.data;
@@ -249,9 +250,15 @@ export const memberApi = {
     }
   },
 
-  async getAttendanceHistory() {
+  async getAttendanceHistory(email, month) {
     try {
-      const res = await fetch(`${API_BASE_URL}/member/attendance/history`, { headers: getHeaders() });
+      let url = `${API_BASE_URL}/member/attendance/history`;
+      const params = new URLSearchParams();
+      if (email) params.append('email', email);
+      if (month) params.append('month', month);
+      if (params.toString()) url += `?${params.toString()}`;
+
+      const res = await fetch(url, { headers: getHeaders() });
       if (!res.ok) throw new Error('Failed to fetch attendance history');
       return await res.json();
     } catch (err) {
@@ -259,11 +266,22 @@ export const memberApi = {
     }
   },
 
-  async checkIn() {
+  async getAdminAttendanceLogs() {
+    try {
+      const res = await fetch(`${API_BASE_URL}/member/attendance/admin/all`, { headers: getHeaders() });
+      if (!res.ok) throw new Error('Failed to fetch admin attendance logs');
+      return await res.json();
+    } catch (err) {
+      return null;
+    }
+  },
+
+  async checkIn(payload) {
     try {
       const res = await fetch(`${API_BASE_URL}/member/attendance/checkin`, {
         method: 'POST',
-        headers: getHeaders()
+        headers: getHeaders(),
+        body: JSON.stringify(payload || {})
       });
       if (!res.ok) throw new Error('Failed check-in');
       return await res.json();
@@ -272,11 +290,12 @@ export const memberApi = {
     }
   },
 
-  async checkOut() {
+  async checkOut(payload) {
     try {
       const res = await fetch(`${API_BASE_URL}/member/attendance/checkout`, {
         method: 'POST',
-        headers: getHeaders()
+        headers: getHeaders(),
+        body: JSON.stringify(payload || {})
       });
       if (!res.ok) throw new Error('Failed check-out');
       return await res.json();
@@ -286,44 +305,15 @@ export const memberApi = {
   },
 
   async faceScanAttendance(scanData) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/member/attendance/facescan`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify(scanData)
-      });
-      if (!res.ok) throw new Error('Failed face scan attendance');
-      return await res.json();
-    } catch (err) {
-      return null;
-    }
+    return this.checkIn(scanData);
   },
 
   async registerFaceProfile(regData) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/member/attendance/register-face`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify(regData)
-      });
-      if (!res.ok) throw new Error('Failed face registration');
-      return await res.json();
-    } catch (err) {
-      return null;
-    }
+    return { success: true, message: 'Member manual keycard profile active.' };
   },
 
   async getRegisteredFaces() {
-    try {
-      const res = await fetch(`${API_BASE_URL}/member/attendance/registered-faces`, {
-        headers: getHeaders()
-      });
-      if (!res.ok) throw new Error('Failed fetching registered faces');
-      const data = await res.json();
-      return data.data;
-    } catch (err) {
-      return null;
-    }
+    return {};
   },
 
   // --- 6. SUPPLEMENT SHOP ENDPOINTS ---
@@ -338,14 +328,40 @@ export const memberApi = {
     }
   },
 
-  async checkoutSupplements(cartItems, promoCode) {
+  async checkoutSupplements(cartItems, promoCode, shippingInfo = null, paymentMethod = 'card', userEmail = null, userName = null, userPhone = null) {
     try {
       const res = await fetch(`${API_BASE_URL}/member/supplements/checkout`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ cartItems, promoCode })
+        body: JSON.stringify({ cartItems, promoCode, shippingInfo, paymentMethod, userEmail, userName, userPhone })
       });
       if (!res.ok) throw new Error('Failed supplement checkout');
+      return await res.json();
+    } catch (err) {
+      return null;
+    }
+  },
+
+  async getSupplementOrders(email = null) {
+    try {
+      const url = email ? `${API_BASE_URL}/member/supplements/orders?email=${encodeURIComponent(email)}` : `${API_BASE_URL}/member/supplements/orders`;
+      const res = await fetch(url, { headers: getHeaders() });
+      if (!res.ok) throw new Error('Failed to fetch orders');
+      const data = await res.json();
+      return data.data;
+    } catch (err) {
+      return null;
+    }
+  },
+
+  async updateSupplementOrderStatus(orderId, statusData) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/supplements/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(statusData)
+      });
+      if (!res.ok) throw new Error('Failed to update order status');
       return await res.json();
     } catch (err) {
       return null;
@@ -399,7 +415,6 @@ export const memberApi = {
       const data = await res.json();
       return data.data;
     } catch (err) {
-      console.warn('Member API Notice: Failed to fetch alerts from server.', err.message);
       return null;
     }
   },

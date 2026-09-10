@@ -284,18 +284,33 @@ export default function DashboardPage({ navigate }) {
 
             {/* Member supplements shop view (Member Only) */}
             {currentUser.role === 'member' && (
-              <li>
-                <a
-                  onClick={() => setActiveSubView('supplements')}
-                  className={`sidebar-nav-link ${activeSubView === 'supplements' ? 'active' : ''}`}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                  </svg>
-                  Supplements
-                </a>
-              </li>
+              <>
+                <li>
+                  <a
+                    onClick={() => setActiveSubView('supplements')}
+                    className={`sidebar-nav-link ${activeSubView === 'supplements' ? 'active' : ''}`}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                    </svg>
+                    Supplements
+                  </a>
+                </li>
+                <li>
+                  <a
+                    onClick={() => setActiveSubView('orders')}
+                    className={`sidebar-nav-link ${activeSubView === 'orders' || activeSubView === 'order-tracking' ? 'active' : ''}`}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1m-4 0h1" />
+                    </svg>
+                    My Orders 🚚
+                  </a>
+                </li>
+              </>
             )}
 
             {/* Member membership status and pass view (Member Only) */}
@@ -434,6 +449,19 @@ export default function DashboardPage({ navigate }) {
                 </li>
                 <li>
                   <a
+                    onClick={() => setActiveSubView('orders')}
+                    className={`sidebar-nav-link ${activeSubView === 'orders' || activeSubView === 'supplement-orders' ? 'active' : ''}`}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1m-4 0h1" />
+                    </svg>
+                    Supplement Orders 📦
+                  </a>
+                </li>
+                <li>
+                  <a
                     onClick={() => setActiveSubView('alerts')}
                     className={`sidebar-nav-link ${activeSubView === 'alerts' ? 'active' : ''}`}
                     style={{ cursor: 'pointer' }}
@@ -493,7 +521,7 @@ export default function DashboardPage({ navigate }) {
         {/* LOGOUT */}
         <div className="sidebar-footer">
           <button onClick={handleLogout} className="outline-btn logout-btn" id="portal-logout-btn">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
             Logout
@@ -814,7 +842,7 @@ export default function DashboardPage({ navigate }) {
                   features: [
                     'Unlimited Member Slots',
                     '24/7 Dedicated Account Manager',
-                    'AI Face Biometric Integrations',
+                    'Manual Keycard & Turnstile Attendance',
                     'Custom Branding & Subdomain',
                     'Advanced Billing Audit Logs'
                   ],

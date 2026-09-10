@@ -17,12 +17,39 @@ const SupplementSchema = new mongoose.Schema({
 
 const OrderSchema = new mongoose.Schema({
   orderId: { type: String, required: true },
-  items: [{ id: String, name: String, price: Number, quantity: Number }],
+  txId: { type: String },
+  userEmail: { type: String, default: 'member@apex.com' },
+  userName: { type: String, default: 'Registered Member' },
+  userPhone: { type: String },
+  items: [{ id: String, name: String, price: Number, quantity: Number, image: String }],
+  itemsSummary: { type: String },
+  subtotal: { type: Number },
+  memberDiscount: { type: Number, default: 0 },
+  promoDiscount: { type: Number, default: 0 },
+  shippingFee: { type: Number, default: 0 },
+  total: { type: Number },
   totalAmount: { type: Number },
-  discountApplied: { type: Number },
-  promoCode: { type: String },
-  date: { type: String },
-  status: { type: String, default: 'Confirmed' }
+  shippingInfo: {
+    fullName: String,
+    phone: String,
+    address: String,
+    city: String,
+    state: String,
+    pincode: String,
+    deliveryType: String
+  },
+  paymentMethod: { type: String, default: 'card' },
+  paymentStatus: { type: String, default: 'Paid' },
+  courierName: { type: String, default: '' },
+  trackingNumber: { type: String, default: '' },
+  estimatedDelivery: { type: String, default: '' },
+  status: { type: String, default: 'Pending Confirmation' },
+  statusTimeline: [{
+    status: { type: String },
+    timestamp: { type: String },
+    note: { type: String }
+  }],
+  date: { type: String }
 }, { timestamps: true });
 
 export const Supplement = mongoose.models.Supplement || mongoose.model('Supplement', SupplementSchema);
