@@ -1,111 +1,141 @@
 import React, { useState, useEffect, useRef } from 'react';
 import SupplementShop from './SupplementShop';
 import DummyPaymentGateway from './DummyPaymentGateway';
+import ReceiptModal from './ReceiptModal';
+import { initiateRazorpayPayment } from '../services/razorpayService';
 import { memberApi } from '../services/memberApi';
 import { CustomSwal } from '../utils/swal';
 
 
 // Helper to parse weight strings (e.g., "175 lbs", "80 kg", "150")
 const parseWeight = (weightStr) => {
-  if (!weightStr) return { value: 160, unit: 'lbs' };
+  if (!weightStr || weightStr === '0' || weightStr === '0 lbs') return { value: 160, unit: 'lbs' };
   const matches = String(weightStr).match(/(\d+(?:\.\d+)?)\s*(lbs|kg)?/i);
   if (matches) {
-    return {
-      value: parseFloat(matches[1]),
-      unit: matches[2]?.toLowerCase() === 'kg' ? 'kg' : 'lbs'
-    };
+    const val = parseFloat(matches[1]);
+    if (val > 20) {
+      return {
+        value: val,
+        unit: matches[2]?.toLowerCase() === 'kg' ? 'kg' : 'lbs'
+      };
+    }
   }
   return { value: 160, unit: 'lbs' };
 };
 
 // Helper to parse height strings (e.g., "5' 11\"", "180 cm", "0")
 const parseHeight = (heightStr) => {
-  if (!heightStr) return { feet: 5, inches: 9, cm: 175, type: 'ft' };
+  if (!heightStr || heightStr === '0') return { feet: 5, inches: 9, cm: 175, type: 'ft' };
   const ftInMatch = String(heightStr).match(/(\d+)\s*(?:'|ft)?\s*(\d+)?\s*(?:"|in)?/i);
   const cmMatch = String(heightStr).match(/(\d+)\s*cm/i);
 
   if (cmMatch) {
     const cmVal = parseInt(cmMatch[1]);
-    const totalInches = cmVal / 2.54;
-    return {
-      feet: Math.floor(totalInches / 12),
-      inches: Math.round(totalInches % 12),
-      cm: cmVal,
-      type: 'cm'
-    };
+    if (cmVal > 50) {
+      const totalInches = cmVal / 2.54;
+      return {
+        feet: Math.floor(totalInches / 12),
+        inches: Math.round(totalInches % 12),
+        cm: cmVal,
+        type: 'cm'
+      };
+    }
   } else if (ftInMatch) {
     const feet = parseInt(ftInMatch[1]);
-    const inches = ftInMatch[2] ? parseInt(ftInMatch[2]) : 0;
-    const cm = Math.round((feet * 12 + inches) * 2.54);
-    return {
-      feet,
-      inches,
-      cm,
-      type: 'ft'
-    };
+    if (feet > 2) {
+      const inches = ftInMatch[2] ? parseInt(ftInMatch[2]) : 0;
+      const cm = Math.round((feet * 12 + inches) * 2.54);
+      return {
+        feet,
+        inches,
+        cm,
+        type: 'ft'
+      };
+    }
   }
   return { feet: 5, inches: 9, cm: 175, type: 'ft' };
 };
 
-export default function MemberPanel({ activeView, currentUser, addActivity, onUpdateUser, onNavigateSubView }) {
-  // Member Profile states
-  const memberKey = currentUser?.name || 'member_user';
-  const [profileData, setProfileData] = useState(() => {
-    const saved = localStorage.getItem(`apex_member_profile_${memberKey}`);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {}
-    }
+// Helper to sanitize and clean profile records (removing ugly '0' / '0 lbs' / 'May 2026' placeholders)
+const sanitizeProfile = (raw, currentUser) => {
+  if (!raw) raw = {};
+  const cleanStr = (val, fallback = '') => (val === '0' || val === 0 || !val ? fallback : String(val).trim());
+  const userEmail = currentUser?.email || currentUser?.sub || raw.email || 'member@apex.com';
+  const isDefaultMock = userEmail.toLowerCase() === 'member@apex.com' || (currentUser?.name && currentUser.name.toLowerCase() === 'ethan hunt');
 
-    const userEmail = currentUser?.email || currentUser?.sub || '';
-    const isDefaultMockMember = userEmail.toLowerCase() === 'member@apex.com' || (currentUser?.name && currentUser.name.toLowerCase() === 'ethan hunt');
+  // Compute real current date (e.g. "Sep 2026") and replace any legacy hardcoded mock dates
+  const currentRealDate = new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  let resolvedJoinDate = raw.joinedDate || currentUser?.joinedDate;
+  if (!resolvedJoinDate || resolvedJoinDate === 'May 2026' || resolvedJoinDate === 'July 2026' || resolvedJoinDate === '0') {
+    resolvedJoinDate = currentRealDate;
+  }
 
-    if (!isDefaultMockMember) {
-      const registeredUsers = JSON.parse(localStorage.getItem('apex_registered_users') || '[]');
-      const registeredUser = registeredUsers.find(
-        (u) => u.email && u.email.toLowerCase() === userEmail.toLowerCase()
-      );
-
-      return {
-        name: registeredUser?.name || currentUser?.name || 'Registered Member',
-        email: registeredUser?.email || userEmail || 'member@apex.com',
-        phone: registeredUser?.phone || '0',
-        age: registeredUser?.age || 0,
-        gender: '0',
-        height: '0',
-        weight: '0 lbs',
-        targetWeight: '0 lbs',
-        fitnessGoal: '0',
-        emergencyContact: '0',
-        address: '0',
-        bio: '0',
-        membershipTier: currentUser?.membershipTier || 'Muscle Pro',
-        joinedDate: 'July 2026',
-        profileImage: null
-      };
-    }
-
+  if (isDefaultMock && !raw.name) {
     return {
       name: currentUser?.name || 'Ethan Hunt',
-      email: userEmail || 'member@apex.com',
+      email: userEmail,
       phone: '+91 98765 43210',
-      age: 26,
-      gender: 'Athlete',
+      age: '26',
+      gender: 'Male',
       height: "5' 11\"",
       weight: '175 lbs',
       targetWeight: '185 lbs',
       fitnessGoal: 'Hypertrophy & Max Strength',
-      emergencyContact: 'Emergency Contact (+91 98765 43210)',
+      emergencyContact: 'Jane Hunt (+91 98765 43210)',
       address: 'Apex Fitness Member Residence',
       bio: 'Dedicated athlete focusing on progressive overload and powerlifting metrics.',
       membershipTier: currentUser?.membershipTier || 'Muscle Pro',
-      joinedDate: 'July 2026',
+      joinedDate: resolvedJoinDate,
       profileImage: null
     };
+  }
+
+  return {
+    name: cleanStr(raw.name, currentUser?.name || 'Registered Member'),
+    email: userEmail,
+    phone: cleanStr(raw.phone, ''),
+    age: (raw.age && raw.age !== '0' && raw.age !== 0) ? String(raw.age) : '',
+    gender: (raw.gender && raw.gender !== '0') ? raw.gender : 'Male',
+    height: (raw.height && raw.height !== '0') ? raw.height : '',
+    weight: (raw.weight && raw.weight !== '0' && raw.weight !== '0 lbs') ? raw.weight : '',
+    targetWeight: (raw.targetWeight && raw.targetWeight !== '0' && raw.targetWeight !== '0 lbs') ? raw.targetWeight : '',
+    fitnessGoal: (raw.fitnessGoal && raw.fitnessGoal !== '0') ? raw.fitnessGoal : 'Hypertrophy & Max Strength',
+    emergencyContact: cleanStr(raw.emergencyContact, ''),
+    address: cleanStr(raw.address, ''),
+    bio: cleanStr(raw.bio, ''),
+    membershipTier: raw.membershipTier || currentUser?.membershipTier || 'Muscle Pro',
+    joinedDate: resolvedJoinDate,
+    profileImage: raw.profileImage || currentUser?.picture || currentUser?.profileImage || null
+  };
+};
+
+export default function MemberPanel({ activeView, currentUser, addActivity, onUpdateUser, onNavigateSubView }) {
+  // Member Profile states (keyed by email or username for reliable session binding)
+  const memberKey = currentUser?.email
+    ? currentUser.email.toLowerCase().replace(/[^a-z0-9]/g, '_')
+    : (currentUser?.name ? currentUser.name.toLowerCase().replace(/[^a-z0-9]/g, '_') : 'member_user');
+
+  const [profileData, setProfileData] = useState(() => {
+    const saved = localStorage.getItem(`apex_member_profile_${memberKey}`) || (currentUser?.name ? localStorage.getItem(`apex_member_profile_${currentUser.name}`) : null);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return sanitizeProfile(parsed, currentUser);
+      } catch (e) {}
+    }
+
+    const userEmail = currentUser?.email || currentUser?.sub || '';
+    const registeredUsers = JSON.parse(localStorage.getItem('apex_registered_users') || '[]');
+    const registeredUser = registeredUsers.find(
+      (u) => u.email && u.email.toLowerCase() === userEmail.toLowerCase()
+    );
+
+    return sanitizeProfile(registeredUser, currentUser);
   });
+
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState(profileData);
+  const [formErrors, setFormErrors] = useState({});
   const [profileToast, setProfileToast] = useState(null);
 
   // Broadcast alerts states
@@ -204,17 +234,51 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
   // Billing states
   const [membershipTier, setMembershipTier] = useState('Muscle Pro');
   const [autoRenew, setAutoRenew] = useState(true);
-  const [billingInvoices, setBillingInvoices] = useState([
-    {
-      txId: 'TX-8392',
-      plan: 'Muscle Pro Subscription',
-      amount: 3500.0,
-      status: 'paid',
-      date: 'June 10, 2026'
+  const [activeReceipt, setActiveReceipt] = useState(null);
+  const [billingInvoices, setBillingInvoices] = useState(() => {
+    const memberKey = currentUser?.name || 'member_user';
+    const saved = localStorage.getItem(`apex_member_invoices_${memberKey}`);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
     }
-  ]);
+    return [];
+  });
+
+  // Sync official Razorpay Receipts from backend
+  useEffect(() => {
+    const fetchMemberReceipts = async () => {
+      try {
+        const uEmail = currentUser?.email || profileData?.email;
+        const res = await fetch(`http://localhost:5000/api/payment/receipts?email=${encodeURIComponent(uEmail || '')}`);
+        const data = await res.json();
+        if (data.success && data.receipts && data.receipts.length > 0) {
+          const mapped = data.receipts.map((r) => ({
+            txId: r.receiptNumber,
+            orderId: r.orderId,
+            paymentId: r.paymentId,
+            plan: r.title,
+            amount: r.amount,
+            status: r.status || 'paid',
+            date: new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            fullReceipt: r
+          }));
+          setBillingInvoices((prev) => {
+            const map = new Map();
+            [...mapped, ...prev].forEach((item) => {
+              if (item && item.txId) map.set(item.txId, item);
+            });
+            return Array.from(map.values());
+          });
+        }
+      } catch (err) {
+        console.warn('Could not load backend receipts:', err);
+      }
+    };
+    fetchMemberReceipts();
+  }, [currentUser, profileData?.email]);
+
   const [renewed, setRenewed] = useState(false);
-  const [daysLeft, setDaysLeft] = useState(5);
+  const [daysLeft, setDaysLeft] = useState(30);
 
   // Chat states
   const [chatHistory, setChatHistory] = useState([]);
@@ -409,46 +473,140 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
   const handleConfirmTrainerPayment = async (e) => {
     if (e) e.preventDefault();
     if (!trainerToHire) return;
-    setShowTrainerGateway(true);
-  };
 
-  const handleTrainerPaymentSuccess = async (paymentDetail) => {
-    setShowTrainerGateway(false);
-    
     const packageDetails = {
       monthly: { name: '1-Month Personal Coaching', price: 5000 },
       '3month': { name: '3-Month Transformation Package', price: 13000 },
       '6month': { name: '6-Month VIP Elite Mentorship', price: 23000 }
     }[trainerPackage] || { name: '1-Month Personal Coaching', price: 5000 };
 
-    const txId = paymentDetail.txId || 'TX-TRN-' + Math.floor(1000 + Math.random() * 9000);
-    const newInvoice = {
-      txId,
-      plan: `Personal Coaching - ${trainerToHire.name} (${packageDetails.name})`,
-      amount: packageDetails.price,
-      status: 'paid',
-      date: 'Today'
-    };
+    setIsProcessingTrainerPayment(true);
+    try {
+      await initiateRazorpayPayment({
+        amount: packageDetails.price,
+        title: `Hire Coach: ${trainerToHire.name} (${packageDetails.name})`,
+        paymentType: 'trainer_booking',
+        items: [
+          {
+            name: `Personal Coaching (${trainerToHire.name}) - ${packageDetails.name}`,
+            qty: 1,
+            unitPrice: packageDetails.price,
+            total: packageDetails.price
+          }
+        ],
+        memberInfo: {
+          id: currentUser?.id || 'MEM-90210',
+          name: profileData?.name || currentUser?.name || 'Athlete Member',
+          email: profileData?.email || currentUser?.email || 'athlete@apex.club',
+          phone: profileData?.phone || '+91 98765 43210'
+        },
+        metadata: {
+          trainerId: trainerToHire.id || trainerToHire.userId,
+          trainerName: trainerToHire.name,
+          package: trainerPackage
+        },
+        onSuccess: async (receipt) => {
+          setIsProcessingTrainerPayment(false);
+          const hiredTrainer = trainerToHire;
+          setTrainerToHire(null);
 
-    setBillingInvoices((prev) => [newInvoice, ...prev]);
+          const txId = receipt?.receiptNumber || receipt?.paymentId || 'MH-RCP-' + Date.now();
+          const newInvoice = {
+            txId,
+            plan: `Personal Coaching - ${hiredTrainer.name} (${packageDetails.name})`,
+            amount: packageDetails.price,
+            status: 'paid',
+            date: 'Today',
+            fullReceipt: receipt
+          };
 
-    setSelectedTrainer(trainerToHire);
-    localStorage.setItem(`apex_selected_trainer_${memberKey}`, JSON.stringify(trainerToHire));
-    setIsTrainerPaid(true);
-    localStorage.setItem(`apex_trainer_paid_${memberKey}`, 'true');
-    setTrainerTabMode('assigned');
-    await memberApi.selectTrainer(trainerToHire.userId || trainerToHire.id, trainerToHire.name);
+          setBillingInvoices((prev) => [newInvoice, ...prev]);
+          setSelectedTrainer(hiredTrainer);
+          localStorage.setItem(`apex_selected_trainer_${memberKey}`, JSON.stringify(hiredTrainer));
+          setIsTrainerPaid(true);
+          localStorage.setItem(`apex_trainer_paid_${memberKey}`, 'true');
+          setTrainerTabMode('assigned');
 
-    if (addActivity) {
-      addActivity(`Hired ${trainerToHire.name} (₹${packageDetails.price} - ${packageDetails.name}, Receipt ${txId})`, 'volt');
+          try {
+            await memberApi.selectTrainer(hiredTrainer.userId || hiredTrainer.id, hiredTrainer.name);
+          } catch (apiErr) {
+            console.warn("API select trainer warning:", apiErr);
+          }
+
+          if (addActivity) {
+            addActivity(`Hired Coach ${hiredTrainer.name} via Razorpay (Paid ₹${packageDetails.price.toLocaleString('en-IN')}, Receipt ${txId})`, 'volt');
+          }
+
+          // Show Payment Successful & Coach Assigned Popup
+          CustomSwal.fire({
+            title: 'Payment Successful! 🎉',
+            html: `
+              <div style="text-align: left; padding: 0.5rem 0.2rem; font-size: 0.88rem; line-height: 1.6;">
+                <div style="background: rgba(198, 255, 0, 0.08); border: 1px solid rgba(198, 255, 0, 0.25); border-radius: 8px; padding: 0.9rem 1.1rem; margin-bottom: 1.1rem;">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+                    <span style="color: var(--text-muted, #888);">Assigned Coach:</span>
+                    <strong style="color: #fff;">🏋️ ${hiredTrainer.name}</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+                    <span style="color: var(--text-muted, #888);">Coaching Package:</span>
+                    <strong style="color: #fff;">${packageDetails.name}</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+                    <span style="color: var(--text-muted, #888);">Amount Paid:</span>
+                    <strong style="color: var(--accent-volt, #c6ff00);">₹${packageDetails.price.toLocaleString('en-IN')} (incl. 18% GST)</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 0.4rem; margin-top: 0.4rem;">
+                    <span style="color: var(--text-muted, #888);">Invoice / Receipt #:</span>
+                    <code style="color: #00f0ff; font-weight: 700;">${txId}</code>
+                  </div>
+                </div>
+                <p style="color: #ccc; margin: 0; font-size: 0.84rem;">
+                  ✅ <strong>Coach ${hiredTrainer.name}</strong> has received your booking details and will begin formulating your tailored workout and nutrition protocols.
+                </p>
+              </div>
+            `,
+            icon: 'success',
+            showCancelButton: true,
+            confirmButtonText: '📄 View Tax Invoice',
+            cancelButtonText: '💬 Connect & Chat with Coach',
+            confirmButtonColor: '#ff5e00',
+            cancelButtonColor: '#2563eb',
+            background: '#0d0d14',
+            color: '#fff',
+            customClass: {
+              popup: 'apex-swal-custom'
+            }
+          }).then(async (result) => {
+            if (result.isConfirmed) {
+              setActiveReceipt(receipt);
+            } else {
+              // Navigate directly to Personal Coach View & open chat
+              if (onNavigateSubView) {
+                onNavigateSubView('trainer');
+              }
+              setTrainerTabMode('assigned');
+              try {
+                const memberName = profileData?.name || currentUser?.name || 'Athlete';
+                await memberApi.sendChatMessage(`Hi Coach ${hiredTrainer.name}! I just booked my coaching package. Looking forward to our sessions!`, hiredTrainer.name);
+              } catch (e) {}
+            }
+          });
+        },
+        onFailure: (err) => {
+          setIsProcessingTrainerPayment(false);
+          if (err?.reason !== 'cancelled') {
+            CustomSwal.fire({
+              icon: 'error',
+              title: 'Payment Incomplete',
+              text: err?.message || 'Payment could not be completed via Razorpay. Please try again.'
+            });
+          }
+        }
+      });
+    } catch (err) {
+      setIsProcessingTrainerPayment(false);
+      console.error(err);
     }
-
-    CustomSwal.fire({
-      icon: 'success',
-      title: 'Payment Successful! 🎉',
-      html: `<p style="font-size:1rem;color:#fff;"><strong>${trainerToHire.name}</strong> is now your official Personal Coach!</p><div style="margin-top:0.8rem;padding:0.6rem;background:rgba(198,255,0,0.06);border:1px solid #c6ff00;border-radius:6px;font-family:monospace;font-size:0.85rem;"><span style="color:#c6ff00;">Receipt ID: ${txId}</span><br/><span style="color:#fff;">Amount Paid: ₹${packageDetails.price.toLocaleString('en-IN')}</span></div>`
-    });
-    setTrainerToHire(null);
   };
 
 
@@ -897,63 +1055,43 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
         console.warn("Error loading attendance statistics:", err);
       }
 
-      // 5. Member Profile
+      // 5. Member Profile Synchronization
       const userEmail = currentUser?.email || currentUser?.sub || '';
-      const isDefaultMockMember = userEmail.toLowerCase() === 'member@apex.com' || (currentUser?.name && currentUser.name.toLowerCase() === 'ethan hunt');
+      let loadedProfile = null;
 
-      if (!isDefaultMockMember) {
-        const savedLocally = localStorage.getItem(`apex_member_profile_${memberKey}`);
-        if (savedLocally) {
-          try {
-            const parsed = JSON.parse(savedLocally);
-            setProfileData((prev) => ({ ...prev, ...parsed }));
-            setProfileForm((prev) => ({ ...prev, ...parsed }));
-          } catch (e) {
-            console.warn("Could not parse saved profile", e);
-          }
-        } else {
-          const registeredUsers = JSON.parse(localStorage.getItem('apex_registered_users') || '[]');
-          const registeredUser = registeredUsers.find(
-            (u) => u.email && u.email.toLowerCase() === userEmail.toLowerCase()
-          );
-          
-          const initialNewProfile = {
-            name: registeredUser?.name || currentUser?.name || 'Registered Member',
-            email: registeredUser?.email || userEmail || 'member@apex.com',
-            phone: registeredUser?.phone || '0',
-            age: registeredUser?.age || 0,
-            gender: '0',
-            height: '0',
-            weight: '0 lbs',
-            targetWeight: '0 lbs',
-            fitnessGoal: '0',
-            emergencyContact: '0',
-            address: '0',
-            bio: '0',
-            membershipTier: currentUser?.membershipTier || 'Muscle Pro',
-            joinedDate: 'July 2026',
-            profileImage: null
-          };
+      // First check local storage by user-specific key
+      const savedLocally = localStorage.getItem(`apex_member_profile_${memberKey}`) || (currentUser?.name ? localStorage.getItem(`apex_member_profile_${currentUser.name}`) : null);
+      if (savedLocally) {
+        try {
+          const parsed = JSON.parse(savedLocally);
+          loadedProfile = sanitizeProfile(parsed, currentUser);
+        } catch (e) {}
+      }
 
-          setProfileData(initialNewProfile);
-          setProfileForm(initialNewProfile);
-          localStorage.setItem(`apex_member_profile_${memberKey}`, JSON.stringify(initialNewProfile));
+      // Then check registered users array if not loaded
+      if (!loadedProfile) {
+        const registeredUsers = JSON.parse(localStorage.getItem('apex_registered_users') || '[]');
+        const registeredUser = registeredUsers.find(
+          (u) => u.email && u.email.toLowerCase() === userEmail.toLowerCase()
+        );
+        if (registeredUser) {
+          loadedProfile = sanitizeProfile(registeredUser, currentUser);
         }
-      } else {
+      }
+
+      // Also attempt server sync
+      try {
         const fetchedProfile = await memberApi.getProfile();
-        if (fetchedProfile) {
-          setProfileData((prev) => ({ ...prev, ...fetchedProfile }));
-          setProfileForm((prev) => ({ ...prev, ...fetchedProfile }));
-        } else {
-          const savedLocally = localStorage.getItem(`apex_member_profile_${memberKey}`);
-          if (savedLocally) {
-            try {
-              const parsed = JSON.parse(savedLocally);
-              setProfileData((prev) => ({ ...prev, ...parsed }));
-              setProfileForm((prev) => ({ ...prev, ...parsed }));
-            } catch (e) {}
-          }
+        if (fetchedProfile && (fetchedProfile.name || fetchedProfile.email)) {
+          // Merge server profile data
+          loadedProfile = sanitizeProfile({ ...(loadedProfile || {}), ...fetchedProfile }, currentUser);
         }
+      } catch (err) {}
+
+      if (loadedProfile) {
+        setProfileData(loadedProfile);
+        setProfileForm(loadedProfile);
+        localStorage.setItem(`apex_member_profile_${memberKey}`, JSON.stringify(loadedProfile));
       }
     }
 
@@ -1051,6 +1189,104 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
     }
   };
 
+  // Profile Form Validation Rules
+  const validateField = (field, value) => {
+    let error = '';
+    const val = String(value ?? '').trim();
+
+    switch (field) {
+      case 'name':
+        if (!val) {
+          error = 'Full name is required.';
+        } else if (val.length < 2) {
+          error = 'Name must be at least 2 characters long.';
+        } else if (!/^[a-zA-Z\s.'-]+$/.test(val)) {
+          error = 'Name can only contain letters, spaces, and hyphens.';
+        }
+        break;
+
+      case 'email':
+        if (!val) {
+          error = 'Email address is required.';
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+          error = 'Please enter a valid email address.';
+        }
+        break;
+
+      case 'phone':
+        if (val) {
+          const digits = val.replace(/\D/g, '');
+          if (digits.length < 7 || digits.length > 15) {
+            error = 'Phone must be a valid number with 7 to 15 digits.';
+          }
+        }
+        break;
+
+      case 'age':
+        if (val) {
+          const num = parseInt(val, 10);
+          if (isNaN(num) || num < 12 || num > 120) {
+            error = 'Age must be between 12 and 120.';
+          }
+        }
+        break;
+
+      case 'height':
+        if (val && (val === '0' || val.length > 25)) {
+          error = 'Please enter a realistic height (e.g. 5\' 11" or 180 cm).';
+        }
+        break;
+
+      case 'weight':
+        if (val) {
+          const num = parseFloat(val);
+          if (val === '0' || val === '0 lbs' || (!isNaN(num) && (num < 20 || num > 500))) {
+            error = 'Please enter a valid weight (e.g. 175 lbs or 80 kg).';
+          }
+        }
+        break;
+
+      case 'targetWeight':
+        if (val) {
+          const num = parseFloat(val);
+          if (val === '0' || val === '0 lbs' || (!isNaN(num) && (num < 20 || num > 500))) {
+            error = 'Please enter a valid target weight (e.g. 185 lbs or 85 kg).';
+          }
+        }
+        break;
+
+      case 'emergencyContact':
+        if (val === '0') {
+          error = 'Please enter a valid emergency contact name and phone number.';
+        }
+        break;
+
+      case 'address':
+        if (val === '0') {
+          error = 'Please enter a valid residential address.';
+        }
+        break;
+
+      default:
+        break;
+    }
+
+    return error;
+  };
+
+  const validateAllForm = (data) => {
+    const errors = {};
+    const fieldsToValidate = ['name', 'email', 'phone', 'age', 'height', 'weight', 'targetWeight', 'emergencyContact', 'address'];
+
+    fieldsToValidate.forEach((field) => {
+      const err = validateField(field, data[field]);
+      if (err) errors[field] = err;
+    });
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   // Profile Edit Handlers
   const handleEditProfileClick = (e) => {
     if (e) {
@@ -1058,6 +1294,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
       e.stopPropagation();
     }
     setProfileForm({ ...profileData });
+    setFormErrors({});
     setIsEditingProfile(true);
 
     setTimeout(() => {
@@ -1078,11 +1315,33 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
   const handleProfileFormChange = (field, value) => {
     setProfileForm((prev) => ({ ...prev, [field]: value }));
+    // Live validation check on change
+    const err = validateField(field, value);
+    setFormErrors((prev) => {
+      const copy = { ...prev };
+      if (err) {
+        copy[field] = err;
+      } else {
+        delete copy[field];
+      }
+      return copy;
+    });
   };
 
   const handleAvatarFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Validate image file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        if (CustomSwal) {
+          CustomSwal.fire({
+            icon: 'error',
+            title: 'File Too Large',
+            text: 'Please select an image smaller than 5 MB.'
+          });
+        }
+        return;
+      }
       const reader = new FileReader();
       reader.onloadend = () => {
         setProfileForm((prev) => ({ ...prev, profileImage: reader.result }));
@@ -1099,18 +1358,55 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
   const handleSaveProfile = async (e) => {
     if (e) e.preventDefault();
-    if (!profileForm.name.trim()) return;
+
+    const isValid = validateAllForm(profileForm);
+    if (!isValid) {
+      if (CustomSwal) {
+        CustomSwal.fire({
+          icon: 'warning',
+          title: 'Validation Error',
+          text: 'Please fix the highlighted errors in the form before saving changes.'
+        });
+      }
+      return;
+    }
 
     setProfileData(profileForm);
     setIsEditingProfile(false);
+    setFormErrors({});
 
-    // Save to localStorage for instant local persistence
+    // 1. Save to localStorage under member key (and fallback name keys)
     localStorage.setItem(`apex_member_profile_${memberKey}`, JSON.stringify(profileForm));
+    if (currentUser?.name) {
+      localStorage.setItem(`apex_member_profile_${currentUser.name}`, JSON.stringify(profileForm));
+    }
+    if (profileForm.name) {
+      localStorage.setItem(`apex_member_profile_${profileForm.name}`, JSON.stringify(profileForm));
+    }
 
-    // Call Node.js Express backend API
+    // 2. Sync with registered users storage
+    try {
+      const regUsers = JSON.parse(localStorage.getItem('apex_registered_users') || '[]');
+      const userIdx = regUsers.findIndex(u => u.email && u.email.toLowerCase() === profileForm.email.toLowerCase());
+      if (userIdx !== -1) {
+        regUsers[userIdx] = { ...regUsers[userIdx], ...profileForm, picture: profileForm.profileImage || regUsers[userIdx].picture };
+        localStorage.setItem('apex_registered_users', JSON.stringify(regUsers));
+      }
+    } catch (err) {}
+
+    // 3. Sync with active auth session
+    try {
+      const authUser = JSON.parse(localStorage.getItem('apex_auth_user') || '{}');
+      if (authUser && authUser.email) {
+        const updatedAuth = { ...authUser, name: profileForm.name, email: profileForm.email, picture: profileForm.profileImage || authUser.picture };
+        localStorage.setItem('apex_auth_user', JSON.stringify(updatedAuth));
+      }
+    } catch (err) {}
+
+    // 4. Call Node.js Express backend API (saves to server/data/db.json)
     await memberApi.updateProfile(profileForm);
 
-    // Trigger parent currentUser state update (for sidebar & top bar sync)
+    // 5. Trigger parent currentUser state update (for sidebar, top bar & greeting sync)
     if (onUpdateUser) {
       onUpdateUser({
         name: profileForm.name,
@@ -1123,12 +1419,23 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
       addActivity(`Member ${profileForm.name} updated profile details`, 'volt');
     }
 
+    if (CustomSwal) {
+      CustomSwal.fire({
+        icon: 'success',
+        title: 'Profile Updated! 🎯',
+        text: 'Your member profile and photo have been updated and synchronized.',
+        timer: 2000,
+        showConfirmButton: false
+      });
+    }
+
     setProfileToast('Member profile successfully updated & synced!');
     setTimeout(() => setProfileToast(null), 4000);
   };
 
   const handleCancelEdit = () => {
     setProfileForm(profileData);
+    setFormErrors({});
     setIsEditingProfile(false);
   };
 
@@ -1159,12 +1466,6 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
     // Sync with Node.js Express backend
     await memberApi.addWorkout(newLog);
-  };
-
-  // Renew membership action
-  const handleRenew = () => {
-    const planObj = plans[membershipTier] || plans['Muscle Core'];
-    handleOpenMembershipPayment(planObj);
   };
 
   const plans = {
@@ -1258,51 +1559,95 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
     setMembershipCardCvv('');
   };
 
+  const handleRenew = () => {
+    const planObj = plans[membershipTier] || plans['Muscle Pro'] || plans['Muscle Core'];
+    handleOpenMembershipPayment(planObj);
+  };
+
   const handleConfirmMembershipPayment = async (e) => {
     if (e) e.preventDefault();
     if (!planToPurchase) return;
-    setShowMembershipGateway(true);
-  };
 
-  const handleMembershipPaymentSuccess = async (paymentDetail) => {
-    setShowMembershipGateway(false);
-    
-    const oldPlan = membershipTier;
-    const newPlan = planToPurchase.name;
-    const planPrice = planToPurchase.price;
-    const txId = paymentDetail.txId || 'TX-MEM-' + Math.floor(1000 + Math.random() * 9000);
+    setIsProcessingMembershipPayment(true);
+    try {
+      await initiateRazorpayPayment({
+        amount: planToPurchase.price,
+        title: `${planToPurchase.name} Pass Subscription`,
+        paymentType: 'membership',
+        items: [
+          {
+            name: `${planToPurchase.name} Pass Subscription`,
+            qty: 1,
+            unitPrice: planToPurchase.price,
+            total: planToPurchase.price
+          }
+        ],
+        memberInfo: {
+          id: currentUser?.id || 'MEM-90210',
+          name: profileData?.name || currentUser?.name || 'Athlete Member',
+          email: profileData?.email || currentUser?.email || 'athlete@apex.club',
+          phone: profileData?.phone || '+91 98765 43210'
+        },
+        metadata: {
+          planTier: planToPurchase.name,
+          durationDays: planToPurchase.period === 'year' ? 365 : planToPurchase.period === '6 months' ? 180 : 30
+        },
+        onSuccess: async (receipt) => {
+          setIsProcessingMembershipPayment(false);
+          const purchasedPlan = planToPurchase;
+          setPlanToPurchase(null);
 
-    const newInvoice = {
-      txId,
-      plan: `${newPlan} Subscription Pass`,
-      amount: planPrice,
-      status: 'paid',
-      date: 'Today'
-    };
+          const newPlan = purchasedPlan.name;
+          const planPrice = purchasedPlan.price;
+          const txId = receipt?.receiptNumber || receipt?.paymentId || 'MH-RCP-' + Date.now();
 
-    setBillingInvoices((prev) => [newInvoice, ...prev]);
-    setMembershipTier(newPlan);
-    setRenewed(true);
-    setIsMembershipPaid(true);
-    localStorage.setItem(`apex_membership_paid_${memberKey}`, 'true');
-    localStorage.setItem(`apex_selected_plan_${memberKey}`, newPlan);
+          const newInvoice = {
+            txId,
+            plan: `${newPlan} Subscription Pass`,
+            amount: planPrice,
+            status: 'paid',
+            date: 'Today',
+            fullReceipt: receipt
+          };
 
-    if (onUpdateUser) {
-      onUpdateUser({ membershipTier: newPlan });
+          setBillingInvoices((prev) => [newInvoice, ...prev]);
+          setMembershipTier(newPlan);
+          setRenewed(true);
+          setIsMembershipPaid(true);
+          localStorage.setItem(`apex_membership_paid_${memberKey}`, 'true');
+          localStorage.setItem(`apex_selected_plan_${memberKey}`, newPlan);
+
+          if (onUpdateUser) {
+            onUpdateUser({ membershipTier: newPlan });
+          }
+
+          try {
+            await memberApi.changePlan(newPlan);
+          } catch (apiErr) {
+            console.warn("API change plan warning:", apiErr);
+          }
+
+          if (addActivity) {
+            addActivity(`Member ${currentUser?.name || 'Member'} activated ${newPlan} via Razorpay (Paid ₹${planPrice.toLocaleString('en-IN')}, Receipt ${txId})`, 'cyan');
+          }
+
+          setActiveReceipt(receipt);
+        },
+        onFailure: (err) => {
+          setIsProcessingMembershipPayment(false);
+          if (err?.reason !== 'cancelled') {
+            CustomSwal.fire({
+              icon: 'error',
+              title: 'Payment Incomplete',
+              text: err?.message || 'Payment could not be completed via Razorpay. Please try again.'
+            });
+          }
+        }
+      });
+    } catch (err) {
+      setIsProcessingMembershipPayment(false);
+      console.error(err);
     }
-
-    await memberApi.changePlan(newPlan);
-
-    if (addActivity) {
-      addActivity(`Member ${currentUser.name} purchased ${newPlan} subscription pass (Paid ₹${planPrice}, Invoice ${txId})`, 'cyan');
-    }
-
-    CustomSwal.fire({
-      icon: 'success',
-      title: 'Membership Activated! 🎉',
-      html: `<p style="font-size:1rem;color:#fff;">Your membership pass has been updated to <strong>${newPlan}</strong>!</p><div style="margin-top:0.8rem;padding:0.6rem;background:rgba(198,255,0,0.06);border:1px solid #c6ff00;border-radius:6px;font-family:monospace;font-size:0.85rem;"><span style="color:#c6ff00;">Receipt ID: ${txId}</span><br/><span style="color:#fff;">Amount Paid: ₹${planPrice.toLocaleString('en-IN')}</span></div>`
-    });
-    setPlanToPurchase(null);
   };
 
 
@@ -1524,11 +1869,28 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                     <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5rem', color: 'var(--text-white)', margin: 0, textTransform: 'uppercase', lineHeight: 1.1 }}>
                       {profileData.name}
                     </h2>
-                    <span className="role-badge" style={{ background: 'var(--accent-volt)', color: '#000', fontWeight: 800, fontSize: '0.68rem', padding: '0.2rem 0.5rem' }}>
+                    <span className="role-badge" style={{
+                      background: 'linear-gradient(135deg, #ff5e00, #ff7a00)',
+                      color: '#ffffff',
+                      fontWeight: 800,
+                      fontSize: '0.68rem',
+                      padding: '0.22rem 0.55rem',
+                      borderRadius: '4px',
+                      letterSpacing: '0.04em',
+                      boxShadow: '0 2px 6px rgba(255, 94, 0, 0.25)'
+                    }}>
                       ATHLETE MEMBER
                     </span>
-                    <span className="status-badge paid" style={{ fontSize: '0.68rem', padding: '0.2rem 0.5rem' }}>
-                      {profileData.membershipTier} Tier
+                    <span className="status-badge paid" style={{
+                      fontSize: '0.68rem',
+                      padding: '0.22rem 0.6rem',
+                      borderRadius: '4px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
+                    }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'currentColor', display: 'inline-block' }}></span>
+                      {profileData.membershipTier || 'Muscle Pro'} Tier
                     </span>
 
                     {/* EDIT PROFILE BUTTON MOVED RIGHT BESIDE TIER BADGE */}
@@ -1612,8 +1974,8 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                     </svg>
                   </div>
                   <div className="metric-details">
-                    <h3>{profileData.weight}</h3>
-                    <p>Current Weight ({profileData.targetWeight} target)</p>
+                    <h3>{profileData.weight || 'Not Set'}</h3>
+                    <p>Current Weight ({profileData.targetWeight || 'Target'} goal)</p>
                   </div>
                 </div>
 
@@ -1668,15 +2030,15 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '0.6rem' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Phone Number</span>
-                      <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>{profileData.phone}</strong>
+                      <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>{profileData.phone || 'Not provided'}</strong>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '0.6rem' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Age / Gender</span>
-                      <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>{profileData.age} Yrs &bull; {profileData.gender}</strong>
+                      <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>{profileData.age ? `${profileData.age} Yrs` : 'Age not set'} &bull; {profileData.gender || 'Athlete'}</strong>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '0.6rem' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Address</span>
-                      <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>{profileData.address}</strong>
+                      <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>{profileData.address || 'Not provided'}</strong>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Joined Date</span>
@@ -1702,19 +2064,19 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1.2rem' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '0.6rem' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Height</span>
-                      <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>{profileData.height}</strong>
+                      <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>{profileData.height || 'Not specified'}</strong>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '0.6rem' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Current Weight</span>
-                      <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>{profileData.weight}</strong>
+                      <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>{profileData.weight || 'Not specified'}</strong>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '0.6rem' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Target Weight</span>
-                      <strong style={{ color: 'var(--accent-volt)', fontSize: '0.9rem' }}>{profileData.targetWeight}</strong>
+                      <strong style={{ color: 'var(--accent-volt)', fontSize: '0.9rem' }}>{profileData.targetWeight || 'Not specified'}</strong>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '0.6rem' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Primary Goal</span>
-                      <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>{profileData.fitnessGoal}</strong>
+                      <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>{profileData.fitnessGoal || 'Hypertrophy & Max Strength'}</strong>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Assigned Coach</span>
@@ -1737,7 +2099,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1.2rem' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '0.6rem' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Emergency Contact</span>
-                      <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>{profileData.emergencyContact}</strong>
+                      <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>{profileData.emergencyContact || 'Not provided'}</strong>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Medical Clearances</span>
@@ -1760,8 +2122,8 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1.2rem' }}>
                     <div>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Athlete Bio & Notes</span>
-                      <p style={{ color: 'var(--text-white)', fontSize: '0.88rem', lineHeight: 1.5, marginTop: '0.3rem', background: 'rgba(255,255,255,0.01)', padding: '0.8rem', borderRadius: '6px', border: '1px solid var(--border-color)', margin: '0.4rem 0 0 0' }}>
-                        {profileData.bio}
+                      <p style={{ color: 'var(--text-white)', fontSize: '0.88rem', lineHeight: 1.5, marginTop: '0.3rem', background: 'var(--bg-main)', padding: '0.8rem', borderRadius: '6px', border: '1px solid var(--border-color)', margin: '0.4rem 0 0 0' }}>
+                        {profileData.bio || 'No athlete bio notes added yet. Click Edit Profile to add your fitness background and goals.'}
                       </p>
                     </div>
 
@@ -1788,10 +2150,10 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                 <p className="card-subtitle" style={{ margin: '0.3rem 0 0 0' }}>Update your personal contact details, physical metrics, and avatar image</p>
               </div>
 
-              <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              <form onSubmit={handleSaveProfile} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
 
                 {/* 1. AVATAR & PHOTO SELECTION */}
-                <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', padding: '1.5rem', borderRadius: '8px' }}>
+                <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '1.5rem', borderRadius: '8px' }}>
                   <h4 style={{ fontSize: '0.95rem', color: 'var(--accent-volt)', margin: '0 0 1rem 0' }}>1. Profile Avatar & Photo</h4>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', flexWrap: 'wrap' }}>
@@ -1800,13 +2162,13 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                         <img src={profileForm.profileImage} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : (
                         <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, var(--accent-volt), var(--accent-cyan))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontWeight: 800, fontSize: '1.8rem' }}>
-                          {profileForm.name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)}
+                          {(profileForm.name || 'Member').split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)}
                         </div>
                       )}
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                      <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Upload New Avatar Image</label>
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Upload New Avatar Image (JPEG/PNG, max 5MB)</label>
                       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                         <input
                           type="file"
@@ -1839,59 +2201,88 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                 </div>
 
                 {/* 2. PERSONAL DETAILS GRID */}
-                <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', padding: '1.5rem', borderRadius: '8px' }}>
+                <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '1.5rem', borderRadius: '8px' }}>
                   <h4 style={{ fontSize: '0.95rem', color: 'var(--accent-volt)', margin: '0 0 1.2rem 0' }}>2. Personal & Contact Information</h4>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.2rem' }}>
                     <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Full Name</label>
+                      <label className="form-label">Full Name <span style={{ color: '#ef4444' }}>*</span></label>
                       <input
                         type="text"
                         className="form-input"
+                        placeholder="e.g. John Doe"
                         value={profileForm.name}
                         onChange={(e) => handleProfileFormChange('name', e.target.value)}
+                        style={{ borderColor: formErrors.name ? '#ef4444' : undefined }}
                         required
                       />
+                      {formErrors.name && (
+                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '0.3rem', display: 'block', fontWeight: 600 }}>
+                          {formErrors.name}
+                        </span>
+                      )}
                     </div>
 
                     <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Email Address</label>
+                      <label className="form-label">Email Address <span style={{ color: '#ef4444' }}>*</span></label>
                       <input
                         type="email"
                         className="form-input"
+                        placeholder="e.g. member@apex.com"
                         value={profileForm.email}
                         onChange={(e) => handleProfileFormChange('email', e.target.value)}
+                        style={{ borderColor: formErrors.email ? '#ef4444' : undefined }}
                         required
                       />
+                      {formErrors.email && (
+                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '0.3rem', display: 'block', fontWeight: 600 }}>
+                          {formErrors.email}
+                        </span>
+                      )}
                     </div>
 
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Phone Number</label>
                       <input
-                        type="text"
+                        type="tel"
                         className="form-input"
+                        placeholder="e.g. +91 98765 43210"
                         value={profileForm.phone}
                         onChange={(e) => handleProfileFormChange('phone', e.target.value)}
+                        style={{ borderColor: formErrors.phone ? '#ef4444' : undefined }}
                       />
+                      {formErrors.phone && (
+                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '0.3rem', display: 'block', fontWeight: 600 }}>
+                          {formErrors.phone}
+                        </span>
+                      )}
                     </div>
 
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Age</label>
                       <input
                         type="number"
+                        min="12"
+                        max="120"
                         className="form-input"
+                        placeholder="e.g. 25"
                         value={profileForm.age}
                         onChange={(e) => handleProfileFormChange('age', e.target.value)}
+                        style={{ borderColor: formErrors.age ? '#ef4444' : undefined }}
                       />
+                      {formErrors.age && (
+                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '0.3rem', display: 'block', fontWeight: 600 }}>
+                          {formErrors.age}
+                        </span>
+                      )}
                     </div>
 
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Gender</label>
                       <select
                         className="form-input"
-                        value={profileForm.gender}
+                        value={profileForm.gender || 'Male'}
                         onChange={(e) => handleProfileFormChange('gender', e.target.value)}
-                        style={{ background: 'var(--bg-black)' }}
                       >
                         <option value="Male">Male</option>
                         <option value="Female">Female</option>
@@ -1905,9 +2296,16 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                       <input
                         type="text"
                         className="form-input"
+                        placeholder="e.g. Jane Doe (+91 98765 00000)"
                         value={profileForm.emergencyContact}
                         onChange={(e) => handleProfileFormChange('emergencyContact', e.target.value)}
+                        style={{ borderColor: formErrors.emergencyContact ? '#ef4444' : undefined }}
                       />
+                      {formErrors.emergencyContact && (
+                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '0.3rem', display: 'block', fontWeight: 600 }}>
+                          {formErrors.emergencyContact}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -1916,54 +2314,81 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                     <input
                       type="text"
                       className="form-input"
+                      placeholder="e.g. Flat 402, Gym Heights, NY"
                       value={profileForm.address}
                       onChange={(e) => handleProfileFormChange('address', e.target.value)}
+                      style={{ borderColor: formErrors.address ? '#ef4444' : undefined }}
                     />
+                    {formErrors.address && (
+                      <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '0.3rem', display: 'block', fontWeight: 600 }}>
+                        {formErrors.address}
+                      </span>
+                    )}
                   </div>
                 </div>
 
                 {/* 3. PHYSICAL METRICS & FITNESS GOALS */}
-                <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', padding: '1.5rem', borderRadius: '8px' }}>
+                <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '1.5rem', borderRadius: '8px' }}>
                   <h4 style={{ fontSize: '0.95rem', color: 'var(--accent-volt)', margin: '0 0 1.2rem 0' }}>3. Physical Metrics & Fitness Target</h4>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.2rem' }}>
                     <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Height (e.g. 5' 11")</label>
+                      <label className="form-label">Height (e.g. 5' 11" or 180 cm)</label>
                       <input
                         type="text"
                         className="form-input"
+                        placeholder={"e.g. 5' 11\" or 180 cm"}
                         value={profileForm.height}
                         onChange={(e) => handleProfileFormChange('height', e.target.value)}
+                        style={{ borderColor: formErrors.height ? '#ef4444' : undefined }}
                       />
+                      {formErrors.height && (
+                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '0.3rem', display: 'block', fontWeight: 600 }}>
+                          {formErrors.height}
+                        </span>
+                      )}
                     </div>
 
                     <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Current Weight (e.g. 175 lbs)</label>
+                      <label className="form-label">Current Weight (e.g. 175 lbs or 75 kg)</label>
                       <input
                         type="text"
                         className="form-input"
+                        placeholder="e.g. 175 lbs or 75 kg"
                         value={profileForm.weight}
                         onChange={(e) => handleProfileFormChange('weight', e.target.value)}
+                        style={{ borderColor: formErrors.weight ? '#ef4444' : undefined }}
                       />
+                      {formErrors.weight && (
+                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '0.3rem', display: 'block', fontWeight: 600 }}>
+                          {formErrors.weight}
+                        </span>
+                      )}
                     </div>
 
                     <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Target Weight (e.g. 185 lbs)</label>
+                      <label className="form-label">Target Weight (e.g. 185 lbs or 80 kg)</label>
                       <input
                         type="text"
                         className="form-input"
+                        placeholder="e.g. 185 lbs or 80 kg"
                         value={profileForm.targetWeight}
                         onChange={(e) => handleProfileFormChange('targetWeight', e.target.value)}
+                        style={{ borderColor: formErrors.targetWeight ? '#ef4444' : undefined }}
                       />
+                      {formErrors.targetWeight && (
+                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '0.3rem', display: 'block', fontWeight: 600 }}>
+                          {formErrors.targetWeight}
+                        </span>
+                      )}
                     </div>
 
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Primary Fitness Goal</label>
                       <select
                         className="form-input"
-                        value={profileForm.fitnessGoal}
+                        value={profileForm.fitnessGoal || 'Hypertrophy & Max Strength'}
                         onChange={(e) => handleProfileFormChange('fitnessGoal', e.target.value)}
-                        style={{ background: 'var(--bg-black)' }}
                       >
                         <option value="Hypertrophy & Max Strength">Hypertrophy & Max Strength</option>
                         <option value="Fat Loss & Conditioning">Fat Loss & Conditioning</option>
@@ -1976,7 +2401,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                 </div>
 
                 {/* 4. BIO & NOTES */}
-                <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', padding: '1.5rem', borderRadius: '8px' }}>
+                <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '1.5rem', borderRadius: '8px' }}>
                   <h4 style={{ fontSize: '0.95rem', color: 'var(--accent-volt)', margin: '0 0 1.2rem 0' }}>4. Athlete Bio & Notes</h4>
 
                   <div className="form-group" style={{ margin: 0 }}>
@@ -1984,6 +2409,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                     <textarea
                       rows="3"
                       className="form-input"
+                      placeholder="Tell us about your fitness journey, training background, and goals..."
                       value={profileForm.bio}
                       onChange={(e) => handleProfileFormChange('bio', e.target.value)}
                       style={{ resize: 'vertical', fontFamily: 'inherit' }}
@@ -2012,77 +2438,137 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
       {activeView === 'home' && (
         <div className="member-sub-view" id="member-subview-home" style={{ display: 'block' }}>
 
-          {/* BROADCASTED SYSTEM ALERTS BANNER */}
-          {broadcastAlerts.filter(a => !dismissedAlerts.includes(a.id)).map((alt) => {
-            const typeInfo = {
-              holiday: { bg: 'rgba(255, 62, 108, 0.15)', border: '#ff3e6c', icon: '🛑' },
-              event: { bg: 'rgba(0, 240, 255, 0.15)', border: '#00f0ff', icon: '🎉' },
-              maintenance: { bg: 'rgba(255, 159, 0, 0.15)', border: '#ff9f00', icon: '⚙️' },
-              general: { bg: 'rgba(255, 255, 255, 0.05)', border: '#8e919f', icon: '📢' }
-            }[alt.type] || { bg: 'rgba(255, 255, 255, 0.05)', border: '#8e919f', icon: '📢' };
+          {/* BROADCASTED SYSTEM ALERTS BANNER (Compact & Non-intrusive) */}
+          {broadcastAlerts
+            .filter(a => {
+              if (!a || !a.id) return false;
+              if (dismissedAlerts.includes(a.id)) return false;
+              if (a.date) {
+                const alertTime = new Date(a.date).getTime();
+                if (!isNaN(alertTime) && (Date.now() - alertTime > 7 * 24 * 60 * 60 * 1000)) {
+                  return false;
+                }
+              }
+              return true;
+            })
+            .map((alt) => {
+              const typeInfo = {
+                holiday: { bg: 'rgba(255, 62, 108, 0.08)', border: '#ff3e6c', color: '#ff3e6c', label: 'Holiday Notice' },
+                event: { bg: 'rgba(0, 240, 255, 0.08)', border: '#00f0ff', color: '#00f0ff', label: 'Club Event' },
+                maintenance: { bg: 'rgba(255, 159, 0, 0.08)', border: '#ff9f00', color: '#ff9f00', label: 'Maintenance' },
+                general: { bg: 'rgba(255, 255, 255, 0.04)', border: 'rgba(255,255,255,0.1)', color: 'var(--accent-volt)', label: 'Announcement' }
+              }[alt.type] || { bg: 'rgba(255, 255, 255, 0.04)', border: 'rgba(255,255,255,0.1)', color: 'var(--accent-volt)', label: 'Announcement' };
 
-            return (
-              <div key={alt.id} className="db-card member-alert-card" style={{
-                background: typeInfo.bg,
-                border: `1.5px solid ${typeInfo.border}`,
-                boxShadow: `0 0 15px ${typeInfo.bg}`,
-                marginBottom: '1.2rem',
-                position: 'relative',
-                padding: '1.2rem 1.5rem',
-                borderRadius: '8px'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '1rem' }}>
-                  <div style={{ fontSize: '1.8rem' }}>{typeInfo.icon}</div>
-                  <div className="alert-details" style={{ flexGrow: 1 }}>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', color: typeInfo.border }}>{alt.type} Announcement</span>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>• {alt.date}</span>
-                    </div>
-                    <h4 style={{ color: 'var(--text-white)', fontWeight: 800, margin: '0.2rem 0', fontSize: '1.15rem' }}>{alt.title}</h4>
-                    <p style={{ color: 'var(--text-white)', fontSize: '0.85rem', margin: 0 }}>{alt.message}</p>
+              return (
+                <div key={alt.id} style={{
+                  background: typeInfo.bg,
+                  border: `1px solid ${typeInfo.border}`,
+                  marginBottom: '1rem',
+                  padding: '0.75rem 1.2rem',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '1rem'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap' }}>
+                    <span style={{
+                      fontSize: '0.68rem',
+                      fontWeight: 800,
+                      textTransform: 'uppercase',
+                      color: typeInfo.color,
+                      padding: '0.2rem 0.5rem',
+                      background: 'rgba(0,0,0,0.35)',
+                      borderRadius: '4px',
+                      border: `1px solid ${typeInfo.border}`,
+                      letterSpacing: '0.04em'
+                    }}>
+                      {typeInfo.label}
+                    </span>
+                    <span style={{ color: 'var(--text-white)', fontWeight: 700, fontSize: '0.88rem' }}>{alt.title}</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>— {alt.message}</span>
                   </div>
-                  <button onClick={() => {
-                    const updatedDismissed = [...dismissedAlerts, alt.id];
-                    setDismissedAlerts(updatedDismissed);
-                    localStorage.setItem('dismissed_alerts', JSON.stringify(updatedDismissed));
-                  }} style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--text-muted)',
-                    fontSize: '1.5rem',
-                    cursor: 'pointer',
-                    alignSelf: 'flex-start',
-                    padding: '0 0.5rem'
-                  }}>&times;</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updatedDismissed = [...dismissedAlerts, alt.id];
+                      setDismissedAlerts(updatedDismissed);
+                      localStorage.setItem('dismissed_alerts', JSON.stringify(updatedDismissed));
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      fontSize: '1.25rem',
+                      cursor: 'pointer',
+                      padding: '0 0.3rem',
+                      lineHeight: 1
+                    }}
+                    title="Dismiss announcement"
+                  >
+                    &times;
+                  </button>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
 
-          {/* EXPIRY ALERT BANNER */}
-          {billingInvoices.length > 0 && (daysLeft <= 10 || !renewed) && (
-            <div className="db-card member-alert-card" id="member-expiry-alert-box" style={{ display: 'block', marginBottom: '1.8rem' }}>
-              <div className="member-alert-content" style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '1rem' }}>
-                <div className="alert-icon-box" style={{ color: '#ff9f00' }}>
-                  <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
+
+          {/* 1-WEEK ADVANCE EXPIRATION & RENEWAL BANNER */}
+          {daysLeft <= 7 && !renewed && (
+            <div
+              className="db-card member-alert-card"
+              id="member-expiry-alert-box"
+              style={{
+                display: 'block',
+                marginBottom: '1.8rem',
+                border: `1.5px solid ${daysLeft <= 0 ? '#ef4444' : '#ff5e00'}`,
+                background: daysLeft <= 0 ? 'rgba(239, 68, 68, 0.12)' : 'rgba(255, 94, 0, 0.12)',
+                boxShadow: daysLeft <= 0 ? '0 0 20px rgba(239, 68, 68, 0.2)' : '0 0 20px rgba(255, 94, 0, 0.2)'
+              }}
+            >
+              <div className="member-alert-content" style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '1rem', flexWrap: 'wrap' }}>
+                <div className="alert-icon-box" style={{ color: daysLeft <= 0 ? '#ef4444' : '#ff5e00', fontSize: '1.8rem' }}>
+                  {daysLeft <= 0 ? '❌' : '⏳'}
                 </div>
-                <div className="alert-details">
-                  <h4>Membership Expiration Alert</h4>
-                  <p>
-                    {renewed ? (
-                      <span>Thank you! Your <strong>{membershipTier} Pass</strong> has been successfully renewed. Session keycard active. Next charge date: <strong>August 10, 2026</strong>.</span>
-                    ) : (
-                      <span>Your <strong>{membershipTier} Pass</strong> will expire in <span id="member-days-left">{daysLeft}</span> days on <span id="member-expiry-date">July 17, 2026</span>. Please renew to avoid keycard lookup lockouts.</span>
-                    )}
+                <div className="alert-details" style={{ flexGrow: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.2rem' }}>
+                    <h4 style={{ margin: 0, color: '#fff', fontSize: '1.05rem', fontWeight: 800 }}>
+                      {daysLeft <= 0 ? 'Plan Expired — Immediate Action Required' : '1-Week Advance Plan Renewal Reminder'}
+                    </h4>
+                    <span style={{
+                      fontSize: '0.68rem',
+                      fontWeight: 800,
+                      padding: '0.15rem 0.55rem',
+                      borderRadius: '4px',
+                      background: daysLeft <= 0 ? '#ef4444' : '#ff5e00',
+                      color: '#000',
+                      textTransform: 'uppercase'
+                    }}>
+                      {daysLeft <= 0 ? 'Expired' : `${daysLeft} Day${daysLeft === 1 ? '' : 's'} Remaining`}
+                    </span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--text-muted)' }}>
+                    <span>
+                      Your <strong>{membershipTier} Pass</strong> {selectedTrainer ? `and coaching under Coach ${selectedTrainer.name}` : ''} {daysLeft <= 0 ? 'has expired' : `will expire on ${new Date(Date.now() + daysLeft * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`}. Please renew now via Razorpay to avoid biometric lockout and retain your coach schedule.
+                    </span>
                   </p>
                 </div>
-                {!renewed && (
-                  <button onClick={handleRenew} className="glow-btn" id="member-renew-btn" style={{ padding: '0.6rem 1.4rem', fontSize: '0.8rem', marginLeft: 'auto' }}>
-                    Renew Now
-                  </button>
-                )}
+                <button
+                  onClick={handleRenew}
+                  className="glow-btn"
+                  id="member-renew-btn"
+                  style={{
+                    padding: '0.65rem 1.5rem',
+                    fontSize: '0.82rem',
+                    fontWeight: 800,
+                    marginLeft: 'auto',
+                    background: daysLeft <= 0 ? '#ef4444' : '#ff5e00',
+                    color: '#000',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  ⚡ Renew via Razorpay
+                </button>
               </div>
             </div>
           )}
@@ -2566,8 +3052,9 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                     }}
                     style={{ width: '100%', padding: '0.65rem', fontSize: '0.85rem', marginTop: '1.2rem', cursor: 'pointer' }}
                   >
-                    Calculate Targets ⚡
+                    Calculate Targets
                   </button>
+
                 </div>
               ) : (
                 <div className="db-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '430px', padding: '2rem' }}>
@@ -4523,11 +5010,26 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                               <td>
                                 <button
                                   type="button"
-                                  onClick={() => alert(`Downloading Official PDF Receipt for Invoice ${inv.txId}...`)}
+                                  onClick={() => {
+                                    setActiveReceipt(inv.fullReceipt || {
+                                      receiptNumber: inv.txId,
+                                      orderId: inv.orderId || 'ORD-MEM-PRO',
+                                      paymentId: inv.paymentId || 'PAY-VERIFIED',
+                                      title: inv.plan,
+                                      amount: inv.amount,
+                                      userName: profileData?.name || currentUser?.name || 'Athlete Member',
+                                      userEmail: profileData?.email || currentUser?.email || 'athlete@apex.club',
+                                      userPhone: profileData?.phone || '+91 98765 43210',
+                                      paymentMethod: 'Razorpay Online (UPI/Cards)',
+                                      paymentType: 'membership',
+                                      createdAt: inv.date === 'Today' ? new Date().toISOString() : new Date(inv.date || Date.now()).toISOString(),
+                                      items: [{ name: inv.plan, qty: 1, unitPrice: inv.amount, total: inv.amount }]
+                                    });
+                                  }}
                                   className="outline-btn"
-                                  style={{ padding: '0.3rem 0.7rem', fontSize: '0.7rem' }}
+                                  style={{ padding: '0.35rem 0.8rem', fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
                                 >
-                                  Receipt PDF 📄
+                                  <span>📄</span> View Receipt
                                 </button>
                               </td>
                             </tr>
@@ -4554,18 +5056,32 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
       {/* 5. MEMBER GYM EQUIPMENT VIEW */}
       {activeView === 'equipment' && (
         <div className="member-sub-view" id="member-subview-equipment" style={{ display: 'block' }}>
-          <div className="db-card" style={{ marginBottom: '1.8rem' }}>
-            <h4>Gym Floor Equipment Status</h4>
-            <p className="card-subtitle">Real-time usage and servicing updates for MuScLe HuB floor machines</p>
+          <div className="db-card" style={{ marginBottom: '1.8rem', padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.8rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1.2rem' }}>
+              <div>
+                <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.4rem', color: 'var(--text-white)', margin: 0, textTransform: 'uppercase' }}>
+                  Gym Floor Equipment Stations
+                </h3>
+                <p className="card-subtitle" style={{ margin: '0.3rem 0 0 0' }}>Real-time usage, machine specs, and servicing status across all training zones</p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                <span className="status-badge paid" style={{ fontSize: '0.75rem', padding: '0.35rem 0.8rem', borderRadius: '20px', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'currentColor' }}></span>
+                  6 / 6 Stations Operational
+                </span>
+              </div>
+            </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginTop: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.8rem' }}>
               {[
                 {
                   id: 'chest',
                   name: 'Chest Station',
-                  desc: 'Chest press machines & bench presses',
+                  category: 'Upper Body',
+                  desc: 'Incline, flat & decline chest press machines, cable crossovers, and bench presses.',
                   image: 'assets/images/chest_workout.png',
-                  status: 'Active',
+                  status: 'Active & Ready',
+                  target: 'Pectoralis Major & Deltoids',
                   specs: [
                     'Equipped with: 3 Incline Bench Presses, 2 Flat Bench Presses, 2 Pec Dec Fly machines',
                     'Features: Adjustable seat alignments, commercial-grade weight stacks',
@@ -4577,9 +5093,11 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                 {
                   id: 'back',
                   name: 'Back Station',
-                  desc: 'Lat pulldown machines & rowing stations',
+                  category: 'Upper Body',
+                  desc: 'Heavy-duty lat pulldown towers, seated cable row platforms, and T-bar row stations.',
                   image: 'assets/images/back_workout.png',
-                  status: 'Active',
+                  status: 'Active & Ready',
+                  target: 'Latissimus Dorsi & Rhomboids',
                   specs: [
                     'Equipped with: 4 Lat Pulldown towers, 3 Seated Cable Row machines, 2 T-Bar Row platforms',
                     'Features: Ergonomic multi-grip pulldown attachments, steel cables',
@@ -4591,9 +5109,11 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                 {
                   id: 'biceps',
                   name: 'Biceps Station',
-                  desc: 'Dumbbells curls & preacher curl benches',
+                  category: 'Arms',
+                  desc: 'Preacher curl benches, EZ-curl barbell racks, and comprehensive dumbbell collections.',
                   image: 'assets/images/biceps_workout.png',
-                  status: 'Active',
+                  status: 'Active & Ready',
+                  target: 'Biceps Brachii & Forearms',
                   specs: [
                     'Equipped with: 2 Preacher Curl Benches, 3 EZ-Bar racks, Dumbbells from 5 to 100 lbs',
                     'Features: Padded arm support setups, heavy-duty frames',
@@ -4605,9 +5125,11 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                 {
                   id: 'triceps',
                   name: 'Triceps Station',
-                  desc: 'Cable rope pushdowns & overhead extensions',
+                  category: 'Arms',
+                  desc: 'Dual-pulley cable pushdown stations, overhead extension setups, and parallel dip bars.',
                   image: 'assets/images/triceps_workout.png',
-                  status: 'Active',
+                  status: 'Active & Ready',
+                  target: 'Triceps Brachii (All Heads)',
                   specs: [
                     'Equipped with: 3 Cable crossover towers, overhead triceps machines, dip handles',
                     'Features: Dual pulley pulleys, adjustable heights, attachment storage rack',
@@ -4619,9 +5141,11 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                 {
                   id: 'shoulder',
                   name: 'Shoulder Station',
-                  desc: 'Dumbbell overhead presses & lateral raises',
+                  category: 'Upper Body',
+                  desc: 'Counterbalanced seated overhead presses, lateral raise machines, and military press cages.',
                   image: 'assets/images/shoulder_workout.png',
-                  status: 'Active',
+                  status: 'Active & Ready',
+                  target: 'Deltoids (Anterior, Lateral, Rear)',
                   specs: [
                     'Equipped with: 2 Seated Shoulder Press racks, 2 lateral raise stations, overhead press cage',
                     'Features: Counterbalanced press arms, adjustable seat safety configurations',
@@ -4633,9 +5157,11 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                 {
                   id: 'legs',
                   name: 'Legs Station',
-                  desc: 'Barbell squats & leg press machines',
+                  category: 'Lower Body',
+                  desc: '45-degree linear leg press machines, Olympic squat cages, and leg extension/curl benches.',
                   image: 'assets/images/legs_workout.png',
-                  status: 'Active',
+                  status: 'Active & Ready',
+                  target: 'Quadriceps, Hamstrings & Glutes',
                   specs: [
                     'Equipped with: 3 Squat Racks, 2 Leg Press machines, 2 Leg Extension/Curl benches',
                     'Features: Angled linear sleds, heavy-duty footplates, safety locking pegs',
@@ -4644,21 +5170,72 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                     'Target Muscles: Quadriceps, Gluteus Maximus, Hamstrings, Gastrocnemius (Calves)'
                   ]
                 }
-              ]
-                .slice((equipmentPage - 1) * 3, equipmentPage * 3)
-                .map((eq) => (
-                  <div key={eq.id} className="equipment-card" style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column', transition: 'transform 0.2s' }}>
-                    <div style={{ height: '140px', background: '#0a0a0f', borderBottom: '1px solid var(--border-color)', overflow: 'hidden' }}>
-                      <img src={eq.image} alt={eq.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ].map((eq) => (
+                <div
+                  key={eq.id}
+                  className="equipment-card"
+                  style={{
+                    background: 'var(--bg-main)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    boxShadow: '0 4px 15px rgba(0, 0, 0, 0.04)',
+                    transition: 'transform 0.25s ease, box-shadow 0.25s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-4px)';
+                    e.currentTarget.style.boxShadow = '0 12px 30px rgba(0, 0, 0, 0.12)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.04)';
+                  }}
+                >
+                  <div style={{ height: '190px', background: '#0a0a0f', borderBottom: '1px solid var(--border-color)', overflow: 'hidden', position: 'relative' }}>
+                    <img src={eq.image} alt={eq.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <span style={{
+                      position: 'absolute',
+                      top: '12px',
+                      left: '12px',
+                      background: 'rgba(0, 0, 0, 0.75)',
+                      backdropFilter: 'blur(4px)',
+                      color: '#ffffff',
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      padding: '0.2rem 0.6rem',
+                      borderRadius: '4px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em'
+                    }}>
+                      {eq.category}
+                    </span>
+                  </div>
+                  <div style={{ padding: '1.4rem', display: 'flex', flexDirection: 'column', gap: '0.9rem', flexGrow: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                      <h4 style={{ color: 'var(--text-white)', fontWeight: 800, fontSize: '1.1rem', margin: 0, fontFamily: 'var(--font-display)' }}>
+                        {eq.name}
+                      </h4>
+                      <span className="status-badge paid" style={{ fontSize: '0.68rem', padding: '0.2rem 0.55rem', borderRadius: '4px', flexShrink: 0 }}>
+                        {eq.status}
+                      </span>
                     </div>
-                    <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.8rem', flexGrow: 1 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <h5 style={{ color: 'var(--text-white)', fontWeight: 700, margin: 0 }}>{eq.name}</h5>
-                        <span style={{ fontSize: '0.72rem', color: 'var(--accent-volt)', fontWeight: 800, background: 'rgba(198,255,0,0.08)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>{eq.status}</span>
-                      </div>
-                      <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: 0 }}>{eq.desc}</p>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto' }}>
-                        <button className="outline-btn" style={{ padding: '0.3rem 0.6rem', fontSize: '0.7rem' }} onClick={() => {
+
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.84rem', margin: 0, lineHeight: 1.5 }}>
+                      {eq.desc}
+                    </p>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.2rem' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>Target:</span>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--accent-volt)', fontWeight: 700 }}>{eq.target}</span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto', paddingTop: '0.5rem' }}>
+                      <button
+                        className="glow-btn"
+                        style={{ padding: '0.45rem 1.1rem', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}
+                        onClick={() => {
                           setSelectedEquipment({
                             name: eq.name + ' Workout Station',
                             status: 'Active & Available',
@@ -4667,20 +5244,18 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                           });
                           setModalViewMode('photo');
                           if (eq.id === 'chest') setChestPhotoIndex(0);
-                        }}>Details</button>
-                      </div>
+                        }}
+                      >
+                        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        View Station Specs
+                      </button>
                     </div>
                   </div>
-                ))}
+                </div>
+              ))}
             </div>
-
-            {renderPaginationBar(
-              equipmentPage,
-              Math.ceil(6 / 3) || 1,
-              6,
-              setEquipmentPage,
-              3
-            )}
           </div>
         </div>
       )}
@@ -4693,45 +5268,61 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
           left: 0,
           width: '100%',
           height: '100%',
-          background: 'rgba(5, 5, 8, 0.85)',
+          background: 'rgba(5, 5, 8, 0.75)',
           backdropFilter: 'blur(8px)',
           zIndex: 99999,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center'
-        }}>
+        }}
+        onClick={(e) => { if (e.target === e.currentTarget) setSelectedEquipment(null); }}
+        >
           <div style={{
-            background: '#0e0e13',
+            background: 'var(--bg-card)',
+            color: 'var(--text-white)',
             border: '1px solid var(--border-color)',
-            boxShadow: '0 0 35px rgba(0, 240, 255, 0.18)',
-            borderRadius: '12px',
+            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.25)',
+            borderRadius: '16px',
             width: '90%',
             maxWidth: '680px',
             padding: '2rem',
-            position: 'relative'
+            position: 'relative',
+            maxHeight: '90vh',
+            overflowY: 'auto'
           }}>
             <button
               onClick={() => setSelectedEquipment(null)}
               style={{
                 position: 'absolute',
-                top: '1rem',
-                right: '1rem',
-                background: 'none',
-                border: 'none',
+                top: '1.2rem',
+                right: '1.2rem',
+                background: 'rgba(128, 128, 128, 0.1)',
+                border: '1px solid var(--border-color)',
                 color: 'var(--text-muted)',
-                fontSize: '1.8rem',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.3rem',
                 cursor: 'pointer',
-                transition: 'color 0.2s',
-                padding: '0.2rem',
+                transition: 'all 0.2s',
                 lineHeight: 1
               }}
-              onMouseEnter={(e) => e.target.style.color = '#ff3e6c'}
-              onMouseLeave={(e) => e.target.style.color = 'var(--text-muted)'}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = '#ff3e6c';
+                e.currentTarget.style.background = 'rgba(255, 62, 108, 0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--text-muted)';
+                e.currentTarget.style.background = 'rgba(128, 128, 128, 0.1)';
+              }}
             >
               &times;
             </button>
 
-            <h3 style={{ textTransform: 'uppercase', fontFamily: 'var(--font-display)', fontWeight: 800, color: 'var(--text-white)', margin: '0 0 0.5rem 0', fontSize: '1.4rem' }}>
+            <h3 style={{ textTransform: 'uppercase', fontFamily: 'var(--font-display)', fontWeight: 800, color: 'var(--text-white)', margin: '0 0 0.5rem 0', fontSize: '1.4rem', letterSpacing: '0.02em' }}>
               {selectedEquipment.name}
             </h3>
             <p style={{ color: 'var(--text-muted)', margin: '0 0 1.5rem 0', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -4743,17 +5334,17 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
               <button
                 className={`glow-btn`}
                 style={{
-                  padding: '0.5rem 1rem',
+                  padding: '0.5rem 1.2rem',
                   fontSize: '0.78rem',
                   textTransform: 'uppercase',
-                  background: modalViewMode === 'photo' ? 'var(--accent-volt)' : 'rgba(255, 255, 255, 0.02)',
-                  color: modalViewMode === 'photo' ? 'var(--bg-black)' : 'var(--text-white)',
+                  background: modalViewMode === 'photo' ? 'var(--accent-volt)' : 'var(--bg-card-hover, rgba(128, 128, 128, 0.08))',
+                  color: modalViewMode === 'photo' ? '#ffffff' : 'var(--text-muted)',
                   border: '1px solid',
                   borderColor: modalViewMode === 'photo' ? 'var(--accent-volt)' : 'var(--border-color)',
                   boxShadow: modalViewMode === 'photo' ? 'var(--glow-volt)' : 'none',
                   cursor: 'pointer',
                   fontWeight: 700,
-                  borderRadius: '4px',
+                  borderRadius: '6px',
                   transition: 'all 0.2s'
                 }}
                 onClick={() => setModalViewMode('photo')}
@@ -4763,17 +5354,17 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
               <button
                 className={`outline-btn`}
                 style={{
-                  padding: '0.5rem 1rem',
+                  padding: '0.5rem 1.2rem',
                   fontSize: '0.78rem',
                   textTransform: 'uppercase',
-                  background: modalViewMode === 'specs' ? 'var(--accent-cyan)' : 'rgba(255, 255, 255, 0.02)',
-                  color: modalViewMode === 'specs' ? 'var(--bg-black)' : 'var(--text-white)',
+                  background: modalViewMode === 'specs' ? 'var(--accent-cyan)' : 'var(--bg-card-hover, rgba(128, 128, 128, 0.08))',
+                  color: modalViewMode === 'specs' ? '#ffffff' : 'var(--text-muted)',
                   border: '1px solid',
                   borderColor: modalViewMode === 'specs' ? 'var(--accent-cyan)' : 'var(--border-color)',
                   boxShadow: modalViewMode === 'specs' ? 'var(--glow-cyan)' : 'none',
                   cursor: 'pointer',
                   fontWeight: 700,
-                  borderRadius: '4px',
+                  borderRadius: '6px',
                   transition: 'all 0.2s'
                 }}
                 onClick={() => setModalViewMode('specs')}
@@ -5767,20 +6358,20 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                 )
               ) : (
                 <div style={{
-                  background: 'rgba(255,255,255,0.01)',
+                  background: 'var(--bg-card-hover, rgba(128,128,128,0.06))',
                   border: '1px solid var(--border-color)',
-                  borderRadius: '8px',
-                  padding: '1.2rem',
+                  borderRadius: '10px',
+                  padding: '1.4rem',
                   maxHeight: '260px',
                   overflowY: 'auto'
                 }}>
-                  <h4 style={{ color: 'var(--text-white)', fontWeight: 700, fontSize: '0.85rem', textTransform: 'uppercase', marginBottom: '0.8rem', letterSpacing: '0.05em' }}>
+                  <h4 style={{ color: 'var(--text-white)', fontWeight: 700, fontSize: '0.9rem', textTransform: 'uppercase', marginBottom: '0.8rem', letterSpacing: '0.05em' }}>
                     Zone Specifications & Guidelines
                   </h4>
-                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
                     {selectedEquipment.specs.map((spec, idx) => (
-                      <li key={idx} style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-                        <span style={{ color: 'var(--accent-volt)', marginTop: '0.1rem' }}>▶</span>
+                      <li key={idx} style={{ fontSize: '0.85rem', color: 'var(--text-white)', display: 'flex', alignItems: 'flex-start', gap: '0.6rem', lineHeight: 1.5 }}>
+                        <span style={{ color: 'var(--accent-volt)', marginTop: '0.1rem', fontWeight: 'bold' }}>▶</span>
                         <span>{spec}</span>
                       </li>
                     ))}
@@ -5793,9 +6384,15 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
               <button
                 className="outline-btn"
                 onClick={() => setSelectedEquipment(null)}
-                style={{ padding: '0.6rem 1.5rem', fontSize: '0.8rem' }}
+                style={{
+                  padding: '0.6rem 1.6rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  borderRadius: '6px'
+                }}
               >
-                Close details
+                Close Details
               </button>
             </div>
           </div>
@@ -6831,12 +7428,11 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
         </div>
       )}
 
-      {showMembershipGateway && planToPurchase && (
-        <DummyPaymentGateway
-          amount={planToPurchase.price}
-          title={`Membership Checkout: ${planToPurchase.name}`}
-          onPaymentSuccess={handleMembershipPaymentSuccess}
-          onClose={() => setShowMembershipGateway(false)}
+      {/* OFFICIAL RAZORPAY RECEIPT & TAX INVOICE MODAL */}
+      {activeReceipt && (
+        <ReceiptModal
+          receipt={activeReceipt}
+          onClose={() => setActiveReceipt(null)}
         />
       )}
     </div>

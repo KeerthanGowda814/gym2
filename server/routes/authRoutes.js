@@ -244,6 +244,149 @@ router.post('/login', async (req, res) => {
 });
 
 /**
+ * POST /api/auth/google
+ * Authenticate or auto-register user via Google OAuth 2.0 credential
+ */
+router.post('/google', async (req, res) => {
+  try {
+    const { credential, role } = req.body;
+
+    if (!credential) {
+      return res.status(400).json({
+        success: false,
+        message: 'Google credential token is required.'
+      });
+    }
+
+    // Decode Google JWT payload safely
+    let googlePayload = null;
+    try {
+      const base64Url = credential.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = Buffer.from(base64, 'base64').toString('utf8');
+      googlePayload = JSON.parse(jsonPayload);
+    } catch (e) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid Google credential token format.'
+      });
+    }
+
+    const { email, name, picture, sub } = googlePayload;
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email address not found in Google credential.'
+      });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = name || cleanEmail.split('@')[0];
+    const defaultRole = role === 'trainer' ? 'trainer' : (role === 'admin' || cleanEmail.includes('admin') ? 'admin' : 'member');
+
+    const db = getDB();
+    if (!db.users) db.users = [];
+
+    let existingUser = db.users.find(u => u.email && u.email.trim().toLowerCase() === cleanEmail);
+
+    if (!existingUser && isMongoConnected()) {
+      existingUser = await User.findOne({ email: new RegExp(`^${cleanEmail}$`, 'i') });
+    }
+
+    let userToAuth = null;
+    const regDate = new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+    if (existingUser) {
+      userToAuth = {
+        userId: existingUser.userId || `USR-${Date.now()}`,
+        name: existingUser.name || cleanName,
+        email: cleanEmail,
+        role: existingUser.role || defaultRole,
+        picture: picture || existingUser.picture || null,
+        membershipTier: existingUser.membershipTier || 'Muscle Pro',
+        status: existingUser.status || 'Active'
+      };
+    } else {
+      userToAuth = {
+        userId: defaultRole === 'trainer' ? `TRN-${Date.now()}` : `USR-${Date.now()}`,
+        name: cleanName,
+        email: cleanEmail,
+        password: `google_oauth_${sub || Date.now()}`,
+        role: defaultRole,
+        picture: picture || null,
+        membershipTier: defaultRole === 'trainer' ? 'Staff Trainer' : (defaultRole === 'admin' ? 'System Admin' : 'Muscle Pro'),
+        status: 'Active',
+        joinedDate: regDate,
+        authProvider: 'google'
+      };
+
+      db.users.push(userToAuth);
+
+      if (defaultRole === 'trainer') {
+        if (!db.trainer) db.trainer = {};
+        db.trainer.coachName = cleanName;
+      } else if (defaultRole === 'member') {
+        if (!db.trainer) db.trainer = {};
+        if (!Array.isArray(db.trainer.members)) db.trainer.members = [];
+        const inRoster = db.trainer.members.some(m => m.email && m.email.toLowerCase() === cleanEmail);
+        if (!inRoster) {
+          db.trainer.members.unshift({
+            id: userToAuth.userId,
+            name: cleanName,
+            email: cleanEmail,
+            tier: 'Pro Member',
+            status: 'Active',
+            joined: regDate,
+            goal: 'General Fitness'
+          });
+        }
+      }
+
+      saveDB(db);
+
+      if (isMongoConnected()) {
+        await User.findOneAndUpdate(
+          { email: cleanEmail },
+          userToAuth,
+          { upsert: true, returnDocument: 'after' }
+        );
+      }
+    }
+
+    const token = jwt.sign(
+      { userId: userToAuth.userId, email: userToAuth.email, name: userToAuth.name, role: userToAuth.role },
+      process.env.JWT_SECRET || 'apex_sha256_mock_sig_valid',
+      { expiresIn: '30d' }
+    );
+
+    console.log(`🌐 GOOGLE AUTH LOGIN SUCCESSFUL: ${userToAuth.name} (${userToAuth.email}) [${userToAuth.role.toUpperCase()}]`);
+
+    return res.json({
+      success: true,
+      message: `Welcome, ${userToAuth.name}! Authenticated via Google.`,
+      token,
+      user: {
+        userId: userToAuth.userId,
+        name: userToAuth.name,
+        email: userToAuth.email,
+        role: userToAuth.role,
+        picture: userToAuth.picture,
+        membershipTier: userToAuth.membershipTier
+      }
+    });
+
+  } catch (err) {
+    console.error('Google Auth Error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error during Google authentication.',
+      error: err.message
+    });
+  }
+});
+
+
+/**
  * GET /api/auth/users
  * Retrieve all registered users stored in MongoDB Atlas
  */

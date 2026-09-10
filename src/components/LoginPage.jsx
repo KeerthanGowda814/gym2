@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ApexAuth } from '../services/auth';
+import GoogleLoginButton from './GoogleLoginButton';
+import ThemeToggle from './ThemeToggle';
+
 
 export default function LoginPage({ navigate }) {
   const [activeSessionUser, setActiveSessionUser] = useState(null);
@@ -256,6 +259,11 @@ export default function LoginPage({ navigate }) {
         Return to Main Site
       </a>
 
+      {/* Theme Toggle Button */}
+      <div style={{ position: 'absolute', top: '2rem', right: '2rem', zIndex: 10 }}>
+        <ThemeToggle />
+      </div>
+
       {/* 3D Card wrapper */}
       <div className="login-wrapper">
         <div className={`login-card ${isFlipped ? 'flipped' : ''}`} id="login-card-container">
@@ -434,7 +442,18 @@ export default function LoginPage({ navigate }) {
               >
                 {isLoggingIn ? 'Authorizing...' : 'Authenticate'}
               </button>
+
+              {/* Google Sign In Option */}
+              <GoogleLoginButton
+                role={activeRole}
+                buttonText="signin_with"
+                label={`Sign in with Google as ${activeRole === 'trainer' ? 'Trainer' : 'Member'}`}
+                onSuccess={(user) => {
+                  navigate('dashboard');
+                }}
+              />
             </form>
+
 
             <div className="portal-footer">
               <p style={{ marginBottom: '0.8rem' }}>

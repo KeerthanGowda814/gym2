@@ -1,9 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
 import { memberApi } from '../services/memberApi';
+import ReceiptModal from './ReceiptModal';
 
 export default function AdminPanel({ activeView, activities, addActivity, onNavigateSubView }) {
-  // Expiry alerts mock list
+  // Financial Accounts & Razorpay Transaction States
+  const [accountsSummary, setAccountsSummary] = useState({
+    totalRevenue: 0,
+    membershipRevenue: 0,
+    supplementRevenue: 0,
+    trainerRevenue: 0,
+    totalGstCollected: 0,
+    transactionCount: 0,
+    averageOrderValue: 0
+  });
+  const [adminTransactions, setAdminTransactions] = useState([]);
+  const [activeAdminReceipt, setActiveAdminReceipt] = useState(null);
+  const [paymentCategoryFilter, setPaymentCategoryFilter] = useState('all');
+  const [paymentSearchQuery, setPaymentSearchQuery] = useState('');
+  const [isAccountsLoading, setIsAccountsLoading] = useState(false);
+
   // Expiry alerts mock list
   const [expiryAlerts, setExpiryAlerts] = useState([]);
   const [selectedEquipment, setSelectedEquipment] = useState(null);
@@ -484,6 +500,26 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
     window.addEventListener('storage', syncRegisteredUsers);
     return () => window.removeEventListener('storage', syncRegisteredUsers);
   }, []);
+
+  const fetchFinancialAccounts = async () => {
+    setIsAccountsLoading(true);
+    try {
+      const res = await fetch('http://localhost:5000/api/payment/admin/accounts');
+      const data = await res.json();
+      if (data.success) {
+        setAccountsSummary(data.summary || {});
+        setAdminTransactions(data.transactions || []);
+      }
+    } catch (err) {
+      console.warn('Could not fetch financial accounts from backend:', err);
+    } finally {
+      setIsAccountsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchFinancialAccounts();
+  }, [activeView]);
 
   useEffect(() => {
     const paymentRecords = membersList.map((m, idx) => {
@@ -1504,49 +1540,307 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
         </div>
       )}
 
-      {/* 3. ADMIN PAYMENTS LOG TABLE VIEW */}
+      {/* 3. ADMIN FINANCIAL ACCOUNTS & LEDGER VIEW */}
       {activeView === 'payments' && (
         <div className="admin-sub-view" id="admin-subview-payments" style={{ display: 'block' }}>
-          <div className="db-card flex-card">
-            <div className="card-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          
+          {/* Header Banner */}
+          <div className="db-card" style={{ marginBottom: '1.5rem', background: 'linear-gradient(135deg, rgba(20, 20, 28, 0.95) 0%, rgba(10, 10, 15, 0.95) 100%)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '1.5rem 1.8rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
               <div>
-                <h4 style={{ textTransform: 'uppercase', fontSize: '1.2rem', fontWeight: 800 }}>Latest Payments Log</h4>
-                <p className="card-subtitle" style={{ margin: 0 }}>Recent invoices & club subscription billing processing</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <span style={{ fontSize: '1.5rem' }}>💳</span>
+                  <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.3rem', color: 'var(--text-white)', margin: 0, textTransform: 'uppercase' }}>
+                    Club Financial Accounts & Revenue Ledger
+                  </h3>
+                </div>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: '0.3rem 0 0 0' }}>
+                  Real-time transaction tracking, Razorpay payment verification, tax invoices, and accounting records.
+                </p>
               </div>
-              <span className="badge badge-success">{payments.length} Transactions</span>
+
+              <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', background: 'rgba(0, 255, 102, 0.12)', color: '#00ff66', border: '1px solid rgba(0, 255, 102, 0.3)', padding: '0.35rem 0.8rem', borderRadius: '20px', fontWeight: 800 }}>
+                  ● Razorpay Gateway Active
+                </span>
+                <button
+                  type="button"
+                  onClick={fetchFinancialAccounts}
+                  className="outline-btn"
+                  style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', cursor: 'pointer' }}
+                >
+                  ↻ Refresh Ledger
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const csvRows = [
+                      ['Receipt ID', 'Member Name', 'Email', 'Category', 'Description', 'Amount (INR)', 'Payment ID', 'Order ID', 'Status', 'Date'],
+                      ...((adminTransactions.length > 0 ? adminTransactions : payments).map((p) => [
+                        p.receiptNumber || p.txId || '',
+                        p.userName || p.name || '',
+                        p.userEmail || '',
+                        p.paymentType || 'membership',
+                        p.title || p.plan || '',
+                        p.amount || 0,
+                        p.paymentId || '',
+                        p.orderId || '',
+                        p.status || 'paid',
+                        p.createdAt ? new Date(p.createdAt).toLocaleDateString() : p.date || ''
+                      ]))
+                    ];
+                    const csvContent = 'data:text/csv;charset=utf-8,' + csvRows.map(e => e.join(',')).join('\n');
+                    const encodedUri = encodeURI(csvContent);
+                    const link = document.createElement('a');
+                    link.setAttribute('href', encodedUri);
+                    link.setAttribute('download', `MuScLeHuB_Financial_Ledger_${new Date().toISOString().split('T')[0]}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="glow-btn"
+                  style={{ padding: '0.5rem 1.2rem', fontSize: '0.8rem', fontWeight: 800, cursor: 'pointer' }}
+                >
+                  📥 Export CSV
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Financial KPI Summary Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.2rem', marginBottom: '1.5rem' }}>
+            <div className="db-card" style={{ padding: '1.4rem', borderLeft: '4px solid var(--accent-volt)' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Total Gross Revenue</span>
+              <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-white)', margin: '0.3rem 0 0 0' }}>
+                ₹{((accountsSummary?.totalRevenue || 0) + payments.reduce((acc, p) => acc + (p.amount || 0), 0)).toLocaleString('en-IN')}
+              </h3>
+              <span style={{ fontSize: '0.72rem', color: '#10b981', marginTop: '0.2rem', display: 'block' }}>
+                ✓ Verified collections across all portals
+              </span>
+            </div>
+
+            <div className="db-card" style={{ padding: '1.4rem', borderLeft: '4px solid var(--accent-cyan)' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Membership Subscriptions</span>
+              <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-white)', margin: '0.3rem 0 0 0' }}>
+                ₹{((accountsSummary?.membershipRevenue || 0) + payments.reduce((acc, p) => acc + (p.amount || 0), 0)).toLocaleString('en-IN')}
+              </h3>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem', display: 'block' }}>
+                Keycard passes & renewals
+              </span>
+            </div>
+
+            <div className="db-card" style={{ padding: '1.4rem', borderLeft: '4px solid #f59e0b' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Supplement Store Sales</span>
+              <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-white)', margin: '0.3rem 0 0 0' }}>
+                ₹{(accountsSummary?.supplementRevenue || 0).toLocaleString('en-IN')}
+              </h3>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem', display: 'block' }}>
+                Protein, Creatine & Stack orders
+              </span>
+            </div>
+
+            <div className="db-card" style={{ padding: '1.4rem', borderLeft: '4px solid #8b5cf6' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Personal Coach Bookings</span>
+              <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-white)', margin: '0.3rem 0 0 0' }}>
+                ₹{(accountsSummary?.trainerRevenue || 0).toLocaleString('en-IN')}
+              </h3>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem', display: 'block' }}>
+                1-on-1 coaching mentorships
+              </span>
+            </div>
+          </div>
+
+          {/* Transaction Ledger Card */}
+          <div className="db-card flex-card">
+            {/* Filter and Search Bar */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1.2rem' }}>
+              {/* Category Filter Tabs */}
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                {[
+                  { id: 'all', label: 'All Transactions' },
+                  { id: 'membership', label: '🏷️ Memberships' },
+                  { id: 'supplement_order', label: '💊 Supplements' },
+                  { id: 'trainer_booking', label: '🏋️ Trainer Bookings' }
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setPaymentCategoryFilter(tab.id)}
+                    style={{
+                      padding: '0.45rem 0.9rem',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      background: paymentCategoryFilter === tab.id ? 'var(--accent-volt)' : 'var(--bg-card-hover, rgba(128,128,128,0.06))',
+                      color: paymentCategoryFilter === tab.id ? '#000' : 'var(--text-muted)',
+                      border: '1px solid',
+                      borderColor: paymentCategoryFilter === tab.id ? 'var(--accent-volt)' : 'var(--border-color)',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Search Bar */}
+              <div style={{ minWidth: '240px' }}>
+                <input
+                  type="text"
+                  placeholder="Search receipt #, member, or ID..."
+                  value={paymentSearchQuery}
+                  onChange={(e) => setPaymentSearchQuery(e.target.value)}
+                  className="form-input"
+                  style={{ padding: '0.5rem 0.8rem', fontSize: '0.8rem', background: 'var(--bg-black)' }}
+                />
+              </div>
             </div>
             
+            {/* Table */}
             <div className="table-wrapper">
               <table className="db-table" id="admin-payments-table">
                 <thead>
                   <tr>
-                    <th>Transaction ID</th>
-                    <th>Member Name</th>
-                    <th>Plan Selected</th>
-                    <th>Amount Paid</th>
-                    <th>Billing Status</th>
-                    <th>Processing Date</th>
+                    <th>Receipt No.</th>
+                    <th>Member / Client</th>
+                    <th>Category & Item</th>
+                    <th>Gateway Ref (Razorpay)</th>
+                    <th>Amount (INR)</th>
+                    <th>Status</th>
+                    <th>Date</th>
+                    <th>Invoice</th>
                   </tr>
                 </thead>
                 <tbody id="admin-payments-body">
-                  {payments.length === 0 ? (
-                    <tr>
-                      <td colSpan="6" style={{ textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.85rem', padding: '2rem 1.2rem' }}>
-                        No payment transactions logged.
-                      </td>
-                    </tr>
-                  ) : (
-                    payments.map((pay, idx) => (
-                      <tr key={idx}>
-                        <td style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--accent-cyan)', fontSize: '0.85rem' }}>{pay.txId}</td>
-                        <td><strong>{pay.name}</strong></td>
-                        <td>{pay.plan}</td>
-                        <td><strong>₹{pay.amount.toFixed(2)}</strong></td>
-                        <td><span className={`status-badge ${pay.status}`}>{pay.status}</span></td>
-                        <td>{pay.date}</td>
+                  {(() => {
+                    // Combine MongoDB transactions with fallback payment records
+                    const combined = [
+                      ...adminTransactions,
+                      ...payments.map(p => ({
+                        receiptNumber: p.txId,
+                        orderId: 'ORD-PRO-TIER',
+                        paymentId: p.txId,
+                        userName: p.name,
+                        userEmail: 'member@apex.com',
+                        paymentType: 'membership',
+                        title: p.plan,
+                        amount: p.amount,
+                        status: p.status || 'paid',
+                        paymentMethod: 'Razorpay / Gateway',
+                        createdAt: p.date === 'Today' ? new Date().toISOString() : new Date().toISOString()
+                      }))
+                    ];
+
+                    const filtered = combined.filter((item) => {
+                      // Filter by category
+                      if (paymentCategoryFilter !== 'all' && item.paymentType !== paymentCategoryFilter) {
+                        return false;
+                      }
+                      // Filter by search query
+                      if (paymentSearchQuery.trim()) {
+                        const q = paymentSearchQuery.toLowerCase();
+                        const rNo = (item.receiptNumber || item.txId || '').toLowerCase();
+                        const uName = (item.userName || item.name || '').toLowerCase();
+                        const uEmail = (item.userEmail || '').toLowerCase();
+                        const pId = (item.paymentId || '').toLowerCase();
+                        const tTitle = (item.title || item.plan || '').toLowerCase();
+                        return rNo.includes(q) || uName.includes(q) || uEmail.includes(q) || pId.includes(q) || tTitle.includes(q);
+                      }
+                      return true;
+                    });
+
+                    if (filtered.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan="8" style={{ textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.85rem', padding: '2.5rem 1.2rem' }}>
+                            {isAccountsLoading ? 'Loading financial ledger from database...' : 'No payment transactions matching your filter criteria.'}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return filtered.map((pay, idx) => (
+                      <tr key={pay.receiptNumber || pay.paymentId || idx}>
+                        <td style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--accent-cyan)', fontSize: '0.85rem' }}>
+                          {pay.receiptNumber || pay.txId || `MH-RCP-${idx + 1000}`}
+                        </td>
+                        <td>
+                          <strong style={{ color: 'var(--text-white)' }}>{pay.userName || pay.name}</strong>
+                          {pay.userEmail && (
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>{pay.userEmail}</span>
+                          )}
+                        </td>
+                        <td>
+                          <span style={{
+                            display: 'inline-block',
+                            fontSize: '0.65rem',
+                            textTransform: 'uppercase',
+                            fontWeight: 800,
+                            padding: '0.15rem 0.5rem',
+                            borderRadius: '4px',
+                            background: pay.paymentType === 'membership' ? 'rgba(0, 112, 243, 0.1)' : pay.paymentType === 'supplement_order' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(139, 92, 246, 0.1)',
+                            color: pay.paymentType === 'membership' ? 'var(--accent-cyan)' : pay.paymentType === 'supplement_order' ? '#f59e0b' : '#8b5cf6',
+                            marginBottom: '0.2rem'
+                          }}>
+                            {pay.paymentType === 'membership' ? 'Membership' : pay.paymentType === 'supplement_order' ? 'Supplement' : pay.paymentType === 'trainer_booking' ? 'Coach Hire' : 'General'}
+                          </span>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-white)' }}>
+                            {pay.title || pay.plan || 'Club Service Fee'}
+                          </div>
+                        </td>
+                        <td>
+                          <code style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            {pay.paymentId || 'pay_test_online'}
+                          </code>
+                          <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)', display: 'block' }}>
+                            {pay.paymentMethod || 'Razorpay Online'}
+                          </span>
+                        </td>
+                        <td>
+                          <strong style={{ color: 'var(--text-white)', fontSize: '0.95rem' }}>
+                            ₹{Number(pay.amount || 0).toLocaleString('en-IN')}
+                          </strong>
+                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>
+                            (Incl. 18% GST)
+                          </span>
+                        </td>
+                        <td>
+                          <span className="status-badge paid" style={{ fontSize: '0.68rem', padding: '0.2rem 0.6rem' }}>
+                            {pay.status ? pay.status.toUpperCase() : 'PAID'} ✓
+                          </span>
+                        </td>
+                        <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                          {pay.createdAt ? new Date(pay.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }) : (pay.date || 'Today')}
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveAdminReceipt({
+                                receiptNumber: pay.receiptNumber || pay.txId || 'MH-RCP-ADMIN',
+                                orderId: pay.orderId || 'ORD-VERIFIED',
+                                paymentId: pay.paymentId || 'PAY-VERIFIED',
+                                title: pay.title || pay.plan || 'MuScLe HuB Transaction',
+                                amount: pay.amount,
+                                userName: pay.userName || pay.name || 'Athlete Member',
+                                userEmail: pay.userEmail || 'athlete@apex.club',
+                                userPhone: pay.userPhone || '+91 98765 43210',
+                                paymentMethod: pay.paymentMethod || 'Razorpay Gateway',
+                                paymentType: pay.paymentType || 'membership',
+                                createdAt: pay.createdAt || new Date().toISOString(),
+                                items: pay.items && pay.items.length > 0 ? pay.items : [{ name: pay.title || pay.plan || 'Gym Service', qty: 1, unitPrice: pay.amount, total: pay.amount }]
+                              });
+                            }}
+                            className="outline-btn"
+                            style={{ padding: '0.35rem 0.8rem', fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                          >
+                            <span>📄</span> Tax Invoice
+                          </button>
+                        </td>
                       </tr>
-                    ))
-                  )}
+                    ));
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -2248,45 +2542,61 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
           left: 0,
           width: '100%',
           height: '100%',
-          background: 'rgba(5, 5, 8, 0.85)',
+          background: 'rgba(5, 5, 8, 0.75)',
           backdropFilter: 'blur(8px)',
           zIndex: 99999,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center'
-        }}>
+        }}
+        onClick={(e) => { if (e.target === e.currentTarget) setSelectedEquipment(null); }}
+        >
           <div style={{
-            background: '#0e0e13',
+            background: 'var(--bg-card)',
+            color: 'var(--text-white)',
             border: '1px solid var(--border-color)',
-            boxShadow: '0 0 30px rgba(0, 240, 255, 0.15)',
-            borderRadius: '12px',
+            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.25)',
+            borderRadius: '16px',
             width: '90%',
-            maxWidth: '550px',
+            maxWidth: '580px',
             padding: '2rem',
-            position: 'relative'
+            position: 'relative',
+            maxHeight: '90vh',
+            overflowY: 'auto'
           }}>
             <button
               onClick={() => setSelectedEquipment(null)}
               style={{
                 position: 'absolute',
-                top: '1rem',
-                right: '1rem',
-                background: 'none',
-                border: 'none',
+                top: '1.2rem',
+                right: '1.2rem',
+                background: 'rgba(128, 128, 128, 0.1)',
+                border: '1px solid var(--border-color)',
                 color: 'var(--text-muted)',
-                fontSize: '1.8rem',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.3rem',
                 cursor: 'pointer',
-                transition: 'color 0.2s',
-                padding: '0.2rem',
+                transition: 'all 0.2s',
                 lineHeight: 1
               }}
-              onMouseEnter={(e) => e.target.style.color = '#ff3e6c'}
-              onMouseLeave={(e) => e.target.style.color = 'var(--text-muted)'}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = '#ff3e6c';
+                e.currentTarget.style.background = 'rgba(255, 62, 108, 0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--text-muted)';
+                e.currentTarget.style.background = 'rgba(128, 128, 128, 0.1)';
+              }}
             >
               &times;
             </button>
 
-            <h3 style={{ textTransform: 'uppercase', fontFamily: 'var(--font-display)', fontWeight: 800, color: 'var(--text-white)', margin: '0 0 0.5rem 0', fontSize: '1.4rem' }}>
+            <h3 style={{ textTransform: 'uppercase', fontFamily: 'var(--font-display)', fontWeight: 800, color: 'var(--text-white)', margin: '0 0 0.5rem 0', fontSize: '1.4rem', letterSpacing: '0.02em' }}>
               {selectedEquipment.name}
             </h3>
             <p style={{ color: 'var(--text-muted)', margin: '0 0 1.5rem 0', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -2301,14 +2611,14 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                   padding: '0.5rem 1.2rem',
                   fontSize: '0.8rem',
                   textTransform: 'uppercase',
-                  background: modalViewMode === 'photo' ? 'var(--accent-volt)' : 'rgba(255, 255, 255, 0.02)',
-                  color: modalViewMode === 'photo' ? 'var(--bg-black)' : 'var(--text-white)',
+                  background: modalViewMode === 'photo' ? 'var(--accent-volt)' : 'var(--bg-card-hover, rgba(128, 128, 128, 0.08))',
+                  color: modalViewMode === 'photo' ? '#ffffff' : 'var(--text-muted)',
                   border: '1px solid',
                   borderColor: modalViewMode === 'photo' ? 'var(--accent-volt)' : 'var(--border-color)',
                   boxShadow: modalViewMode === 'photo' ? 'var(--glow-volt)' : 'none',
                   cursor: 'pointer',
                   fontWeight: 700,
-                  borderRadius: '4px',
+                  borderRadius: '6px',
                   transition: 'all 0.2s'
                 }}
                 onClick={() => setModalViewMode('photo')}
@@ -2321,14 +2631,14 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                   padding: '0.5rem 1.2rem',
                   fontSize: '0.8rem',
                   textTransform: 'uppercase',
-                  background: modalViewMode === 'diagnostics' ? 'var(--accent-cyan)' : 'rgba(255, 255, 255, 0.02)',
-                  color: modalViewMode === 'diagnostics' ? 'var(--bg-black)' : 'var(--text-white)',
+                  background: modalViewMode === 'diagnostics' ? 'var(--accent-cyan)' : 'var(--bg-card-hover, rgba(128, 128, 128, 0.08))',
+                  color: modalViewMode === 'diagnostics' ? '#ffffff' : 'var(--text-muted)',
                   border: '1px solid',
                   borderColor: modalViewMode === 'diagnostics' ? 'var(--accent-cyan)' : 'var(--border-color)',
                   boxShadow: modalViewMode === 'diagnostics' ? 'var(--glow-cyan)' : 'none',
                   cursor: 'pointer',
                   fontWeight: 700,
-                  borderRadius: '4px',
+                  borderRadius: '6px',
                   transition: 'all 0.2s'
                 }}
                 onClick={() => setModalViewMode('diagnostics')}
@@ -2738,20 +3048,20 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                 )
               ) : (
                 <div style={{
-                  background: 'rgba(255,255,255,0.01)',
+                  background: 'var(--bg-card-hover, rgba(128,128,128,0.06))',
                   border: '1px solid var(--border-color)',
-                  borderRadius: '8px',
-                  padding: '1.2rem',
-                  maxHeight: '220px',
+                  borderRadius: '10px',
+                  padding: '1.4rem',
+                  maxHeight: '260px',
                   overflowY: 'auto'
                 }}>
-                  <h4 style={{ color: 'var(--text-white)', fontWeight: 700, fontSize: '0.85rem', textTransform: 'uppercase', marginBottom: '0.8rem', letterSpacing: '0.05em' }}>
+                  <h4 style={{ color: 'var(--text-white)', fontWeight: 700, fontSize: '0.9rem', textTransform: 'uppercase', marginBottom: '0.8rem', letterSpacing: '0.05em' }}>
                     Diagnostic Logs
                   </h4>
-                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
                     {selectedEquipment.diagnostics.map((log, idx) => (
-                      <li key={idx} style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span style={{ color: 'var(--accent-volt)' }}>▶</span> {log}
+                      <li key={idx} style={{ fontSize: '0.85rem', color: 'var(--text-white)', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <span style={{ color: 'var(--accent-volt)', fontWeight: 'bold' }}>▶</span> {log}
                       </li>
                     ))}
                   </ul>
@@ -2763,9 +3073,15 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
               <button
                 className="outline-btn"
                 onClick={() => setSelectedEquipment(null)}
-                style={{ padding: '0.6rem 1.5rem', fontSize: '0.8rem' }}
+                style={{
+                  padding: '0.6rem 1.6rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  borderRadius: '6px'
+                }}
               >
-                Close details
+                Close Details
               </button>
             </div>
           </div>
@@ -3913,6 +4229,14 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
             </form>
           </div>
         </div>
+      )}
+
+      {/* OFFICIAL RAZORPAY RECEIPT / TAX INVOICE MODAL */}
+      {activeAdminReceipt && (
+        <ReceiptModal
+          receipt={activeAdminReceipt}
+          onClose={() => setActiveAdminReceipt(null)}
+        />
       )}
     </div>
   );

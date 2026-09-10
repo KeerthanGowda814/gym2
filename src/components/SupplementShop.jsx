@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { memberApi } from '../services/memberApi';
 import DummyPaymentGateway from './DummyPaymentGateway';
+import ReceiptModal from './ReceiptModal';
+import { initiateRazorpayPayment } from '../services/razorpayService';
 
 
 const DEFAULT_PRODUCTS = [
@@ -165,6 +167,8 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
   // Multi-step Checkout Flow State: 'cart' | 'shipping' | 'payment'
   const [checkoutStep, setCheckoutStep] = useState('cart');
   const [showGateway, setShowGateway] = useState(false);
+  const [activeReceipt, setActiveReceipt] = useState(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
 
   // Shipping Form State
@@ -402,8 +406,50 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
 
     if (paymentInfo.method === 'cod') {
       await processCheckoutInDB();
-    } else {
-      setShowGateway(true);
+      return;
+    }
+
+    setIsProcessingPayment(true);
+    try {
+      await initiateRazorpayPayment({
+        amount: totalPrice,
+        title: 'MuScLe HuB Supplement Store Order',
+        paymentType: 'supplement_order',
+        items: cart.map((i) => ({
+          productId: i.product.id,
+          name: i.product.name,
+          qty: i.qty,
+          unitPrice: i.product.price,
+          total: i.product.price * i.qty
+        })),
+        memberInfo: {
+          id: currentUser?.id || currentUser?.memberId || 'MEM-90210',
+          name: shippingInfo.fullName || currentUser?.name || 'Athlete Member',
+          email: currentUser?.email || 'athlete@apex.club',
+          phone: shippingInfo.phone || '+91 98765 43210'
+        },
+        metadata: {
+          deliveryType: shippingInfo.deliveryType,
+          address: shippingInfo.address,
+          city: shippingInfo.city,
+          pincode: shippingInfo.pincode,
+          state: shippingInfo.state
+        },
+        onSuccess: async (receipt) => {
+          setIsProcessingPayment(false);
+          await processCheckoutInDB(receipt?.receiptNumber || receipt?.paymentId);
+          setActiveReceipt(receipt);
+        },
+        onFailure: (err) => {
+          setIsProcessingPayment(false);
+          if (err?.reason !== 'cancelled') {
+            alert(err?.message || 'Payment could not be completed via Razorpay. Please try again.');
+          }
+        }
+      });
+    } catch (err) {
+      setIsProcessingPayment(false);
+      console.error('[Supplement Checkout Error]:', err);
     }
   };
 
@@ -1508,17 +1554,49 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
               </div>
             </div>
 
-            <button
-              className="outline-btn"
-              id="success-modal-close-btn"
-              onClick={() => {
-                setShowSuccessModal(false);
-                setCheckoutStep('cart');
-              }}
-              style={{ width: '100%', padding: '0.75rem', fontSize: '0.85rem' }}
-            >
-              Continue Shopping
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              <button
+                type="button"
+                className="glow-btn"
+                onClick={() => {
+                  const receiptObj = activeReceipt || {
+                    receiptNumber: lastCheckoutDetail.txId || 'MH-RCP-SUPP',
+                    orderId: lastCheckoutDetail.orderId || 'ORD-SUPP',
+                    paymentId: lastCheckoutDetail.txId || 'PAY-VERIFIED',
+                    title: 'MuScLe HuB Supplement Store Order',
+                    amount: lastCheckoutDetail.total,
+                    userName: lastCheckoutDetail.shippingInfo?.fullName || currentUser?.name || 'Athlete Member',
+                    userEmail: currentUser?.email || 'athlete@apex.club',
+                    userPhone: lastCheckoutDetail.shippingInfo?.phone || '+91 98765 43210',
+                    paymentMethod: lastCheckoutDetail.paymentMethod === 'cod' ? 'Cash On Delivery (COD)' : 'Razorpay Verified',
+                    paymentType: 'supplement_order',
+                    createdAt: new Date().toISOString(),
+                    items: lastCheckoutDetail.cartSnapshot.map((i) => ({
+                      name: i.product.name,
+                      qty: i.qty,
+                      unitPrice: i.product.price,
+                      total: i.product.price * i.qty
+                    }))
+                  };
+                  setActiveReceipt(receiptObj);
+                }}
+                style={{ width: '100%', padding: '0.75rem', fontSize: '0.85rem', fontWeight: 800, cursor: 'pointer', background: 'var(--accent-volt)', color: '#000', border: 'none', borderRadius: '6px' }}
+              >
+                📄 View / Print Tax Invoice
+              </button>
+
+              <button
+                className="outline-btn"
+                id="success-modal-close-btn"
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  setCheckoutStep('cart');
+                }}
+                style={{ width: '100%', padding: '0.65rem', fontSize: '0.82rem', cursor: 'pointer' }}
+              >
+                Continue Shopping
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1776,6 +1854,13 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
         </div>
       )}
 
+      {/* OFFICIAL RAZORPAY TAX INVOICE RECEIPT MODAL */}
+      {activeReceipt && (
+        <ReceiptModal
+          receipt={activeReceipt}
+          onClose={() => setActiveReceipt(null)}
+        />
+      )}
     </div>
   );
 }

@@ -67,3 +67,18 @@ select.form-input option {
 #register-trainer-form::-webkit-scrollbar-thumb:hover {
   background: var(--accent-volt);
 }
+
+[data-theme="light"] select.form-input option {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+[data-theme="light"] #register-member-form::-webkit-scrollbar-track,
+[data-theme="light"] #register-trainer-form::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+[data-theme="light"] #register-member-form::-webkit-scrollbar-thumb,
+[data-theme="light"] #register-trainer-form::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}

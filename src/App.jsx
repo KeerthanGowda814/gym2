@@ -4,6 +4,7 @@ import LoginPage from './components/LoginPage';
 import RegisterPage from './components/RegisterPage';
 import DashboardPage from './components/DashboardPage';
 import AdminLoginPage from './components/AdminLoginPage';
+import { getInitialTheme, applyTheme } from './utils/theme';
 
 // Import CSS Stylesheets
 import './styles/style.css';
@@ -15,6 +16,8 @@ export default function App() {
   const [currentHash, setCurrentHash] = useState(window.location.hash || '#/');
 
   useEffect(() => {
+    applyTheme(getInitialTheme());
+
     const handleHashChange = () => {
       setCurrentHash(window.location.hash || '#/');
     };

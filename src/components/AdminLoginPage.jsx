@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ApexAuth } from '../services/auth';
+import GoogleLoginButton from './GoogleLoginButton';
+
 
 export default function AdminLoginPage({ navigate }) {
   const [activeSessionUser, setActiveSessionUser] = useState(null);
@@ -366,7 +368,18 @@ export default function AdminLoginPage({ navigate }) {
               >
                 {isLoggingIn ? 'Authorizing Console...' : 'Authenticate Console'}
               </button>
+
+              {/* Google Admin Login */}
+              <GoogleLoginButton
+                role="admin"
+                buttonText="signin_with"
+                label="Sign in with Google Admin"
+                onSuccess={(user) => {
+                  navigate('dashboard');
+                }}
+              />
             </form>
+
 
             <div className="portal-footer">
               <p>MuScLe HuB admin console. Unauthorized entry is logged.</p>

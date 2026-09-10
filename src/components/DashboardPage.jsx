@@ -6,6 +6,7 @@ import AdminPanel from './AdminPanel';
 import CustomSwal from '../utils/swal';
 import SupplementShop from './SupplementShop';
 import { memberApi } from '../services/memberApi';
+import ThemeToggle from './ThemeToggle';
 
 class WorkspaceErrorBoundary extends React.Component {
   constructor(props) {
@@ -307,10 +308,11 @@ export default function DashboardPage({ navigate }) {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1m-4 0h1" />
                     </svg>
-                    My Orders 🚚
+                    My Orders
                   </a>
                 </li>
               </>
+
             )}
 
             {/* Member membership status and pass view (Member Only) */}
@@ -457,9 +459,10 @@ export default function DashboardPage({ navigate }) {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1m-4 0h1" />
                     </svg>
-                    Supplement Orders 📦
+                    Supplement Orders
                   </a>
                 </li>
+
                 <li>
                   <a
                     onClick={() => setActiveSubView('alerts')}
@@ -529,13 +532,34 @@ export default function DashboardPage({ navigate }) {
         </div>
       </aside>
 
-      {/* MAIN WORKSPACE CONTENT */}
-      <main className="db-main-content">
-        {/* Render top header bar for all roles for high-tech premium feel */}
+      {/* RIGHT WORKSPACE WRAPPER */}
+      <div className="db-content-wrapper">
+        {/* Render top floating header bar for all roles */}
         {currentUser.role && (
           <header className="admin-header">
+            {/* Header Left: Search (admin) or Breadcrumbs (member/trainer) */}
+            <div className="db-header-left">
+              {currentUser.role === 'admin' ? (
+                <div className="admin-search-wrapper">
+                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#8E919F" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input type="text" placeholder="Search members, coaches, equipment..." />
+                </div>
+              ) : (
+                <div className="db-breadcrumb">
+                  <span className="breadcrumb-sub">{currentUser.role === 'trainer' ? 'Coach Portal' : 'Athlete Portal'}</span>
+                  <span className="breadcrumb-sep">/</span>
+                  <span className="breadcrumb-main">{activeSubView.toUpperCase()}</span>
+                </div>
+              )}
+            </div>
+
             {/* Header Right Actions */}
             <div className="admin-header-actions" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              {/* Theme Toggle Button */}
+              <ThemeToggle />
+
               {/* Notification icon & dynamic dropdown */}
               <div className="admin-action-icon" style={{ position: 'relative' }} onClick={handleToggleNotifDropdown}>
                 <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{ cursor: 'pointer' }}>
@@ -560,21 +584,21 @@ export default function DashboardPage({ navigate }) {
                     overflowY: 'auto',
                     textAlign: 'left'
                   }} onClick={(e) => e.stopPropagation()}>
-                    <h4 style={{ margin: '0 0 0.8rem 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.95rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-white)' }}>
-                      <span>📢 Broadcast Alerts</span>
-                      {alerts.length > 0 && <span className="badge-new" style={{ background: 'var(--accent-volt)', color: '#000', fontSize: '0.7rem', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>{alerts.length} Active</span>}
+                    <h4 style={{ margin: '0 0 0.8rem 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-white)' }}>
+                      <span>Club Announcements</span>
+                      {alerts.length > 0 && <span className="badge-new" style={{ background: 'var(--accent-volt)', color: '#000', fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderRadius: '4px', fontWeight: 800 }}>{alerts.length} Active</span>}
                     </h4>
                     {alerts.length === 0 ? (
-                      <p style={{ margin: '1rem 0', color: 'var(--text-muted)', fontSize: '0.8rem', textAlign: 'center' }}>No active broadcasts or holiday announcements.</p>
+                      <p style={{ margin: '1rem 0', color: 'var(--text-muted)', fontSize: '0.8rem', textAlign: 'center' }}>No active broadcast announcements.</p>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
                         {alerts.map((alt) => {
                           const typeColors = {
-                            holiday: { bg: 'rgba(255, 62, 108, 0.1)', border: '#ff3e6c', label: 'Holiday 🛑' },
-                            event: { bg: 'rgba(0, 240, 255, 0.1)', border: '#00f0ff', label: 'Event 🎉' },
-                            maintenance: { bg: 'rgba(255, 159, 0, 0.1)', border: '#ff9f00', label: 'Maintenance ⚙️' },
-                            general: { bg: 'rgba(255, 255, 255, 0.03)', border: '#8e919f', label: 'Alert 📢' }
-                          }[alt.type] || { bg: 'rgba(255, 255, 255, 0.03)', border: '#8e919f', label: 'Alert 📢' };
+                            holiday: { bg: 'rgba(255, 62, 108, 0.1)', border: '#ff3e6c', label: 'Holiday' },
+                            event: { bg: 'rgba(0, 240, 255, 0.1)', border: '#00f0ff', label: 'Event' },
+                            maintenance: { bg: 'rgba(255, 159, 0, 0.1)', border: '#ff9f00', label: 'Maintenance' },
+                            general: { bg: 'rgba(255, 255, 255, 0.03)', border: '#8e919f', label: 'General' }
+                          }[alt.type] || { bg: 'rgba(255, 255, 255, 0.03)', border: '#8e919f', label: 'General' };
 
                           return (
                             <div key={alt.id} style={{
@@ -585,7 +609,7 @@ export default function DashboardPage({ navigate }) {
                               boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
                             }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.2rem' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: typeColors.border, textTransform: 'uppercase' }}>{typeColors.label}</span>
+                                <span style={{ fontSize: '0.72rem', fontWeight: 800, color: typeColors.border, textTransform: 'uppercase' }}>{typeColors.label}</span>
                                 <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{alt.date}</span>
                               </div>
                               <h5 style={{ margin: '0 0 0.15rem 0', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-white)' }}>{alt.title}</h5>
@@ -599,18 +623,22 @@ export default function DashboardPage({ navigate }) {
                 )}
               </div>
 
-              {/* Chat/Messages icon */}
-              <div className="admin-action-icon" onClick={() => alert("Direct messages mailbox is offline.")}>
-                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-              </div>
-
-              {/* User Profile Info */}
-              <div className="admin-header-profile" onClick={() => setActiveSubView('home')}>
-                <img src={currentUser.role === 'admin' ? "assets/images/trainer_male.png" : (currentUser.role === 'trainer' ? "assets/images/trainer_female.png" : "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop")} alt={currentUser.name} onError={(e) => { e.target.src = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=256&auto=format&fit=crop"; }} />
+              {/* User Profile Info - Clean Initials Avatar badge without dummy stock photo */}
+              <div className="admin-header-profile" onClick={() => setActiveSubView(currentUser.role === 'member' ? 'profile' : 'home')} style={{ cursor: 'pointer' }}>
+                {currentUser.picture || currentUser.profileImage ? (
+                  <img
+                    src={currentUser.picture || currentUser.profileImage}
+                    alt={currentUser.name}
+                    style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover' }}
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                ) : (
+                  <div className="header-avatar-badge">
+                    {initials}
+                  </div>
+                )}
                 <div className="admin-profile-info">
-                  <h4>{currentUser.name ? currentUser.name.split(' ')[0] : 'User'}</h4>
+                  <h4>{currentUser.name || 'User'}</h4>
                   <span>{currentUser.role === 'admin' ? 'Club Owner' : (currentUser.role === 'trainer' ? 'Certified Coach' : 'Gym Athlete')}</span>
                 </div>
                 <span className="admin-profile-arrow">▼</span>
@@ -619,9 +647,10 @@ export default function DashboardPage({ navigate }) {
           </header>
         )}
 
-        {/* Dynamic view routing */}
-        <div className="db-workspace-container">
-          <WorkspaceErrorBoundary>
+        {/* MAIN WORKSPACE CONTENT */}
+        <main className="db-main-content">
+          <div className="db-workspace-container">
+            <WorkspaceErrorBoundary>
             {currentUser.role && currentUser.role.toLowerCase() === 'admin' ? (
               activeSubView === 'trainer-module' ? (
                 <div>
@@ -740,6 +769,7 @@ export default function DashboardPage({ navigate }) {
           </WorkspaceErrorBoundary>
         </div>
       </main>
+    </div>
 
       {showUpgradeModal && (
         <div style={{

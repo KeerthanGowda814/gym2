@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ApexAuth } from '../services/auth';
+import ThemeToggle from './ThemeToggle';
 
 export default function LandingPage({ navigate }) {
   // Mobile menu open state
@@ -199,6 +200,7 @@ export default function LandingPage({ navigate }) {
           </nav>
           
           <div className="nav-cta">
+            <ThemeToggle />
             <a onClick={() => navigate('login')} className="outline-btn" style={{ padding: '0.6rem 1.5rem', fontSize: '0.85rem', borderColor: 'rgba(255,255,255,0.15)', cursor: 'pointer' }} id="header-login">Portal Login</a>
             <a onClick={() => navigate('register')} className="glow-btn" style={{ padding: '0.6rem 1.6rem', fontSize: '0.85rem', cursor: 'pointer' }} id="header-cta">Join Now</a>
           </div>

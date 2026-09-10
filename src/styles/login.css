@@ -448,3 +448,102 @@
     padding: 2.5rem 1.5rem;
   }
 }
+
+/* --- GOOGLE AUTHENTICATION BUTTON ENHANCEMENTS --- */
+.google-auth-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  transition: var(--transition-fast);
+}
+
+.google-auth-container iframe {
+  margin: 0 auto !important;
+}
+
+.google-auth-container:hover {
+  filter: drop-shadow(0 0 10px rgba(66, 133, 244, 0.25));
+}
+
+/* --- LIGHT THEME PORTAL OVERRIDES --- */
+[data-theme="light"] .card-panel {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="light"] .portal-header h2 {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .portal-header p {
+  color: #475569 !important;
+}
+
+[data-theme="light"] .role-tabs {
+  background: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+}
+
+[data-theme="light"] .role-tab {
+  color: #475569 !important;
+}
+
+[data-theme="light"] .role-tab.active {
+  background: #ff5e00 !important;
+  color: #ffffff !important;
+}
+
+[data-theme="light"] .input-wrapper input,
+[data-theme="light"] .form-input {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-theme="light"] .input-wrapper input:focus,
+[data-theme="light"] .form-input:focus {
+  border-color: #ff5e00 !important;
+  box-shadow: 0 0 0 3px rgba(255, 94, 0, 0.12) !important;
+}
+
+[data-theme="light"] .field-icon {
+  color: #64748b !important;
+}
+
+[data-theme="light"] .input-wrapper:focus-within .field-icon {
+  color: #ff5e00 !important;
+}
+
+[data-theme="light"] .portal-back-link {
+  color: #475569 !important;
+}
+
+[data-theme="light"] .portal-back-link:hover {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .forgot-success-state {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .form-label-row label {
+  color: #334155 !important;
+}
+
+[data-theme="light"] .checkbox-label {
+  color: #475569 !important;
+}
+
+[data-theme="light"] .auth-divider span {
+  background: #ffffff !important;
+  color: #64748b !important;
+}
+
+[data-theme="light"] .auth-divider::before {
+  border-color: #e2e8f0 !important;
+}
+
+

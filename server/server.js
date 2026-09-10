@@ -15,9 +15,19 @@ import equipmentRoutes from './routes/equipmentRoutes.js';
 import trainerPanelRoutes from './routes/trainerPanelRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import alertRoutes from './routes/alertRoutes.js';
+import paymentRoutes from './routes/paymentRoutes.js';
 import { connectMongoDB, isMongoConnected } from './config/mongodb.js';
 
 dotenv.config();
+
+// Global Exception & Rejection Handlers to prevent unexpected server crash
+process.on('uncaughtException', (err) => {
+  console.error('[UNCAUGHT EXCEPTION]:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[UNHANDLED REJECTION]:', reason);
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,6 +53,9 @@ app.use('/api/auth', authRoutes);
 
 // Alerts Routes (Public for GET, but secured or general in backend)
 app.use('/api/alerts', alertRoutes);
+
+// Payment Gateway Routes (Order creation, signature verification, receipts, accounts)
+app.use('/api/payment', paymentRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

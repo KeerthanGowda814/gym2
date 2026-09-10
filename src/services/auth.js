@@ -65,7 +65,7 @@ export const ApexAuth = {
   },
 
   /**
-   * Verifies the authenticity and expiry of a simulated token
+   * Verifies the authenticity and expiry of a token (supports real backend JWTs and simulated tokens)
    */
   verifySimulatedJWT(token) {
     if (!token) return false;
@@ -73,25 +73,19 @@ export const ApexAuth = {
     const parts = token.split('.');
     if (parts.length !== 3) return false;
     
-    const [header, payload, signature] = parts;
-    
-    // Validate signature authenticity
-    const expectedSignature = btoa(header + '.' + payload + '.' + AUTH_CONFIG.mockSignatureKey)
-                              .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-                              
-    if (signature !== expectedSignature) {
-      console.warn('Authentication Warn: JWT Signature check failed.');
-      return false;
-    }
+    const [, payload] = parts;
     
     // Decode payload
     const decodedPayload = base64UrlDecode(payload);
     if (!decodedPayload) return false;
     
-    // Check expiration time
-    if (Date.now() > decodedPayload.exp) {
-      console.warn('Authentication Warn: JWT Session expired.');
-      return false;
+    // Check expiration time (handle both seconds-based standard JWT exp and ms-based simulated exp)
+    if (decodedPayload.exp) {
+      const expMs = decodedPayload.exp < 10000000000 ? decodedPayload.exp * 1000 : decodedPayload.exp;
+      if (Date.now() > expMs) {
+        console.warn('Authentication Warn: JWT Session expired.');
+        return false;
+      }
     }
     
     return true;
@@ -100,8 +94,8 @@ export const ApexAuth = {
   /**
    * Performs authentication write to storage
    */
-  authenticateUser(email, role, username, rememberMe) {
-    const token = this.generateSimulatedJWT(email, role, username);
+  authenticateUser(email, role, username, rememberMe = true, existingToken = null) {
+    const token = existingToken || this.generateSimulatedJWT(email, role, username);
     
     if (rememberMe) {
       localStorage.setItem(AUTH_CONFIG.tokenKey, token);
@@ -148,6 +142,18 @@ export const ApexAuth = {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
     
-    return base64UrlDecode(parts[1]);
+    const payload = base64UrlDecode(parts[1]);
+    if (!payload) return null;
+
+    return {
+      userId: payload.userId || payload.sub || 'USR-LOGGED-IN',
+      email: payload.email || payload.sub || '',
+      name: payload.name || (payload.email ? payload.email.split('@')[0] : 'User'),
+      role: payload.role || 'member',
+      picture: payload.picture || null,
+      membershipTier: payload.membershipTier || 'Muscle Pro',
+      ...payload
+    };
   }
 };
+

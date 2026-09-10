@@ -239,6 +239,51 @@ router.delete('/members/:id', (req, res) => {
   });
 });
 
+// POST /api/trainer/send-renewal-reminder - Send automated renewal reminder to a client
+router.post('/send-renewal-reminder', (req, res) => {
+  const { memberEmail, memberName, coachName, daysLeft, packageType } = req.body;
+  
+  if (!memberEmail) {
+    return res.status(400).json({ success: false, message: 'Member email is required' });
+  }
+
+  let db = getDB();
+  db = ensureTrainerDB(db);
+
+  const daysNum = Number(daysLeft) || 0;
+  const daysText = daysNum <= 0 ? 'has expired' : `expires in ${daysNum} day${daysNum === 1 ? '' : 's'}`;
+  const reminderText = `🔔 Coaching Renewal Reminder: Hi ${memberName || 'Athlete'}! Your personal coaching plan with Coach ${coachName || 'Trainer'} ${daysText}. Please renew your subscription to maintain uninterrupted coaching and workouts.`;
+
+  // 1. Add to trainer chat history
+  if (!db.trainer.chatHistory) db.trainer.chatHistory = [];
+  db.trainer.chatHistory.push({
+    id: `msg-${Date.now()}`,
+    sender: 'coach',
+    text: reminderText,
+    time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  });
+
+  // 2. Add to alerts
+  if (!db.alerts) db.alerts = [];
+  db.alerts.unshift({
+    id: `alt-renewal-${Date.now()}`,
+    title: `Coaching Plan Renewal: ${daysText.toUpperCase()}`,
+    message: reminderText,
+    type: 'renewal_reminder',
+    targetEmail: memberEmail,
+    date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    active: true
+  });
+
+  saveDB(db);
+
+  res.json({
+    success: true,
+    message: `Renewal reminder successfully sent to ${memberName || memberEmail}!`,
+    reminderText
+  });
+});
+
 /**
  * --- 2. WORKOUT PLANS ARCHITECT ENDPOINTS ---
  */

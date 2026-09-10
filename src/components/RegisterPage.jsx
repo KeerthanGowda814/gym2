@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ApexAuth } from '../services/auth';
+import GoogleLoginButton from './GoogleLoginButton';
+import ThemeToggle from './ThemeToggle';
+
 
 export default function RegisterPage({ navigate }) {
   // Redirect authenticated sessions
@@ -250,6 +253,11 @@ export default function RegisterPage({ navigate }) {
         Return to Main Site
       </a>
 
+      {/* Theme Toggle Button */}
+      <div style={{ position: 'absolute', top: '2rem', right: '2rem', zIndex: 10 }}>
+        <ThemeToggle />
+      </div>
+
       {/* Main Card Container */}
       <div className="login-wrapper">
         <div className="login-card">
@@ -432,7 +440,18 @@ export default function RegisterPage({ navigate }) {
                 >
                   {isSubmitting ? 'Creating Profile...' : 'Create Member Account'}
                 </button>
+
+                {/* Google Quick Sign-Up */}
+                <GoogleLoginButton
+                  role="member"
+                  buttonText="signup_with"
+                  label="Sign up with Google as Member"
+                  onSuccess={(user) => {
+                    navigate('dashboard');
+                  }}
+                />
               </form>
+
             )}
 
             {/* B. TRAINER APPLICATION FORM */}
@@ -581,7 +600,18 @@ export default function RegisterPage({ navigate }) {
                 >
                   {isSubmitting ? 'Submitting Details...' : 'Submit Coach Application'}
                 </button>
+
+                {/* Google Quick Sign-Up */}
+                <GoogleLoginButton
+                  role="trainer"
+                  buttonText="signup_with"
+                  label="Sign up with Google as Trainer"
+                  onSuccess={(user) => {
+                    navigate('dashboard');
+                  }}
+                />
               </form>
+
             )}
 
             <div className="portal-footer">
