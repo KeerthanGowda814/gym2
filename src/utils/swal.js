@@ -36,6 +36,7 @@ const getSwalThemeConfig = () => {
 // Custom SweetAlert2 Dynamic Theme Proxy
 export const CustomSwal = {
   fire: (options = {}, ...args) => {
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light' || localStorage.getItem('apex_theme') === 'light';
     const themeConfig = getSwalThemeConfig();
     let finalOptions = {};
     if (typeof options === 'string') {
@@ -46,6 +47,21 @@ export const CustomSwal = {
       };
     } else {
       finalOptions = { ...options };
+    }
+
+    // Strip legacy hardcoded dark-mode background and white colors
+    if (finalOptions.background === '#0d0d14' || finalOptions.background === '#0d0d12' || finalOptions.background === '#12121a' || finalOptions.background === '#0a0a0f') {
+      delete finalOptions.background;
+    }
+    if (finalOptions.color === '#fff' || finalOptions.color === '#ffffff') {
+      delete finalOptions.color;
+    }
+
+    // Adapt inline html colors for light mode if present
+    if (isLight && typeof finalOptions.html === 'string') {
+      finalOptions.html = finalOptions.html
+        .replace(/color:\s*#fff(?:fff)?;/gi, 'color: #0f172a;')
+        .replace(/color:\s*white;/gi, 'color: #0f172a;');
     }
 
     return Swal.fire({

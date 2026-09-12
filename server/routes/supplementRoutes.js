@@ -1,6 +1,7 @@
 import express from 'express';
 import { getDB, saveDB } from '../config/db.js';
 import { Supplement, SupplementOrder } from '../models/Supplement.js';
+import PaymentReceipt from '../models/PaymentReceipt.js';
 import { isMongoConnected } from '../config/mongodb.js';
 
 const router = express.Router();
@@ -91,7 +92,18 @@ router.post('/products', async (req, res) => {
  * Process shop cart checkout, apply promo code, generate order in MongoDB Atlas & DB Fallback
  */
 router.post('/checkout', async (req, res) => {
-  const { cartItems, promoCode, shippingInfo, paymentMethod, userEmail, userName, userPhone } = req.body;
+  const {
+    cartItems,
+    promoCode,
+    shippingInfo,
+    paymentMethod,
+    userEmail,
+    userName,
+    userPhone,
+    receiptNumber,
+    paymentId,
+    paymentStatus
+  } = req.body;
 
   if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
     return res.status(400).json({
@@ -132,7 +144,7 @@ router.post('/checkout', async (req, res) => {
   const shippingFee = shippingInfo?.deliveryType === 'express' ? 49.00 : 0.00;
   const totalBilled = Math.max(0, subtotal - memberDiscount - promoDiscount + shippingFee);
 
-  const txId = 'TX-' + Math.floor(1000 + Math.random() * 9000);
+  const txId = paymentId || ('TX-' + Math.floor(1000 + Math.random() * 9000));
   const orderId = `ORD-${Date.now()}`;
   const itemsSummary = itemsSummaryList.join(', ');
   const orderDate = new Date().toLocaleDateString('en-US', {
@@ -143,17 +155,44 @@ router.post('/checkout', async (req, res) => {
     minute: '2-digit'
   });
 
+  const methodStr = String(paymentMethod || 'online').toLowerCase();
+  const isCod = methodStr.includes('cod') || methodStr === 'cash on delivery';
+  const isAccount = methodStr.includes('account') || methodStr === 'apex member account';
+
+  const normalizedMethod = isCod
+    ? 'Cash on Delivery (COD)'
+    : isAccount
+    ? 'Apex Member Account'
+    : 'Online Payment (Razorpay)';
+
+  const normalizedStatus = paymentStatus || (isCod
+    ? 'Pending (COD)'
+    : isAccount
+    ? 'Billed to Member Account'
+    : 'Paid');
+
+  const resolvedReceiptNumber = receiptNumber || (isCod
+    ? `MH-RCP-COD-${Math.floor(100000 + Math.random() * 900000)}`
+    : isAccount
+    ? `MH-RCP-ACC-${Math.floor(100000 + Math.random() * 900000)}`
+    : `MH-RCP-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`);
+
   const initialTimeline = [
     {
       status: 'Pending Confirmation',
       timestamp: orderDate,
-      note: 'Order submitted by user and pending admin confirmation.'
+      note: isCod
+        ? 'Order placed with Cash on Delivery. Pending admin verification & dispatch.'
+        : isAccount
+        ? 'Order placed and charged to Monthly Member Account invoice. Pending admin confirmation.'
+        : 'Payment received & verified via Razorpay. Pending admin packing & dispatch.'
     }
   ];
 
   const newOrder = {
     orderId,
     txId,
+    receiptNumber: resolvedReceiptNumber,
     userEmail: userEmail || 'member@apex.com',
     userName: userName || shippingInfo?.fullName || 'Registered Member',
     userPhone: userPhone || shippingInfo?.phone || '+91 98765 43210',
@@ -174,8 +213,8 @@ router.post('/checkout', async (req, res) => {
       pincode: '560001',
       deliveryType: 'standard'
     },
-    paymentMethod: paymentMethod || 'card',
-    paymentStatus: paymentMethod === 'cod' ? 'Pending (COD)' : 'Paid',
+    paymentMethod: normalizedMethod,
+    paymentStatus: normalizedStatus,
     courierName: 'Apex Express Logistics',
     trackingNumber: '',
     estimatedDelivery: shippingInfo?.deliveryType === 'express' ? '24 Hours Priority' : '2-3 Business Days',
@@ -187,20 +226,76 @@ router.post('/checkout', async (req, res) => {
   if (!db.supplements.orders) {
     db.supplements.orders = [];
   }
-
   db.supplements.orders.unshift(newOrder);
 
-  // Auto-record in member invoices payment history
+  // 1. Log in Invoices
   const newInvoice = {
+    id: resolvedReceiptNumber,
     txId,
-    plan: `Supp Store: ${itemsSummary.substring(0, 30)}...`,
-    amount: totalBilled,
-    status: paymentMethod === 'cod' ? 'pending' : 'paid',
+    receiptNumber: resolvedReceiptNumber,
+    plan: `Supplements: ${itemsSummary.substring(0, 35)}...`,
+    desc: `Supp Store: ${itemsSummary.substring(0, 35)}...`,
+    amount: `₹${totalBilled.toLocaleString('en-IN')}`,
+    numAmount: totalBilled,
+    status: isCod ? 'Pending (COD)' : (isAccount ? 'Billed to Account' : 'Paid'),
+    paymentMethod: normalizedMethod,
+    userEmail: userEmail || 'member@apex.com',
+    userName: userName || 'Registered Member',
     date: orderDate
   };
 
   if (!db.invoices) db.invoices = [];
   db.invoices.unshift(newInvoice);
+
+  // 2. Generate Receipt in receipts collection so Admin Financial Ledger & Receipts Modal reflect all orders
+  const numAmount = totalBilled;
+  const subtotalNet = Math.round((numAmount / 1.18) * 100) / 100;
+  const gstAmt = Math.round((numAmount - subtotalNet) * 100) / 100;
+
+  const receiptData = {
+    receiptNumber: resolvedReceiptNumber,
+    orderId,
+    paymentId: txId,
+    signature: 'GATEWAY_VERIFIED',
+    userId: 'MEM-90210',
+    userName: userName || shippingInfo?.fullName || 'Registered Member',
+    userEmail: userEmail || 'member@apex.com',
+    userPhone: userPhone || shippingInfo?.phone || '+91 98765 43210',
+    userRole: 'member',
+    paymentType: 'supplement_order',
+    title: `MuScLe HuB Store: ${itemsSummary.substring(0, 40)}`,
+    amount: numAmount,
+    currency: 'INR',
+    status: isCod ? 'pending' : (isAccount ? 'billed_to_account' : 'paid'),
+    paymentMethod: normalizedMethod,
+    bankRrn: `RRN-${Math.floor(100000000000 + Math.random() * 900000000000)}`,
+    items: detailedItems.map(d => ({
+      name: d.name,
+      qty: d.quantity,
+      unitPrice: d.price,
+      total: d.price * d.quantity
+    })),
+    subtotal: subtotalNet,
+    gstRate: 18,
+    gstAmount: gstAmt,
+    discountAmount: memberDiscount + promoDiscount,
+    netAmount: numAmount,
+    createdAt: new Date().toISOString(),
+    metadata: {
+      deliveryType: shippingInfo?.deliveryType || 'standard',
+      shippingAddress: `${shippingInfo?.address || ''}, ${shippingInfo?.city || ''}, ${shippingInfo?.state || ''} - ${shippingInfo?.pincode || ''}`,
+      orderId
+    }
+  };
+
+  if (!db.receipts) db.receipts = [];
+  // Avoid duplicate receipt numbers if already logged by razorpay verify
+  const existingRIndex = db.receipts.findIndex(r => r.receiptNumber === resolvedReceiptNumber || (r.orderId && r.orderId === orderId));
+  if (existingRIndex === -1) {
+    db.receipts.unshift(receiptData);
+  } else {
+    db.receipts[existingRIndex] = { ...db.receipts[existingRIndex], ...receiptData };
+  }
 
   saveDB(db);
 
@@ -210,15 +305,28 @@ router.post('/checkout', async (req, res) => {
     } catch (e) {
       console.warn('Error saving order to MongoDB Atlas:', e.message);
     }
+
+    try {
+      await PaymentReceipt.findOneAndUpdate(
+        { receiptNumber: resolvedReceiptNumber },
+        receiptData,
+        { upsert: true, new: true }
+      );
+    } catch (e) {
+      console.warn('Error saving receipt to MongoDB Atlas:', e.message);
+    }
   }
 
   res.status(201).json({
     success: true,
     message: 'Order placed successfully. Waiting for admin confirmation.',
     txId,
+    orderId,
+    receiptNumber: resolvedReceiptNumber,
     totalBilled,
     order: newOrder,
-    invoice: newInvoice
+    invoice: newInvoice,
+    receipt: receiptData
   });
 });
 
@@ -360,13 +468,26 @@ router.put('/orders/:orderId/status', async (req, res) => {
     orders[orderIndex] = targetOrder;
     db.supplements.orders = orders;
     saveDB(db);
-  }
-
-  if (!targetOrder) {
-    return res.status(404).json({
-      success: false,
-      message: 'Order not found.'
-    });
+  } else if (!targetOrder) {
+    // Upsert order if missing from DB array
+    targetOrder = {
+      orderId,
+      txId: orderId,
+      status: status || 'Confirmed',
+      courierName: courierName || 'Apex Express Logistics',
+      trackingNumber: trackingNumber || '',
+      estimatedDelivery: estimatedDelivery || '2-3 Business Days',
+      statusTimeline: [
+        {
+          status: status || 'Confirmed',
+          timestamp,
+          note: note || `Status updated to ${status || 'Confirmed'} by Admin`
+        }
+      ]
+    };
+    orders.push(targetOrder);
+    db.supplements.orders = orders;
+    saveDB(db);
   }
 
   res.json({

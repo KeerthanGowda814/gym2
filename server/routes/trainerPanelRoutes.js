@@ -1,9 +1,24 @@
 import express from 'express';
 import { getDB, saveDB } from '../config/db.js';
+import TrainerData from '../models/TrainerData.js';
+import Attendance from '../models/Attendance.js';
+import { isMongoConnected } from '../config/mongodb.js';
 
 const router = express.Router();
 
 const defaultTrainerMembers = [
+  {
+    id: 'MEM-98801',
+    name: 'Jeery',
+    email: 'thepcworkshop1@gmail.com',
+    tier: 'Muscle Core Member',
+    status: 'Active',
+    joined: '01 Sep 2026',
+    goal: 'Form Consultation & Baseline Testing',
+    diet: 'Lean Calorie Deficit Plan',
+    workout: 'Hypertrophy Split Alpha (Upper/Lower)',
+    attendance: 96
+  },
   {
     id: 'MEM-10892',
     name: 'Ethan Hunt',
@@ -172,10 +187,10 @@ const defaultAttendanceLogs = [];
 // Helper to ensure trainer db structure exists
 function ensureTrainerDB(db) {
   if (!db.trainer) db.trainer = {};
-  if (!Array.isArray(db.trainer.members)) db.trainer.members = defaultTrainerMembers;
-  if (!Array.isArray(db.trainer.workoutPlans)) db.trainer.workoutPlans = defaultWorkoutPlans;
-  if (!Array.isArray(db.trainer.dietPlans)) db.trainer.dietPlans = defaultDietPlans;
-  if (!Array.isArray(db.trainer.agenda)) db.trainer.agenda = defaultAgenda;
+  if (!Array.isArray(db.trainer.members) || db.trainer.members.length === 0) db.trainer.members = defaultTrainerMembers;
+  if (!Array.isArray(db.trainer.workoutPlans) || db.trainer.workoutPlans.length === 0) db.trainer.workoutPlans = defaultWorkoutPlans;
+  if (!Array.isArray(db.trainer.dietPlans) || db.trainer.dietPlans.length === 0) db.trainer.dietPlans = defaultDietPlans;
+  if (!Array.isArray(db.trainer.agenda) || db.trainer.agenda.length === 0) db.trainer.agenda = defaultAgenda;
   if (!Array.isArray(db.trainer.attendanceLogs)) db.trainer.attendanceLogs = defaultAttendanceLogs;
   return db;
 }
@@ -188,6 +203,24 @@ function ensureTrainerDB(db) {
 router.get('/members', (req, res) => {
   let db = getDB();
   db = ensureTrainerDB(db);
+
+  // Auto-ensure primary member Jeery exists in trainer roster
+  const jeeryName = (db.member && db.member.name) || 'Jeery';
+  if (!db.trainer.members.some(m => m.name && m.name.toLowerCase() === jeeryName.toLowerCase())) {
+    db.trainer.members.unshift({
+      id: db.member?.id || 'MEM-98801',
+      name: jeeryName,
+      email: db.member?.email || 'jeery@apex.com',
+      tier: db.member?.membershipTier || 'Muscle Core Member',
+      status: 'Active',
+      joined: '01 Sep 2026',
+      goal: db.member?.fitnessGoal || 'Form Consultation & Baseline Testing',
+      diet: 'Lean Calorie Deficit Plan',
+      workout: 'Hypertrophy Split Alpha (Upper/Lower)',
+      attendance: db.member?.attendanceRate || 96
+    });
+  }
+
   saveDB(db);
   res.json({ success: true, data: db.trainer.members });
 });
@@ -259,8 +292,13 @@ router.post('/send-renewal-reminder', (req, res) => {
   db.trainer.chatHistory.push({
     id: `msg-${Date.now()}`,
     sender: 'coach',
+    memberName: memberName || 'Athlete',
+    clientEmail: memberEmail,
+    coachName: coachName || 'Coach',
     text: reminderText,
-    time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+    read: false,
+    createdAt: new Date().toISOString()
   });
 
   // 2. Add to alerts
@@ -462,7 +500,7 @@ router.get('/schedule', (req, res) => {
 });
 
 // POST /api/trainer/schedule - Create training session block
-router.post('/schedule', (req, res) => {
+router.post('/schedule', async (req, res) => {
   const { client, routine, timeBlock, status, shiftCategory } = req.body;
   if (!client || !routine || !timeBlock) {
     return res.status(400).json({ success: false, message: 'Client name, routine, and time block are required' });
@@ -488,14 +526,32 @@ router.post('/schedule', (req, res) => {
   }
   const now = new Date();
   const timeStr = now.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) + ', ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  db.trainer.chatHistory.push({
+  const dispatchMsg = {
     id: `c-${Date.now()}`,
     sender: 'coach',
+    memberName: newSession.client,
+    coachName: db.trainer?.coachName || 'Coach',
     text: `📅 [SCHEDULE DISPATCH] Coaching Session Scheduled for ${newSession.client}: "${newSession.routine}" on ${newSession.timeBlock} (${newSession.shiftCategory}).`,
-    time: timeStr
-  });
+    time: timeStr,
+    read: false,
+    createdAt: new Date().toISOString()
+  };
+  db.trainer.chatHistory.push(dispatchMsg);
 
   saveDB(db);
+
+  // MongoDB sync
+  if (isMongoConnected()) {
+    try {
+      await TrainerData.findOneAndUpdate(
+        {},
+        { $push: { agenda: newSession, chatHistory: dispatchMsg } },
+        { upsert: true, new: true }
+      );
+    } catch (e) {
+      console.warn("MongoDB schedule save error:", e);
+    }
+  }
 
   res.status(201).json({
     success: true,
@@ -506,7 +562,7 @@ router.post('/schedule', (req, res) => {
 });
 
 // PUT /api/trainer/schedule/:id - Update session status
-router.put('/schedule/:id', (req, res) => {
+router.put('/schedule/:id', async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   let db = getDB();
@@ -518,6 +574,15 @@ router.put('/schedule/:id', (req, res) => {
     saveDB(db);
   }
 
+  if (isMongoConnected()) {
+    try {
+      await TrainerData.findOneAndUpdate(
+        { "agenda.id": id },
+        { $set: { "agenda.$.status": status } }
+      );
+    } catch (e) {}
+  }
+
   res.json({
     success: true,
     message: 'Session status updated',
@@ -526,13 +591,22 @@ router.put('/schedule/:id', (req, res) => {
 });
 
 // DELETE /api/trainer/schedule/:id - Cancel session block
-router.delete('/schedule/:id', (req, res) => {
+router.delete('/schedule/:id', async (req, res) => {
   const { id } = req.params;
   let db = getDB();
   db = ensureTrainerDB(db);
 
   db.trainer.agenda = db.trainer.agenda.filter(s => s.id !== id);
   saveDB(db);
+
+  if (isMongoConnected()) {
+    try {
+      await TrainerData.findOneAndUpdate(
+        {},
+        { $pull: { agenda: { id: id } } }
+      );
+    } catch (e) {}
+  }
 
   res.json({
     success: true,
@@ -554,7 +628,7 @@ router.get('/attendance', (req, res) => {
 });
 
 // POST /api/trainer/attendance/turnstile - Manual turnstile release trigger
-router.post('/attendance/turnstile', (req, res) => {
+router.post('/attendance/turnstile', async (req, res) => {
   const { memberName, action, date, time } = req.body;
   if (!memberName) {
     return res.status(400).json({ success: false, message: 'Member name required' });
@@ -563,9 +637,24 @@ router.post('/attendance/turnstile', (req, res) => {
   let db = getDB();
   db = ensureTrainerDB(db);
 
-  const matchedUser = db.trainer.members.find(m => m.name === memberName) || { id: 'MEM-90210' };
+  const matchedUser = db.trainer.members.find(m => m.name.toLowerCase() === memberName.trim().toLowerCase()) || { id: 'MEM-90210' };
   const code = matchedUser.id ? `#${matchedUser.id.split('-')[1] || '90210'}-CARD` : '#8092-CARD';
   
+  // Resolve member email
+  let matchedEmail = matchedUser.email;
+  if (!matchedEmail && Array.isArray(db.users)) {
+    const userObj = db.users.find(u => u.name && u.name.toLowerCase() === memberName.trim().toLowerCase());
+    if (userObj) matchedEmail = userObj.email;
+  }
+  if (!matchedEmail) {
+    if (memberName.toLowerCase().includes('ethan')) matchedEmail = 'ethan.hunt@apex.com';
+    else if (memberName.toLowerCase().includes('sarah')) matchedEmail = 'sarah.c@apex.com';
+    else if (memberName.toLowerCase().includes('john')) matchedEmail = 'john.wick@apex.com';
+    else if (memberName.toLowerCase().includes('alex')) matchedEmail = 'alex.m@apex.com';
+    else matchedEmail = 'gkeerthan583@gmail.com';
+  }
+  matchedEmail = matchedEmail.toLowerCase();
+
   const now = new Date();
   const defaultTimeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const defaultDateStr = now.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
@@ -638,7 +727,66 @@ router.post('/attendance/turnstile', (req, res) => {
     }
   }
 
-  // Sync to db.attendance so the member can see it in their history
+  // 1. Sync to db.attendanceLogs (global member attendance list)
+  if (!Array.isArray(db.attendanceLogs)) db.attendanceLogs = [];
+
+  const parsedDayNum = (() => {
+    try {
+      const d = new Date(inputDateStr);
+      return isNaN(d.getTime()) ? now.getDate() : d.getDate();
+    } catch (e) {
+      return now.getDate();
+    }
+  })();
+
+  const monthYearStr = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  if (act === 'check-in') {
+    db.attendanceLogs.unshift({
+      id: `att-${Date.now()}`,
+      userEmail: matchedEmail,
+      memberName: memberName.trim(),
+      code,
+      scanMethod: 'Manual Trainer Entry',
+      gateAction: 'Gate Entry Check-in',
+      inTime: inputTimeStr,
+      outTime: '--',
+      duration: '--',
+      hoursLogged: '--',
+      date: inputDateStr,
+      monthYear: monthYearStr,
+      dayOfMonth: parsedDayNum,
+      status: 'Active'
+    });
+  } else {
+    const activeRec = db.attendanceLogs.find(r => r.userEmail && r.userEmail.toLowerCase() === matchedEmail && r.status === 'Active');
+    if (activeRec) {
+      activeRec.outTime = inputTimeStr;
+      activeRec.status = 'Completed';
+      activeRec.gateAction = 'Gate Exit Check-out';
+      activeRec.duration = '1h 30m';
+      activeRec.hoursLogged = '1h 30m';
+    } else {
+      db.attendanceLogs.unshift({
+        id: `att-${Date.now()}`,
+        userEmail: matchedEmail,
+        memberName: memberName.trim(),
+        code,
+        scanMethod: 'Manual Trainer Entry',
+        gateAction: 'Gate Exit Check-out',
+        inTime: '09:00 AM',
+        outTime: inputTimeStr,
+        duration: '1h 30m',
+        hoursLogged: '1h 30m',
+        date: inputDateStr,
+        monthYear: monthYearStr,
+        dayOfMonth: parsedDayNum,
+        status: 'Completed'
+      });
+    }
+  }
+
+  // 2. Sync to db.attendance object for live quick status
   if (!db.attendance) {
     db.attendance = {
       isCheckedIn: false,
@@ -654,21 +802,16 @@ router.post('/attendance/turnstile', (req, res) => {
     db.attendance.isCheckedIn = true;
     db.attendance.checkInTime = inputTimeStr;
     db.attendance.streakDays = (db.attendance.streakDays || 0) + 1;
-    
-    try {
-      const parsedDate = date ? new Date(date) : now;
-      if (!isNaN(parsedDate.getTime())) {
-        const dayOfMonth = parsedDate.getDate();
-        if (!db.attendance.activeDaysInMonth.includes(dayOfMonth)) {
-          db.attendance.activeDaysInMonth.push(dayOfMonth);
-        }
-      }
-    } catch (e) {}
+    if (!Array.isArray(db.attendance.activeDaysInMonth)) db.attendance.activeDaysInMonth = [];
+    if (!db.attendance.activeDaysInMonth.includes(parsedDayNum)) {
+      db.attendance.activeDaysInMonth.push(parsedDayNum);
+    }
   } else {
     db.attendance.isCheckedIn = false;
     db.attendance.checkInTime = null;
   }
 
+  if (!Array.isArray(db.attendance.sessions)) db.attendance.sessions = [];
   db.attendance.sessions.unshift({
     date: inputDateStr,
     time: inputTimeStr,
@@ -676,6 +819,59 @@ router.post('/attendance/turnstile', (req, res) => {
   });
 
   saveDB(db);
+
+  // 3. Sync to MongoDB Attendance model if connected
+  if (isMongoConnected()) {
+    try {
+      if (act === 'check-in') {
+        await Attendance.create({
+          id: `att-${Date.now()}`,
+          userEmail: matchedEmail,
+          memberName: memberName.trim(),
+          code,
+          scanMethod: 'Manual Trainer Entry',
+          gateAction: 'Gate Entry Check-in',
+          inTime: inputTimeStr,
+          outTime: '--',
+          duration: '--',
+          hoursLogged: '--',
+          date: inputDateStr,
+          monthYear: monthYearStr,
+          dayOfMonth: parsedDayNum,
+          status: 'Active'
+        });
+      } else {
+        const activeMongo = await Attendance.findOne({ userEmail: matchedEmail, status: 'Active' }).sort({ createdAt: -1 });
+        if (activeMongo) {
+          activeMongo.outTime = inputTimeStr;
+          activeMongo.status = 'Completed';
+          activeMongo.gateAction = 'Gate Exit Check-out';
+          activeMongo.duration = '1h 30m';
+          activeMongo.hoursLogged = '1h 30m';
+          await activeMongo.save();
+        } else {
+          await Attendance.create({
+            id: `att-${Date.now()}`,
+            userEmail: matchedEmail,
+            memberName: memberName.trim(),
+            code,
+            scanMethod: 'Manual Trainer Entry',
+            gateAction: 'Gate Exit Check-out',
+            inTime: '09:00 AM',
+            outTime: inputTimeStr,
+            duration: '1h 30m',
+            hoursLogged: '1h 30m',
+            date: inputDateStr,
+            monthYear: monthYearStr,
+            dayOfMonth: parsedDayNum,
+            status: 'Completed'
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("MongoDB attendance sync error in trainer turnstile:", e);
+    }
+  }
 
   res.status(201).json({
     success: true,
@@ -689,23 +885,72 @@ router.post('/attendance/turnstile', (req, res) => {
  * --- 6. CLIENT CHAT ENDPOINTS ---
  */
 
-// GET /api/trainer/chat - Get trainer chat history
-router.get('/chat', (req, res) => {
+// GET /api/trainer/chat - Get trainer chat history scoped to coach & optional client
+router.get('/chat', async (req, res) => {
   let db = getDB();
   db = ensureTrainerDB(db);
   saveDB(db);
-  const memberName = req.query.memberName || req.query.name;
+
+  const targetMember = req.query.memberName || req.query.name;
+  const clientEmail = req.query.clientEmail || req.query.email;
+  const coachName = req.query.coachName || req.query.trainerName;
+
   let history = db.trainer.chatHistory || [];
-  if (memberName) {
-    history = history.filter(m => !m.memberName || m.memberName.toLowerCase() === memberName.toLowerCase());
+
+  // Merge MongoDB if connected
+  if (isMongoConnected()) {
+    try {
+      const trainerDoc = await TrainerData.findOne();
+      if (trainerDoc && Array.isArray(trainerDoc.chatHistory) && trainerDoc.chatHistory.length > 0) {
+        const map = new Map();
+        [...history, ...trainerDoc.chatHistory].forEach(item => {
+          const key = item.id || (item.text + (item.time || ''));
+          map.set(key, item);
+        });
+        history = Array.from(map.values());
+      }
+    } catch (e) {
+      console.warn("MongoDB chat fetch fallback in trainerPanel:", e);
+    }
   }
-  res.json({ success: true, data: history });
+
+  // Filter by coach if provided
+  if (coachName) {
+    history = history.filter(m => !m.coachName || m.coachName.toLowerCase() === coachName.toLowerCase());
+  }
+
+  // Calculate unread counts by member
+  const unreadByMember = {};
+  history.forEach(m => {
+    if (m.sender === 'member' && !m.read && m.memberName) {
+      unreadByMember[m.memberName] = (unreadByMember[m.memberName] || 0) + 1;
+    }
+  });
+
+  // Filter by member if requested
+  let clientHistory = history;
+  if (targetMember || clientEmail) {
+    clientHistory = history.filter(m => {
+      const nameMatch = targetMember && m.memberName && m.memberName.toLowerCase() === targetMember.toLowerCase();
+      const emailMatch = clientEmail && m.clientEmail && m.clientEmail.toLowerCase() === clientEmail.toLowerCase();
+      return nameMatch || emailMatch || (!m.memberName && !m.clientEmail && !targetMember && !clientEmail);
+    });
+  }
+
+  res.json({
+    success: true,
+    data: clientHistory,
+    allHistory: history,
+    unreadByMember,
+    unreadCount: Object.values(unreadByMember).reduce((a, b) => a + b, 0)
+  });
 });
 
 // POST /api/trainer/chat - Trainer sends message to client
-router.post('/chat', (req, res) => {
-  const { text, sender, memberName } = req.body;
-  if (!text) {
+router.post('/chat', async (req, res) => {
+  const { text, message, sender, memberName, clientEmail, coachName } = req.body;
+  const msgText = (text || message || '').trim();
+  if (!msgText) {
     return res.status(400).json({ success: false, message: 'Message text is required' });
   }
 
@@ -717,19 +962,39 @@ router.post('/chat', (req, res) => {
   const timeStr = now.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) + ', ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   const targetMember = memberName || 'Ethan Hunt';
+  const coach = coachName || db.trainer?.coachName || 'Coach';
 
   const newMsg = {
     id: `c-${Date.now()}`,
     memberName: targetMember,
+    clientEmail: clientEmail || '',
+    coachName: coach,
     sender: sender || 'coach',
-    text: text.trim(),
-    time: timeStr
+    text: msgText,
+    time: timeStr,
+    read: false,
+    createdAt: new Date().toISOString()
   };
 
   db.trainer.chatHistory.push(newMsg);
   saveDB(db);
 
-  const memberHistory = db.trainer.chatHistory.filter(m => !m.memberName || m.memberName.toLowerCase() === targetMember.toLowerCase());
+  // Sync to Mongo
+  if (isMongoConnected()) {
+    try {
+      await TrainerData.findOneAndUpdate(
+        {},
+        { $push: { chatHistory: newMsg } },
+        { upsert: true, new: true }
+      );
+    } catch (e) {
+      console.warn("MongoDB chat append error:", e);
+    }
+  }
+
+  const memberHistory = db.trainer.chatHistory.filter(m => {
+    return m.memberName && m.memberName.toLowerCase() === targetMember.toLowerCase();
+  });
 
   res.status(201).json({
     success: true,
@@ -737,6 +1002,42 @@ router.post('/chat', (req, res) => {
     data: newMsg,
     chatHistory: memberHistory
   });
+});
+
+// POST /api/trainer/chat/read - Mark athlete messages as read for trainer
+router.post('/chat/read', async (req, res) => {
+  const { memberName, clientEmail, coachName } = req.body;
+  let db = getDB();
+  db = ensureTrainerDB(db);
+
+  let updated = 0;
+  if (Array.isArray(db.trainer.chatHistory)) {
+    db.trainer.chatHistory.forEach(m => {
+      if (m.sender === 'member' && !m.read) {
+        const nameMatch = memberName && m.memberName && m.memberName.toLowerCase() === memberName.toLowerCase();
+        const emailMatch = clientEmail && m.clientEmail && m.clientEmail.toLowerCase() === clientEmail.toLowerCase();
+        if (nameMatch || emailMatch || (!memberName && !clientEmail)) {
+          m.read = true;
+          updated++;
+        }
+      }
+    });
+  }
+
+  if (updated > 0) {
+    saveDB(db);
+    if (isMongoConnected()) {
+      try {
+        await TrainerData.findOneAndUpdate(
+          {},
+          { $set: { "chatHistory.$[elem].read": true } },
+          { arrayFilters: [{ "elem.sender": "member" }] }
+        );
+      } catch (e) {}
+    }
+  }
+
+  res.json({ success: true, updated });
 });
 
 export default router;

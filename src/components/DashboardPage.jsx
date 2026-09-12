@@ -72,12 +72,45 @@ export default function DashboardPage({ navigate }) {
         navigate('login');
       }
     } else {
-      setCurrentUser(ApexAuth.getCurrentUser());
+      const authUser = ApexAuth.getCurrentUser();
+      if (authUser) {
+        // Sync custom profile name/photo if member updated their profile details
+        const memberKey = authUser.email
+          ? authUser.email.toLowerCase().replace(/[^a-z0-9]/g, '_')
+          : (authUser.name ? authUser.name.toLowerCase().replace(/[^a-z0-9]/g, '_') : 'member_user');
+        const savedProfile = localStorage.getItem(`apex_member_profile_${memberKey}`) || (authUser.name ? localStorage.getItem(`apex_member_profile_${authUser.name}`) : null);
+        if (savedProfile) {
+          try {
+            const parsed = JSON.parse(savedProfile);
+            if (parsed.name) authUser.name = parsed.name;
+            if (parsed.profileImage) authUser.profileImage = parsed.profileImage;
+          } catch (e) {}
+        }
+      }
+      setCurrentUser(authUser);
     }
   }, [navigate]);
 
   // Subview states
   const [activeSubView, setActiveSubView] = useState('home');
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  const handleSwitchRole = (targetRole) => {
+    setShowUserMenu(false);
+    if (targetRole === 'admin') {
+      ApexAuth.authenticateUser('adminmuscle@gmail.com', 'admin', 'System Admin', true);
+      window.location.hash = '#/admin';
+      window.location.reload();
+    } else if (targetRole === 'trainer') {
+      ApexAuth.authenticateUser('trainer@apex.com', 'trainer', 'Coach Marcus Vance', true);
+      window.location.hash = '#/trainer';
+      window.location.reload();
+    } else if (targetRole === 'member') {
+      ApexAuth.authenticateUser('thepcworkshop1@gmail.com', 'member', 'Jeery', true);
+      window.location.hash = '#/dashboard';
+      window.location.reload();
+    }
+  };
 
   // Shared recent activities state (so check-ins in MemberPanel update AdminPanel logs immediately)
   const [activities, setActivities] = useState([]);
@@ -92,23 +125,41 @@ export default function DashboardPage({ navigate }) {
   // Notification center state
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadTrainerChatCount, setUnreadTrainerChatCount] = useState(0);
   const [alerts, setAlerts] = useState([]);
+  const [notifFilter, setNotifFilter] = useState('all');
+
+  const userNotifKey = currentUser?.email
+    ? currentUser.email.toLowerCase().replace(/[^a-z0-9]/g, '_')
+    : (currentUser?.name ? currentUser.name.toLowerCase().replace(/[^a-z0-9]/g, '_') : 'member_user');
+
+  const [dismissedAlertIds, setDismissedAlertIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(`dismissed_alerts_${userNotifKey}`) || localStorage.getItem('dismissed_alerts') || '[]');
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [seenAlertIds, setSeenAlertIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(`seen_alerts_${userNotifKey}`) || localStorage.getItem('seen_alerts') || '[]');
+    } catch (e) {
+      return [];
+    }
+  });
 
   // Fetch alerts dynamically
   const fetchAlerts = async () => {
     try {
       const data = await memberApi.getAlerts();
-      if (data) {
-        setAlerts(data);
-        const seenAlerts = JSON.parse(localStorage.getItem('seen_alerts') || '[]');
-        const unseen = data.filter(a => !seenAlerts.includes(a.id));
-        setUnreadCount(unseen.length);
-      } else {
-        const localAlerts = JSON.parse(localStorage.getItem('apex_broadcast_alerts') || '[]');
-        setAlerts(localAlerts);
-        const seenAlerts = JSON.parse(localStorage.getItem('seen_alerts') || '[]');
-        const unseen = localAlerts.filter(a => !seenAlerts.includes(a.id));
-        setUnreadCount(unseen.length);
+      const rawAlerts = data || JSON.parse(localStorage.getItem('apex_broadcast_alerts') || '[]');
+      if (Array.isArray(rawAlerts)) {
+        setAlerts(rawAlerts);
+        const savedSeen = JSON.parse(localStorage.getItem(`seen_alerts_${userNotifKey}`) || localStorage.getItem('seen_alerts') || '[]');
+        const savedDismissed = JSON.parse(localStorage.getItem(`dismissed_alerts_${userNotifKey}`) || localStorage.getItem('dismissed_alerts') || '[]');
+        const activeUnseen = rawAlerts.filter(a => a && !savedDismissed.includes(a.id) && !savedSeen.includes(a.id));
+        setUnreadCount(activeUnseen.length);
       }
     } catch (e) {
       console.warn("Alerts fetch error:", e);
@@ -117,17 +168,60 @@ export default function DashboardPage({ navigate }) {
 
   useEffect(() => {
     fetchAlerts();
-    const interval = setInterval(fetchAlerts, 10000);
+    const interval = setInterval(fetchAlerts, 8000);
     return () => clearInterval(interval);
-  }, []);
+  }, [userNotifKey]);
+
+  // Poll for unread trainer messages when user is a member
+  useEffect(() => {
+    if (currentUser?.role === 'member') {
+      const checkCoachChat = async () => {
+        try {
+          const res = await memberApi.getChatHistory(currentUser.name, currentUser.email);
+          if (res && res.unreadCount !== undefined) {
+            setUnreadTrainerChatCount(res.unreadCount);
+          }
+        } catch (e) {}
+      };
+      checkCoachChat();
+      const interval = setInterval(checkCoachChat, 4000);
+      return () => clearInterval(interval);
+    }
+  }, [currentUser]);
 
   const handleToggleNotifDropdown = () => {
     setShowNotifDropdown(!showNotifDropdown);
-    if (!showNotifDropdown) {
-      const seenAlerts = alerts.map(a => a.id);
-      localStorage.setItem('seen_alerts', JSON.stringify(seenAlerts));
-      setUnreadCount(0);
-    }
+  };
+
+  const handleMarkAllRead = (e) => {
+    e.stopPropagation();
+    const allIds = alerts.map(a => a.id);
+    const updatedSeen = Array.from(new Set([...seenAlertIds, ...allIds]));
+    setSeenAlertIds(updatedSeen);
+    localStorage.setItem(`seen_alerts_${userNotifKey}`, JSON.stringify(updatedSeen));
+    localStorage.setItem('seen_alerts', JSON.stringify(updatedSeen));
+    setUnreadCount(0);
+  };
+
+  const handleDismissAlert = (e, alertId) => {
+    e.stopPropagation();
+    const nextDismissed = Array.from(new Set([...dismissedAlertIds, alertId]));
+    setDismissedAlertIds(nextDismissed);
+    localStorage.setItem(`dismissed_alerts_${userNotifKey}`, JSON.stringify(nextDismissed));
+    localStorage.setItem('dismissed_alerts', JSON.stringify(nextDismissed));
+
+    // Update unread count
+    const remainingUnseen = alerts.filter(a => a && !nextDismissed.includes(a.id) && !seenAlertIds.includes(a.id));
+    setUnreadCount(remainingUnseen.length);
+  };
+
+  const handleClearAllAlerts = (e) => {
+    e.stopPropagation();
+    const allIds = alerts.map(a => a.id);
+    setDismissedAlertIds(allIds);
+    localStorage.setItem(`dismissed_alerts_${userNotifKey}`, JSON.stringify(allIds));
+    localStorage.setItem('dismissed_alerts', JSON.stringify(allIds));
+    setUnreadCount(0);
   };
 
   // Admin Plan and Modal State
@@ -255,14 +349,24 @@ export default function DashboardPage({ navigate }) {
             {currentUser.role === 'member' && (
               <li>
                 <a
-                  onClick={() => setActiveSubView('trainer')}
+                  onClick={() => {
+                    setActiveSubView('trainer');
+                    setUnreadTrainerChatCount(0);
+                  }}
                   className={`sidebar-nav-link ${activeSubView === 'trainer' ? 'active' : ''}`}
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                  Trainer
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <span>Trainer</span>
+                  </div>
+                  {unreadTrainerChatCount > 0 && (
+                    <span style={{ background: 'var(--accent-volt)', color: '#000', fontSize: '0.65rem', fontWeight: 800, padding: '0.1rem 0.45rem', borderRadius: '10px' }}>
+                      {unreadTrainerChatCount}
+                    </span>
+                  )}
                 </a>
               </li>
             )}
@@ -565,83 +669,305 @@ export default function DashboardPage({ navigate }) {
                 <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{ cursor: 'pointer' }}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
-                {unreadCount > 0 && <span className="dot" style={{ position: 'absolute', top: '-2px', right: '-2px', width: '8px', height: '8px', backgroundColor: 'var(--accent-volt)', borderRadius: '50%' }}></span>}
+                {unreadCount > 0 && (
+                  <span className="dot" title={`${unreadCount} unread announcements`}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
 
                 {/* Dropdown Menu */}
                 {showNotifDropdown && (
-                  <div className="notif-dropdown-menu" style={{
-                    position: 'absolute',
-                    top: '40px',
-                    right: '0',
-                    width: '320px',
-                    background: '#121319',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: '8px',
-                    boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
-                    zIndex: 1000,
-                    padding: '1rem',
-                    maxHeight: '400px',
-                    overflowY: 'auto',
-                    textAlign: 'left'
-                  }} onClick={(e) => e.stopPropagation()}>
-                    <h4 style={{ margin: '0 0 0.8rem 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-white)' }}>
-                      <span>Club Announcements</span>
-                      {alerts.length > 0 && <span className="badge-new" style={{ background: 'var(--accent-volt)', color: '#000', fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderRadius: '4px', fontWeight: 800 }}>{alerts.length} Active</span>}
-                    </h4>
-                    {alerts.length === 0 ? (
-                      <p style={{ margin: '1rem 0', color: 'var(--text-muted)', fontSize: '0.8rem', textAlign: 'center' }}>No active broadcast announcements.</p>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                        {alerts.map((alt) => {
-                          const typeColors = {
-                            holiday: { bg: 'rgba(255, 62, 108, 0.1)', border: '#ff3e6c', label: 'Holiday' },
-                            event: { bg: 'rgba(0, 240, 255, 0.1)', border: '#00f0ff', label: 'Event' },
-                            maintenance: { bg: 'rgba(255, 159, 0, 0.1)', border: '#ff9f00', label: 'Maintenance' },
-                            general: { bg: 'rgba(255, 255, 255, 0.03)', border: '#8e919f', label: 'General' }
-                          }[alt.type] || { bg: 'rgba(255, 255, 255, 0.03)', border: '#8e919f', label: 'General' };
-
-                          return (
-                            <div key={alt.id} style={{
-                              background: typeColors.bg,
-                              borderLeft: `3px solid ${typeColors.border}`,
-                              padding: '0.65rem 0.8rem',
+                  <div className="notif-dropdown-menu" onClick={(e) => e.stopPropagation()}>
+                    <div className="notif-dropdown-header">
+                      <div>
+                        <h4>
+                          <span>🔔</span>
+                          <span>Club Announcements</span>
+                        </h4>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+                          {unreadCount > 0 ? `${unreadCount} unread alert${unreadCount > 1 ? 's' : ''}` : 'All caught up'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        {unreadCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleMarkAllRead}
+                            style={{
+                              background: 'rgba(255, 94, 0, 0.1)',
+                              border: '1px solid rgba(255, 94, 0, 0.3)',
+                              color: 'var(--accent-volt, #ff5e00)',
+                              fontSize: '0.7rem',
+                              fontWeight: 700,
+                              padding: '0.2rem 0.5rem',
                               borderRadius: '4px',
-                              boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-                            }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.2rem' }}>
-                                <span style={{ fontSize: '0.72rem', fontWeight: 800, color: typeColors.border, textTransform: 'uppercase' }}>{typeColors.label}</span>
-                                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{alt.date}</span>
-                              </div>
-                              <h5 style={{ margin: '0 0 0.15rem 0', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-white)' }}>{alt.title}</h5>
-                              <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: '1.3' }}>{alt.message}</p>
+                              cursor: 'pointer'
+                            }}
+                            title="Mark all as read"
+                          >
+                            ✓ Read
+                          </button>
+                        )}
+                        {alerts.filter(a => !dismissedAlertIds.includes(a.id)).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleClearAllAlerts}
+                            style={{
+                              background: 'transparent',
+                              border: '1px solid var(--border-color)',
+                              color: 'var(--text-dim)',
+                              fontSize: '0.7rem',
+                              padding: '0.2rem 0.5rem',
+                              borderRadius: '4px',
+                              cursor: 'pointer'
+                            }}
+                            title="Clear all alerts"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Filter Tabs */}
+                    <div style={{ display: 'flex', gap: '0.4rem', padding: '0.4rem 0.8rem', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-card-hover, rgba(255,255,255,0.01))' }}>
+                      <button
+                        type="button"
+                        onClick={() => setNotifFilter('all')}
+                        style={{
+                          background: notifFilter === 'all' ? 'var(--accent-volt, #ff5e00)' : 'transparent',
+                          color: notifFilter === 'all' ? '#000000' : 'var(--text-muted)',
+                          border: 'none',
+                          padding: '0.15rem 0.5rem',
+                          borderRadius: '12px',
+                          fontSize: '0.68rem',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        All ({alerts.filter(a => !dismissedAlertIds.includes(a.id)).length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNotifFilter('unread')}
+                        style={{
+                          background: notifFilter === 'unread' ? 'var(--accent-volt, #ff5e00)' : 'transparent',
+                          color: notifFilter === 'unread' ? '#000000' : 'var(--text-muted)',
+                          border: 'none',
+                          padding: '0.15rem 0.5rem',
+                          borderRadius: '12px',
+                          fontSize: '0.68rem',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Unread ({unreadCount})
+                      </button>
+                    </div>
+
+                    {/* Notification Body List */}
+                    <div className="notif-dropdown-body">
+                      {(() => {
+                        const visibleAlerts = alerts.filter(a => a && !dismissedAlertIds.includes(a.id));
+                        const filtered = notifFilter === 'unread'
+                          ? visibleAlerts.filter(a => !seenAlertIds.includes(a.id))
+                          : visibleAlerts;
+
+                        if (filtered.length === 0) {
+                          return (
+                            <div style={{ textAlign: 'center', padding: '2rem 1rem' }}>
+                              <span style={{ fontSize: '1.8rem' }}>🎉</span>
+                              <h5 style={{ margin: '0.5rem 0 0.15rem 0', color: 'var(--text-white)', fontWeight: 700, fontSize: '0.88rem' }}>
+                                {notifFilter === 'unread' ? 'No unread notifications' : 'No active announcements'}
+                              </h5>
+                              <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                                You are all up to date with club broadcasts.
+                              </p>
                             </div>
                           );
-                        })}
-                      </div>
-                    )}
+                        }
+
+                        return filtered.map((alt) => {
+                          const isUnread = !seenAlertIds.includes(alt.id);
+                          const typeConfig = {
+                            holiday: { icon: '🏖️', label: 'Holiday', className: 'holiday' },
+                            event: { icon: '🏆', label: 'Event', className: 'event' },
+                            maintenance: { icon: '⚠️', label: 'Maintenance', className: 'maintenance' },
+                            general: { icon: '📢', label: 'Announcement', className: 'general' },
+                            membership: { icon: '⚡', label: 'Pass Alert', className: 'general' },
+                            deal: { icon: '🏷️', label: 'Special Offer', className: 'general' }
+                          }[alt.type] || { icon: '📢', label: 'Announcement', className: 'general' };
+
+                          return (
+                            <div key={alt.id} className={`notif-item ${typeConfig.className} ${isUnread ? 'unread' : ''}`}>
+                              <div className="notif-item-top">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  <span className={`notif-badge ${typeConfig.className}`}>
+                                    <span>{typeConfig.icon}</span>
+                                    <span>{typeConfig.label}</span>
+                                  </span>
+                                  {isUnread && (
+                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent-volt, #ff5e00)' }} title="Unread"></span>
+                                  )}
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  <span className="notif-time">{alt.date}</span>
+                                  <button
+                                    type="button"
+                                    className="notif-item-dismiss"
+                                    onClick={(e) => handleDismissAlert(e, alt.id)}
+                                    title="Dismiss this alert"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </div>
+
+                              <h5 className="notif-title">{alt.title}</h5>
+                              <p className="notif-msg">{alt.message}</p>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="notif-dropdown-footer">
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+                        MuscleHub Live Broadcasts
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowNotifDropdown(false)}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--accent-volt, #ff5e00)', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        Close ✕
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* User Profile Info - Clean Initials Avatar badge without dummy stock photo */}
-              <div className="admin-header-profile" onClick={() => setActiveSubView(currentUser.role === 'member' ? 'profile' : 'home')} style={{ cursor: 'pointer' }}>
-                {currentUser.picture || currentUser.profileImage ? (
-                  <img
-                    src={currentUser.picture || currentUser.profileImage}
-                    alt={currentUser.name}
-                    style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover' }}
-                    onError={(e) => { e.target.style.display = 'none'; }}
-                  />
-                ) : (
-                  <div className="header-avatar-badge">
-                    {initials}
+              {/* User Profile Info with Portal Switcher Dropdown */}
+              <div style={{ position: 'relative' }}>
+                <div
+                  className="admin-header-profile"
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {currentUser.picture || currentUser.profileImage ? (
+                    <img
+                      src={currentUser.picture || currentUser.profileImage}
+                      alt={currentUser.name}
+                      style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover' }}
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                  ) : (
+                    <div className="header-avatar-badge">
+                      {initials}
+                    </div>
+                  )}
+                  <div className="admin-profile-info">
+                    <h4>{currentUser.name || 'User'}</h4>
+                    <span>{currentUser.role === 'admin' ? 'Club Owner' : (currentUser.role === 'trainer' ? 'Certified Coach' : 'Gym Athlete')}</span>
+                  </div>
+                  <span className="admin-profile-arrow">▼</span>
+                </div>
+
+                {/* Role Switcher Dropdown */}
+                {showUserMenu && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 8px)',
+                      right: 0,
+                      width: '240px',
+                      background: 'var(--bg-dark, #12121c)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '10px',
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+                      padding: '0.6rem 0',
+                      zIndex: 999
+                    }}
+                  >
+                    <div style={{ padding: '0.4rem 1rem 0.6rem 1rem', borderBottom: '1px solid var(--border-color)', fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: 800, textTransform: 'uppercase' }}>
+                      Switch Portal View
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchRole('admin')}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '0.65rem 1rem',
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        background: currentUser.role === 'admin' ? 'rgba(255, 94, 0, 0.15)' : 'transparent',
+                        color: currentUser.role === 'admin' ? '#ff5e00' : 'var(--text-white)',
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      👑 Admin Portal (Club Owner)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchRole('trainer')}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '0.65rem 1rem',
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        background: currentUser.role === 'trainer' ? 'rgba(198, 255, 0, 0.15)' : 'transparent',
+                        color: currentUser.role === 'trainer' ? 'var(--accent-volt)' : 'var(--text-white)',
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🏋️‍♂️ Trainer Portal (Coach)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchRole('member')}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '0.65rem 1rem',
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        background: currentUser.role === 'member' ? 'rgba(0, 240, 255, 0.15)' : 'transparent',
+                        color: currentUser.role === 'member' ? 'var(--accent-cyan)' : 'var(--text-white)',
+                        border: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🏃‍♂️ Athlete Portal (Member)
+                    </button>
+
+                    <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '0.4rem', paddingTop: '0.4rem' }}>
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        style={{
+                          width: '100%',
+                          textAlign: 'left',
+                          padding: '0.5rem 1rem',
+                          fontSize: '0.8rem',
+                          color: '#ff3e6c',
+                          background: 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontWeight: 700
+                        }}
+                      >
+                        🚪 Logout
+                      </button>
+                    </div>
                   </div>
                 )}
-                <div className="admin-profile-info">
-                  <h4>{currentUser.name || 'User'}</h4>
-                  <span>{currentUser.role === 'admin' ? 'Club Owner' : (currentUser.role === 'trainer' ? 'Certified Coach' : 'Gym Athlete')}</span>
-                </div>
-                <span className="admin-profile-arrow">▼</span>
               </div>
             </div>
           </header>
@@ -787,9 +1113,9 @@ export default function DashboardPage({ navigate }) {
           padding: '1rem'
         }}>
           <div style={{
-            background: '#121319',
-            border: '1px solid rgba(255, 94, 0, 0.2)',
-            boxShadow: '0 0 35px rgba(255, 94, 0, 0.15), 0 10px 40px rgba(0,0,0,0.8)',
+            background: 'var(--bg-card, #ffffff)',
+            border: '1px solid var(--border-color)',
+            boxShadow: '0 0 35px rgba(255, 94, 0, 0.15), 0 10px 40px rgba(0,0,0,0.5)',
             borderRadius: '12px',
             width: '90%',
             maxWidth: '850px',
@@ -885,8 +1211,8 @@ export default function DashboardPage({ navigate }) {
                   <div
                     key={plan.name}
                     style={{
-                      background: 'rgba(255, 255, 255, 0.01)',
-                      border: isCurrent ? '1.5px solid #FF5E00' : '1px solid rgba(255, 255, 255, 0.08)',
+                      background: 'var(--bg-dark, rgba(255, 255, 255, 0.03))',
+                      border: isCurrent ? '1.5px solid var(--accent-volt, #FF5E00)' : '1px solid var(--border-color)',
                       borderRadius: '10px',
                       padding: '1.8rem',
                       display: 'flex',

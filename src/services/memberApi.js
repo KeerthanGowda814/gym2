@@ -211,26 +211,44 @@ export const memberApi = {
     }
   },
 
-  async getChatHistory(memberName) {
+  async getChatHistory(memberName, clientEmail, coachName) {
     try {
-      const url = memberName ? `${API_BASE_URL}/member/trainer/chat?name=${encodeURIComponent(memberName)}` : `${API_BASE_URL}/member/trainer/chat`;
+      const params = new URLSearchParams();
+      if (memberName) params.append('name', memberName);
+      if (clientEmail) params.append('clientEmail', clientEmail);
+      if (coachName) params.append('coachName', coachName);
+      const url = `${API_BASE_URL}/member/trainer/chat?${params.toString()}`;
       const res = await fetch(url, { headers: getHeaders() });
       if (!res.ok) throw new Error('Failed to fetch chat history');
       const data = await res.json();
-      return data.data;
+      return data;
     } catch (err) {
       return null;
     }
   },
 
-  async sendChatMessage(message, memberName) {
+  async sendChatMessage(message, memberName, clientEmail, coachName) {
     try {
       const res = await fetch(`${API_BASE_URL}/member/trainer/chat`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ message, memberName })
+        body: JSON.stringify({ message, memberName, clientEmail, coachName })
       });
       if (!res.ok) throw new Error('Failed to send chat message');
+      return await res.json();
+    } catch (err) {
+      return null;
+    }
+  },
+
+  async markChatRead(memberName, clientEmail, coachName) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/member/trainer/chat/read`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ memberName, clientEmail, coachName })
+      });
+      if (!res.ok) throw new Error('Failed to mark chat as read');
       return await res.json();
     } catch (err) {
       return null;
@@ -328,12 +346,23 @@ export const memberApi = {
     }
   },
 
-  async checkoutSupplements(cartItems, promoCode, shippingInfo = null, paymentMethod = 'card', userEmail = null, userName = null, userPhone = null) {
+  async checkoutSupplements(cartItems, promoCode, shippingInfo = null, paymentMethod = 'Online Payment (Razorpay)', userEmail = null, userName = null, userPhone = null, receiptNumber = null, paymentId = null, paymentStatus = null) {
     try {
       const res = await fetch(`${API_BASE_URL}/member/supplements/checkout`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ cartItems, promoCode, shippingInfo, paymentMethod, userEmail, userName, userPhone })
+        body: JSON.stringify({
+          cartItems,
+          promoCode,
+          shippingInfo,
+          paymentMethod,
+          userEmail,
+          userName,
+          userPhone,
+          receiptNumber,
+          paymentId,
+          paymentStatus
+        })
       });
       if (!res.ok) throw new Error('Failed supplement checkout');
       return await res.json();

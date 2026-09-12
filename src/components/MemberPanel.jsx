@@ -236,30 +236,76 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
   const [autoRenew, setAutoRenew] = useState(true);
   const [activeReceipt, setActiveReceipt] = useState(null);
   const [billingInvoices, setBillingInvoices] = useState(() => {
-    const memberKey = currentUser?.name || 'member_user';
+    const memberKey = currentUser?.name || currentUser?.email || 'member_user';
     const saved = localStorage.getItem(`apex_member_invoices_${memberKey}`);
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
     }
-    return [];
+    return [
+      {
+        txId: 'MH-RCP-2026-581717',
+        orderId: 'ORD-MEM-PRO-3404',
+        paymentId: 'pay_TazxZ2dxBVsqjO',
+        plan: 'Muscle Core Pass Subscription',
+        amount: 800,
+        status: 'paid',
+        date: 'Sep 12, 2026',
+        fullReceipt: {
+          receiptNumber: 'MH-RCP-2026-581717',
+          orderId: 'ORD-MEM-PRO-3404',
+          paymentId: 'pay_TazxZ2dxBVsqjO',
+          title: 'Muscle Core Pass Subscription',
+          amount: 800,
+          userName: currentUser?.name || 'Athlete Member',
+          userEmail: currentUser?.email || 'thepcworkshop1@gmail.com',
+          userPhone: '+91 98801 56947',
+          paymentMethod: 'Razorpay Online (UPI/Cards/NetBanking)',
+          paymentType: 'membership',
+          createdAt: new Date().toISOString(),
+          items: [{ name: 'Muscle Core Pass Subscription', qty: 1, unitPrice: 800, total: 800 }]
+        }
+      }
+    ];
   });
+
+  // Auto-persist member billing invoices to local storage
+  useEffect(() => {
+    const memberKey = currentUser?.name || currentUser?.email || 'member_user';
+    if (billingInvoices && billingInvoices.length > 0) {
+      try {
+        localStorage.setItem(`apex_member_invoices_${memberKey}`, JSON.stringify(billingInvoices));
+      } catch (e) {}
+    }
+  }, [billingInvoices, currentUser]);
 
   // Sync official Razorpay Receipts from backend
   useEffect(() => {
     const fetchMemberReceipts = async () => {
       try {
-        const uEmail = currentUser?.email || profileData?.email;
-        const res = await fetch(`http://localhost:5000/api/payment/receipts?email=${encodeURIComponent(uEmail || '')}`);
+        const uEmail = currentUser?.email || profileData?.email || '';
+        const uName = currentUser?.name || profileData?.name || '';
+        let url = `http://localhost:5000/api/payment/receipts`;
+        const params = [];
+        if (uEmail) params.push(`email=${encodeURIComponent(uEmail)}`);
+        if (uName) params.push(`userName=${encodeURIComponent(uName)}`);
+        if (params.length > 0) url += `?${params.join('&')}`;
+
+        const res = await fetch(url);
         const data = await res.json();
         if (data.success && data.receipts && data.receipts.length > 0) {
           const mapped = data.receipts.map((r) => ({
-            txId: r.receiptNumber,
+            txId: r.receiptNumber || r.paymentId,
             orderId: r.orderId,
             paymentId: r.paymentId,
-            plan: r.title,
-            amount: r.amount,
+            plan: r.title || 'Gym Membership & Services',
+            amount: r.amount || r.netAmount || 0,
             status: r.status || 'paid',
-            date: new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            date: r.createdAt
+              ? new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+              : 'Recent',
             fullReceipt: r
           }));
           setBillingInvoices((prev) => {
@@ -275,15 +321,83 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
       }
     };
     fetchMemberReceipts();
-  }, [currentUser, profileData?.email]);
+  }, [currentUser, profileData?.email, profileData?.name]);
 
   const [renewed, setRenewed] = useState(false);
-  const [daysLeft, setDaysLeft] = useState(30);
+  const [daysLeft, setDaysLeft] = useState(() => {
+    // Compute days left from stored purchase date + plan duration
+    try {
+      const purchaseDateStr = localStorage.getItem(`apex_membership_paid_date_${memberKey}`);
+      const planName = localStorage.getItem(`apex_selected_plan_${memberKey}`) || 'Muscle Pro';
+      const durationDays = planName === 'Muscle Elite' ? 365 : planName === 'Muscle Pro' ? 180 : 30;
+      if (purchaseDateStr) {
+        const purchaseDate = new Date(purchaseDateStr);
+        const expiryDate = new Date(purchaseDate.getTime() + durationDays * 24 * 60 * 60 * 1000);
+        const diff = Math.ceil((expiryDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+        return Math.max(0, diff);
+      }
+    } catch (e) {}
+    return 30;
+  });
+  const [trainerDaysLeft, setTrainerDaysLeft] = useState(() => {
+    try {
+      const purchaseDateStr = localStorage.getItem(`apex_trainer_paid_date_${memberKey}`);
+      const pkg = localStorage.getItem(`apex_trainer_package_${memberKey}`) || 'monthly';
+      const durationDays = pkg === '6month' ? 180 : pkg === '3month' ? 90 : 30;
+      if (purchaseDateStr) {
+        const purchaseDate = new Date(purchaseDateStr);
+        const expiryDate = new Date(purchaseDate.getTime() + durationDays * 24 * 60 * 60 * 1000);
+        const diff = Math.ceil((expiryDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+        return Math.max(0, diff);
+      }
+    } catch (e) {}
+    return 30;
+  });
+  // Persistent member pass ID (generated once, tied to member key)
+  const [memberPassId] = useState(() => {
+    const stored = localStorage.getItem(`apex_pass_id_${memberKey}`);
+    if (stored) return stored;
+    const hash = memberKey.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    const newId = `MEM-${(10000 + (hash % 89999)).toString().padStart(5, '0')}`;
+    localStorage.setItem(`apex_pass_id_${memberKey}`, newId);
+    return newId;
+  });
+  // Dynamic membership expiry date
+  const membershipExpiryDate = (() => {
+    try {
+      const purchaseDateStr = localStorage.getItem(`apex_membership_paid_date_${memberKey}`);
+      const planName = membershipTier || localStorage.getItem(`apex_selected_plan_${memberKey}`) || 'Muscle Pro';
+      const durationDays = planName === 'Muscle Elite' ? 365 : planName === 'Muscle Pro' ? 180 : 30;
+      if (purchaseDateStr) {
+        const expiryDate = new Date(new Date(purchaseDateStr).getTime() + durationDays * 24 * 60 * 60 * 1000);
+        return expiryDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      }
+    } catch (e) {}
+    return profileData?.membershipExpiry || new Date(Date.now() + daysLeft * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  })();
+  // Dynamic membership expiry in card format MM/YY
+  const membershipExpiryCardFormat = (() => {
+    try {
+      const purchaseDateStr = localStorage.getItem(`apex_membership_paid_date_${memberKey}`);
+      const planName = membershipTier || localStorage.getItem(`apex_selected_plan_${memberKey}`) || 'Muscle Pro';
+      const durationDays = planName === 'Muscle Elite' ? 365 : planName === 'Muscle Pro' ? 180 : 30;
+      if (purchaseDateStr) {
+        const expiryDate = new Date(new Date(purchaseDateStr).getTime() + durationDays * 24 * 60 * 60 * 1000);
+        const m = String(expiryDate.getMonth() + 1).padStart(2, '0');
+        const d = String(expiryDate.getDate()).padStart(2, '0');
+        const y = expiryDate.getFullYear();
+        return `${m}/${d}/${y}`;
+      }
+    } catch (e) {}
+    return '12/31/2027';
+  })();
 
   // Chat states
   const [chatHistory, setChatHistory] = useState([]);
   const [chatInput, setChatInput] = useState('');
+  const [unreadCoachChatCount, setUnreadCoachChatCount] = useState(0);
   const chatHistoryRef = useRef(null);
+  const prevChatCountRef = useRef(0);
 
   // Dynamic Registered Trainers Selection State (MongoDB Atlas Linked)
   const [availableTrainers, setAvailableTrainers] = useState([]);
@@ -394,7 +508,41 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
     };
   };
 
+  const loadAssignedWorkoutPlan = () => {
+    try {
+      const memberNameKey = (currentUser?.name || '').toLowerCase().trim();
+      if (memberNameKey) {
+        const directSaved = localStorage.getItem(`apex_member_assigned_workout_${memberNameKey}`);
+        if (directSaved) {
+          return JSON.parse(directSaved);
+        }
+      }
+
+      const trainerMembers = JSON.parse(localStorage.getItem('apex_trainer_members') || '[]');
+      const memberRecord = trainerMembers.find((m) => m.name && currentUser?.name && m.name.toLowerCase().trim() === currentUser.name.toLowerCase().trim());
+      const assignedWorkoutName = memberRecord?.workout;
+
+      const trainerWorkouts = JSON.parse(localStorage.getItem('apex_trainer_workouts') || '[]');
+      if (assignedWorkoutName && assignedWorkoutName !== 'None') {
+        const match = trainerWorkouts.find((w) => w.name === assignedWorkoutName);
+        if (match) return match;
+      }
+
+      if (trainerWorkouts.length > 0) return trainerWorkouts[0];
+    } catch (err) {
+      console.warn("Workout lookup error:", err);
+    }
+
+    return {
+      name: 'Hypertrophy Split Alpha (Upper/Lower)',
+      target: 'Muscle Mass & Strength',
+      duration: '60 mins',
+      exercises: 'Bench Press (4x8), Barbell Rows (4x10), Overhead Press (3x10), Incline Dumbbell Flyes (3x12)'
+    };
+  };
+
   const [memberDietPlan, setMemberDietPlan] = useState(loadAssignedDietPlan);
+  const [memberWorkoutPlan, setMemberWorkoutPlan] = useState(loadAssignedWorkoutPlan);
 
   const handleOpenDietModal = () => {
     const latestPlan = loadAssignedDietPlan();
@@ -452,7 +600,9 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
   // Trainer Hire Payment Modal states
   const [trainerToHire, setTrainerToHire] = useState(null);
-  const [trainerPackage, setTrainerPackage] = useState('monthly');
+  const [trainerPackage, setTrainerPackage] = useState(() => {
+    return localStorage.getItem(`apex_trainer_package_${memberKey}`) || 'monthly';
+  });
   const [trainerPaymentMethod, setTrainerPaymentMethod] = useState('card');
   const [trainerCardName, setTrainerCardName] = useState('');
   const [trainerCardNum, setTrainerCardNum] = useState('');
@@ -525,6 +675,11 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
           localStorage.setItem(`apex_selected_trainer_${memberKey}`, JSON.stringify(hiredTrainer));
           setIsTrainerPaid(true);
           localStorage.setItem(`apex_trainer_paid_${memberKey}`, 'true');
+          localStorage.setItem(`apex_trainer_paid_date_${memberKey}`, new Date().toISOString());
+          localStorage.setItem(`apex_trainer_package_${memberKey}`, trainerPackage);
+          // Recompute trainer days left
+          const pkgDays = trainerPackage === '6month' ? 180 : trainerPackage === '3month' ? 90 : 30;
+          setTrainerDaysLeft(pkgDays);
           setTrainerTabMode('assigned');
 
           try {
@@ -571,8 +726,6 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
             cancelButtonText: '💬 Connect & Chat with Coach',
             confirmButtonColor: '#ff5e00',
             cancelButtonColor: '#2563eb',
-            background: '#0d0d14',
-            color: '#fff',
             customClass: {
               popup: 'apex-swal-custom'
             }
@@ -615,13 +768,11 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
     CustomSwal.fire({
       title: 'Confirm Coach Switch 🔄',
-      html: `<span style="color:#fff;">Are you sure you want to switch your Personal Coach to <strong>${trainer.name}</strong>?</span>`,
+      html: `<span>Are you sure you want to switch your Personal Coach to <strong>${trainer.name}</strong>?</span>`,
       icon: 'question',
       showCancelButton: true,
       confirmButtonText: 'Yes, Switch Coach',
       cancelButtonText: 'Cancel',
-      background: '#0d0d14',
-      color: '#fff',
       confirmButtonColor: '#c6ff00',
       cancelButtonColor: '#ff3e6c'
     }).then(async (result) => {
@@ -641,11 +792,9 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
         CustomSwal.fire({
           icon: 'success',
           title: 'Coach Switched! 🎉',
-          html: `<span style="color:#fff;"><strong>${trainer.name}</strong> is now your assigned Personal Coach.</span>`,
+          html: `<span><strong>${trainer.name}</strong> is now your assigned Personal Coach.</span>`,
           timer: 2000,
-          showConfirmButton: false,
-          background: '#0d0d14',
-          color: '#fff'
+          showConfirmButton: false
         });
       }
     });
@@ -999,32 +1148,38 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
       if (invoices) setBillingInvoices(invoices);
 
       // 3. Trainer, Chat & Dispatched Schedules
-      const activeMemberName = profileData?.name || currentUser?.name || 'Ethan Hunt';
+      const activeMemberName = profileData?.name || currentUser?.name || 'Athlete';
+      const activeUserEmail = currentUser?.email || currentUser?.sub || profileData?.email || '';
+      const coachName = selectedTrainer?.name || '';
 
       const syncMemberChat = async () => {
-        let localSaved = [];
         try {
-          localSaved = JSON.parse(localStorage.getItem('apex_trainer_chat_history') || '[]');
+          const res = await memberApi.getChatHistory(activeMemberName, activeUserEmail, coachName);
+          if (res && res.success && Array.isArray(res.data)) {
+            setChatHistory(res.data);
+            if (res.unreadCount !== undefined) {
+              setUnreadCoachChatCount(res.unreadCount);
+            }
+            if (res.data.length > prevChatCountRef.current && prevChatCountRef.current > 0) {
+              const latest = res.data[res.data.length - 1];
+              if (latest && latest.sender === 'coach') {
+                CustomSwal.fire({
+                  toast: true,
+                  position: 'top-end',
+                  showConfirmButton: false,
+                  timer: 4500,
+                  timerProgressBar: true,
+                  icon: 'info',
+                  title: `💬 New Message from ${coachName || 'Coach'}`,
+                  text: latest.text,
+                  background: '#121319',
+                  color: '#fff'
+                });
+              }
+            }
+            prevChatCountRef.current = res.data.length;
+          }
         } catch (e) {}
-
-        let remoteChat = [];
-        try {
-          const res = await memberApi.getChatHistory(activeMemberName);
-          if (res && Array.isArray(res)) remoteChat = res;
-        } catch (e) {}
-
-        const map = new Map();
-        [...localSaved, ...remoteChat].forEach((item) => {
-          if (item && item.id) map.set(item.id, item);
-          else if (item && item.text) map.set(item.text + (item.time || ''), item);
-        });
-
-        const combined = Array.from(map.values());
-        const filteredForMember = combined.filter((m) =>
-          !m.memberName || m.memberName.toLowerCase() === activeMemberName.toLowerCase()
-        );
-
-        setChatHistory(filteredForMember);
       };
 
       await syncMemberChat();
@@ -1032,8 +1187,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
       // 4. Attendance
       try {
-        const userEmail = currentUser?.email || currentUser?.sub || profileData?.email || 'gkeerthan583@gmail.com';
-        const attStatus = await memberApi.getAttendanceStatus(userEmail);
+        const attStatus = await memberApi.getAttendanceStatus(activeUserEmail);
         if (attStatus) {
           setIsCheckedIn(attStatus.isCheckedIn || false);
           setCheckInTime(attStatus.checkInTime || '');
@@ -1042,7 +1196,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
           if (attStatus.totalHoursLogged) setTotalHoursLogged(attStatus.totalHoursLogged);
         }
 
-        const attHistory = await memberApi.getAttendanceHistory(userEmail, selectedAttMonth);
+        const attHistory = await memberApi.getAttendanceHistory(activeUserEmail, selectedAttMonth);
         if (attHistory) {
           if (Array.isArray(attHistory.records)) setAttendanceRecords(attHistory.records);
           if (Array.isArray(attHistory.sessions)) setSessions(attHistory.sessions);
@@ -1056,7 +1210,6 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
       }
 
       // 5. Member Profile Synchronization
-      const userEmail = currentUser?.email || currentUser?.sub || '';
       let loadedProfile = null;
 
       // First check local storage by user-specific key
@@ -1072,7 +1225,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
       if (!loadedProfile) {
         const registeredUsers = JSON.parse(localStorage.getItem('apex_registered_users') || '[]');
         const registeredUser = registeredUsers.find(
-          (u) => u.email && u.email.toLowerCase() === userEmail.toLowerCase()
+          (u) => u.email && u.email.toLowerCase() === activeUserEmail.toLowerCase()
         );
         if (registeredUser) {
           loadedProfile = sanitizeProfile(registeredUser, currentUser);
@@ -1099,34 +1252,61 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
     const interval = setInterval(async () => {
       loadMemberSchedules();
-      const activeMemberName = profileData?.name || currentUser?.name || 'Ethan Hunt';
-      let localSaved = [];
+      const activeMemberName = profileData?.name || currentUser?.name || 'Athlete';
+      const userEmail = currentUser?.email || currentUser?.sub || profileData?.email || '';
+      const coachName = selectedTrainer?.name || '';
+
+      // Live update member attendance from backend/trainer entries
       try {
-        localSaved = JSON.parse(localStorage.getItem('apex_trainer_chat_history') || '[]');
+        if (userEmail) {
+          const attStatus = await memberApi.getAttendanceStatus(userEmail);
+          if (attStatus) {
+            setIsCheckedIn(attStatus.isCheckedIn || false);
+            setCheckInTime(attStatus.checkInTime || '');
+            if (attStatus.streakDays !== undefined) setAttendanceStreak(attStatus.streakDays);
+            if (attStatus.attendanceRate !== undefined) setAttendanceRate(attStatus.attendanceRate);
+            if (attStatus.totalHoursLogged) setTotalHoursLogged(attStatus.totalHoursLogged);
+          }
+          const attHistory = await memberApi.getAttendanceHistory(userEmail, selectedAttMonth);
+          if (attHistory && Array.isArray(attHistory.records)) {
+            setAttendanceRecords(attHistory.records);
+            if (Array.isArray(attHistory.sessions)) setSessions(attHistory.sessions);
+            if (Array.isArray(attHistory.activeDaysInMonth)) setActiveDays(attHistory.activeDaysInMonth);
+          }
+        }
       } catch (e) {}
 
-      let remoteChat = [];
       try {
-        const res = await memberApi.getChatHistory(activeMemberName);
-        if (res && Array.isArray(res)) remoteChat = res;
+        const res = await memberApi.getChatHistory(activeMemberName, userEmail, coachName);
+        if (res && res.success && Array.isArray(res.data)) {
+          setChatHistory(res.data);
+          if (res.unreadCount !== undefined) {
+            setUnreadCoachChatCount(res.unreadCount);
+          }
+          if (res.data.length > prevChatCountRef.current && prevChatCountRef.current > 0) {
+            const latest = res.data[res.data.length - 1];
+            if (latest && latest.sender === 'coach') {
+              CustomSwal.fire({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 4500,
+                timerProgressBar: true,
+                icon: 'info',
+                title: `💬 New Message from ${coachName || 'Coach'}`,
+                text: latest.text,
+                background: '#121319',
+                color: '#fff'
+              });
+            }
+          }
+          prevChatCountRef.current = res.data.length;
+        }
       } catch (e) {}
-
-      const map = new Map();
-      [...localSaved, ...remoteChat].forEach((item) => {
-        if (item && item.id) map.set(item.id, item);
-        else if (item && item.text) map.set(item.text + (item.time || ''), item);
-      });
-
-      const combined = Array.from(map.values());
-      const filteredForMember = combined.filter((m) =>
-        !m.memberName || m.memberName.toLowerCase() === activeMemberName.toLowerCase()
-      );
-
-      setChatHistory(filteredForMember);
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [memberKey, currentUser]);
+  }, [memberKey, currentUser, selectedTrainer?.name]);
 
   // Refetch attendance when selected month changes
   useEffect(() => {
@@ -1469,65 +1649,65 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
   };
 
   const plans = {
+    'Muscle Core (Monthly)': {
+      price: 800.0,
+      name: 'Muscle Core (Monthly)',
+      level: 1,
+      period: 'month',
+      desc: 'Monthly membership plan - Gym floor access, locker access, complimentary Wi-Fi'
+    },
     'Muscle Core': {
       price: 800.0,
-      name: 'Muscle Core',
+      name: 'Muscle Core (Monthly)',
       level: 1,
       period: 'month',
       desc: 'Monthly membership plan - Gym floor access, locker access, complimentary Wi-Fi'
     },
     'MuSuLe Core': {
       price: 800.0,
-      name: 'Muscle Core',
+      name: 'Muscle Core (Monthly)',
       level: 1,
       period: 'month',
       desc: 'Monthly membership plan - Gym floor access, locker access, complimentary Wi-Fi'
     },
-    'MaSuLe Core': {
-      price: 800.0,
-      name: 'Muscle Core',
-      level: 1,
-      period: 'month',
-      desc: 'Monthly membership plan - Gym floor access, locker access, complimentary Wi-Fi'
+    'Muscle Pro (6-Month)': {
+      price: 3500.0,
+      name: 'Muscle Pro (6-Month)',
+      level: 2,
+      period: '6 months',
+      desc: '6 Month membership plan - All Core features, groups inclusion, sauna/cold plunges, nutrition check-ins'
     },
     'Muscle Pro': {
       price: 3500.0,
-      name: 'Muscle Pro',
+      name: 'Muscle Pro (6-Month)',
       level: 2,
       period: '6 months',
       desc: '6 Month membership plan - All Core features, groups inclusion, sauna/cold plunges, nutrition check-ins'
     },
     'MuSuLe Pro': {
       price: 3500.0,
-      name: 'Muscle Pro',
+      name: 'Muscle Pro (6-Month)',
       level: 2,
       period: '6 months',
       desc: '6 Month membership plan - All Core features, groups inclusion, sauna/cold plunges, nutrition check-ins'
     },
-    'MaSuLe Pro': {
-      price: 3500.0,
-      name: 'Muscle Pro',
-      level: 2,
-      period: '6 months',
-      desc: '6 Month membership plan - All Core features, groups inclusion, sauna/cold plunges, nutrition check-ins'
+    'Muscle Elite (Yearly)': {
+      price: 7500.0,
+      name: 'Muscle Elite (Yearly)',
+      level: 3,
+      period: 'year',
+      desc: 'Yearly pass membership plan - 24/7 VIP keycard access, unlimited guests, dedicated master coach'
     },
     'Muscle Elite': {
       price: 7500.0,
-      name: 'Muscle Elite',
+      name: 'Muscle Elite (Yearly)',
       level: 3,
       period: 'year',
       desc: 'Yearly pass membership plan - 24/7 VIP keycard access, unlimited guests, dedicated master coach'
     },
     'MuSuLe Elite': {
       price: 7500.0,
-      name: 'Muscle Elite',
-      level: 3,
-      period: 'year',
-      desc: 'Yearly pass membership plan - 24/7 VIP keycard access, unlimited guests, dedicated master coach'
-    },
-    'MaSuLe Elite': {
-      price: 7500.0,
-      name: 'Muscle Elite',
+      name: 'Muscle Elite (Yearly)',
       level: 3,
       period: 'year',
       desc: 'Yearly pass membership plan - 24/7 VIP keycard access, unlimited guests, dedicated master coach'
@@ -1600,6 +1780,13 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
           const newPlan = purchasedPlan.name;
           const planPrice = purchasedPlan.price;
           const txId = receipt?.receiptNumber || receipt?.paymentId || 'MH-RCP-' + Date.now();
+          // Persist purchase date for dynamic expiry computation
+          const purchaseIso = new Date().toISOString();
+          localStorage.setItem(`apex_membership_paid_date_${memberKey}`, purchaseIso);
+          localStorage.setItem(`apex_selected_plan_${memberKey}`, newPlan);
+          // Recompute days left
+          const durationDays = newPlan === 'Muscle Elite' ? 365 : newPlan === 'Muscle Pro' ? 180 : 30;
+          setDaysLeft(durationDays);
 
           const newInvoice = {
             txId,
@@ -1664,32 +1851,29 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
     const textToSend = chatInput.trim();
     if (!textToSend) return;
 
-    const currentMemberName = profileData?.name || currentUser?.name || 'Ethan Hunt';
+    const currentMemberName = profileData?.name || currentUser?.name || 'Athlete Member';
+    const userEmail = currentUser?.email || profileData?.email || '';
+    const coachName = selectedTrainer?.name || 'Coach';
     const now = new Date();
     const timeStr = now.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) + ', ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const userMessage = {
       id: `c-${Date.now()}`,
       memberName: currentMemberName,
+      clientEmail: userEmail,
+      coachName: coachName,
       sender: 'member',
       text: textToSend,
-      time: timeStr
+      time: timeStr,
+      read: false
     };
 
     setChatHistory((prev) => [...prev, userMessage]);
     setChatInput('');
-
-    // Persist to local storage for real-time trainer panel sync
-    try {
-      const savedChat = JSON.parse(localStorage.getItem('apex_trainer_chat_history') || '[]');
-      savedChat.push(userMessage);
-      localStorage.setItem('apex_trainer_chat_history', JSON.stringify(savedChat));
-    } catch (err) {
-      console.warn("Storage sync error:", err);
-    }
+    prevChatCountRef.current = prevChatCountRef.current + 1;
 
     // Backend sync
-    await memberApi.sendChatMessage(textToSend, currentMemberName);
+    await memberApi.sendChatMessage(textToSend, currentMemberName, userEmail, coachName);
   };
 
   // Schedule coaching session
@@ -1742,22 +1926,26 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
       days.push(
         <div
           key={i}
-          className="calendar-day"
-          title={active ? (isToday ? 'Checked in Today' : 'Attended Session') : 'Rest Day'}
+          className={`calendar-day ${active ? 'checked-in-active' : ''}`}
+          title={active ? (isToday ? `Day ${i} - Checked in Today` : `Day ${i} - Attended Session`) : `Day ${i} - Rest Day`}
           style={{
-            background: active ? 'rgba(198,255,0,0.1)' : 'rgba(255,255,255,0.01)',
-            border: active ? '1px solid var(--accent-volt)' : '1px solid var(--border-color)',
-            color: active ? 'var(--accent-volt)' : 'var(--text-dim)',
-            borderRadius: '4px',
-            padding: '0.4rem 0',
-            fontWeight: active ? 'bold' : 'normal',
+            background: active ? 'linear-gradient(135deg, #FF5E00 0%, #FF8700 100%)' : 'rgba(255,255,255,0.02)',
+            border: active ? 'none' : '1px solid var(--border-color)',
+            color: active ? '#ffffff' : 'var(--text-dim)',
+            borderRadius: '6px',
+            padding: '0.45rem 0',
+            fontWeight: active ? 900 : 500,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            minHeight: '28px'
+            minHeight: '32px',
+            fontSize: '0.78rem',
+            boxShadow: active ? '0 4px 14px rgba(255, 94, 0, 0.45)' : 'none',
+            transition: 'all 0.2s ease',
+            cursor: 'pointer'
           }}
         >
-          {active ? '✓' : i}
+          {active ? `✓ ${i}` : i}
         </div>
       );
     }
@@ -1954,8 +2142,35 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
             <div>
               {/* Quick Metrics Header Grid */}
               <div className="metrics-grid col-4" style={{ marginBottom: '1.8rem' }}>
+                {/* Metric 1: Active Membership */}
+                <div className="metric-card" style={{ cursor: 'pointer' }} onClick={() => onNavigateSubView && onNavigateSubView('membership')}>
+                  <div className="metric-icon" style={{ color: 'var(--accent-volt)', background: 'rgba(198,255,0,0.08)' }}>
+                    <span style={{ fontSize: '1.2rem' }}>🎟️</span>
+                  </div>
+                  <div className="metric-details">
+                    <h3 style={{ fontSize: '1.15rem' }}>{membershipTier}</h3>
+                    <p style={{ color: 'var(--accent-volt)', fontWeight: 700 }}>Active Pass • {daysLeft || 26}d Left</p>
+                  </div>
+                </div>
+
+                {/* Metric 2: Assigned Trainer */}
+                <div className="metric-card" style={{ cursor: 'pointer' }} onClick={() => onNavigateSubView && onNavigateSubView('trainer')}>
+                  <div className="metric-icon" style={{ color: 'var(--accent-cyan)', background: 'rgba(0,240,255,0.08)' }}>
+                    <span style={{ fontSize: '1.2rem' }}>🏋️‍♂️</span>
+                  </div>
+                  <div className="metric-details">
+                    <h3 style={{ fontSize: '1.1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {selectedTrainer?.name || 'Coach Marcus'}
+                    </h3>
+                    <p style={{ color: 'var(--accent-cyan)', fontWeight: 700 }}>
+                      {{ monthly: '1-Mo Coaching', '3month': '3-Mo Mentorship', '6month': '6-Mo VIP' }[trainerPackage] || 'Active Coaching'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Metric 3: Training Streak */}
                 <div className="metric-card">
-                  <div className="metric-icon" style={{ color: 'var(--accent-volt)', background: 'rgba(198,255,0,0.05)' }}>
+                  <div className="metric-icon" style={{ color: '#00ff66', background: 'rgba(0,255,102,0.08)' }}>
                     <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -1967,56 +2182,136 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                   </div>
                 </div>
 
+                {/* Metric 4: Biometric Profile */}
                 <div className="metric-card">
-                  <div className="metric-icon" style={{ color: 'var(--accent-cyan)', background: 'rgba(0,240,255,0.05)' }}>
-                    <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 6l3 1m0 0l-3 9a5 5 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5 5 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
-                    </svg>
-                  </div>
-                  <div className="metric-details">
-                    <h3>{profileData.weight || 'Not Set'}</h3>
-                    <p>Current Weight ({profileData.targetWeight || 'Target'} goal)</p>
-                  </div>
-                </div>
-
-                <div className="metric-card">
-                  <div className="metric-icon" style={{ color: '#00ff66', background: 'rgba(0,255,102,0.05)' }}>
+                  <div className="metric-icon" style={{ color: 'var(--accent-orange)', background: 'rgba(255,94,0,0.08)' }}>
                     <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
                     </svg>
                   </div>
                   <div className="metric-details">
-                    <h3>{isFaceRegistered ? 'Verified' : 'Pending'}</h3>
-                    <p>Biometric Face Profile</p>
-                  </div>
-                </div>
-
-                <div className="metric-card">
-                  <div className="metric-icon" style={{ color: '#ff3e6c', background: 'rgba(255,62,108,0.05)' }}>
-                    <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  </div>
-                  <div className="metric-details">
-                    <h3>{attendanceRate}%</h3>
-                    <p>Gym Attendance Rate</p>
+                    <h3>{isFaceRegistered ? 'Verified' : 'Active'}</h3>
+                    <p>Biometric Digital Pass</p>
                   </div>
                 </div>
               </div>
 
-              {/* 2x2 Information Grid */}
+              {/* Information Grid */}
               <div className="db-grid-row" style={{ gridTemplateColumns: '1fr 1fr', gap: '1.8rem' }}>
 
-                {/* CARD 1: PERSONAL INFORMATION */}
+                {/* CARD 1: ACTIVE MEMBERSHIP PLAN DETAILS */}
+                <div className="db-card" style={{ minHeight: 'auto', border: '1px solid var(--accent-volt)', background: 'linear-gradient(135deg, rgba(198, 255, 0, 0.02) 0%, rgba(20, 20, 26, 0.5) 100%)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
+                    <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <span style={{ fontSize: '1.3rem' }}>🎟️</span>
+                      Active Membership Pass
+                    </h4>
+                    <span className="status-badge paid" style={{ fontSize: '0.7rem' }}>● Valid Pass</span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem', marginTop: '1rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.6rem' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Pass ID</span>
+                      <strong style={{ color: 'var(--text-white)', fontSize: '0.88rem', fontFamily: 'monospace' }}>{memberPassId} (Biometric NFC)</strong>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.6rem' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Expiry Date</span>
+                      <span style={{ color: 'var(--text-white)', fontSize: '0.88rem' }}>
+                        {membershipExpiryDate} <strong style={{ color: 'var(--accent-volt)' }}>({daysLeft}d left)</strong>
+                      </span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.6rem' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Access Privileges</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem', lineHeight: 1.4 }}>
+                        {membershipTier === 'Muscle Elite'
+                          ? '24/7 VIP Access, Master Coach Sessions, Sauna/Cryo, Guest Passes'
+                          : membershipTier === 'Muscle Pro'
+                          ? 'Gym Floor, Sauna & Cryo, Group HIIT Classes, Nutrition Check-ins'
+                          : 'Unlimited Floor Access, Cardio Zone, Day Lockers, Wi-Fi'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Auto-Renewal</span>
+                      <span style={{ color: '#00ff66', fontSize: '0.85rem', fontWeight: 600 }}>{autoRenew ? 'Enabled (Auto-charge)' : 'Manual Renewal'}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="glow-btn"
+                    onClick={() => onNavigateSubView && onNavigateSubView('membership')}
+                    style={{ width: '100%', marginTop: '1.2rem', padding: '0.65rem', fontSize: '0.82rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', cursor: 'pointer' }}
+                  >
+                    <span>⚡</span> Manage & Upgrade Membership Pass →
+                  </button>
+                </div>
+
+                {/* CARD 2: ASSIGNED PERSONAL TRAINER DETAILS */}
+                <div className="db-card" style={{ minHeight: 'auto', border: '1px solid var(--accent-cyan)', background: 'linear-gradient(135deg, rgba(0, 240, 255, 0.02) 0%, rgba(20, 20, 26, 0.5) 100%)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
+                    <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <span style={{ fontSize: '1.3rem' }}>🏋️‍♂️</span>
+                      Personal Coach & Mentorship
+                    </h4>
+                    <span className="status-badge paid" style={{ background: 'rgba(0,240,255,0.1)', color: 'var(--accent-cyan)', borderColor: 'rgba(0,240,255,0.3)', fontSize: '0.7rem' }}>
+                      ● Coaching Active
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem', marginTop: '1rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.6rem' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Assigned Coach</span>
+                      <strong style={{ color: 'var(--accent-cyan)', fontSize: '0.95rem' }}>{selectedTrainer?.name || 'Coach Marcus Vance'}</strong>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.6rem' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Specialty</span>
+                      <span style={{ color: 'var(--text-white)', fontSize: '0.85rem' }}>{selectedTrainer?.specialty || 'Certified Strength & Performance Coach'}</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.6rem' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Active Package</span>
+                      <strong style={{ color: 'var(--text-white)', fontSize: '0.85rem' }}>
+                        {{ monthly: '1-Month Personal Coaching', '3month': '3-Month Mentorship', '6month': '6-Month VIP Elite' }[trainerPackage] || '1-Month Personal Coaching'}
+                      </strong>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.6rem' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Coach Email</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{selectedTrainer?.email || 'coach@apex.com'}</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Coaching Slot</span>
+                      <span style={{ color: trainerDaysLeft <= 7 ? '#ff9f00' : '#00ff66', fontSize: '0.85rem', fontWeight: 600 }}>Active ({trainerDaysLeft} Days Remaining)</span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.7rem', marginTop: '1.2rem' }}>
+                    <button
+                      type="button"
+                      className="outline-btn"
+                      onClick={() => onNavigateSubView && onNavigateSubView('trainer')}
+                      style={{ flex: 1, padding: '0.65rem', fontSize: '0.8rem', color: 'var(--accent-cyan)', borderColor: 'rgba(0,240,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', cursor: 'pointer' }}
+                    >
+                      <span>💬</span> Chat with Coach
+                    </button>
+                    <button
+                      type="button"
+                      className="glow-btn"
+                      onClick={() => onNavigateSubView && onNavigateSubView('trainer')}
+                      style={{ flex: 1, padding: '0.65rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', cursor: 'pointer' }}
+                    >
+                      <span>⚡</span> Manage Coaching →
+                    </button>
+                  </div>
+                </div>
+
+                {/* CARD 3: PERSONAL INFORMATION */}
                 <div className="db-card" style={{ minHeight: 'auto' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
                     <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                       <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="var(--accent-volt)" strokeWidth="2">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                       </svg>
-                      Personal Details
+                      Personal Contact Details
                     </h4>
-                    <span className="status-badge paid" style={{ fontSize: '0.7rem' }}>Active Member</span>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1.2rem' }}>
@@ -2047,7 +2342,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                   </div>
                 </div>
 
-                {/* CARD 2: PHYSICAL METRICS & FITNESS GOALS */}
+                {/* CARD 4: PHYSICAL METRICS & FITNESS GOALS */}
                 <div className="db-card" style={{ minHeight: 'auto' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
                     <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -2079,13 +2374,13 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                       <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>{profileData.fitnessGoal || 'Hypertrophy & Max Strength'}</strong>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr' }}>
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Assigned Coach</span>
-                      <strong style={{ color: 'var(--accent-cyan)', fontSize: '0.9rem' }}>Coach Marcus Vance (CSCS)</strong>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Biometric Sync</span>
+                      <strong style={{ color: '#00ff66', fontSize: '0.85rem' }}>{isFaceRegistered ? 'Face ID Verified ✓' : 'Active Profile'}</strong>
                     </div>
                   </div>
                 </div>
 
-                {/* CARD 3: EMERGENCY & HEALTH */}
+                {/* CARD 5: EMERGENCY & HEALTH */}
                 <div className="db-card" style={{ minHeight: 'auto' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
                     <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -2108,7 +2403,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                   </div>
                 </div>
 
-                {/* CARD 4: ATHLETE BIO & SECURITY */}
+                {/* CARD 6: ATHLETE BIO & SECURITY */}
                 <div className="db-card" style={{ minHeight: 'auto' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
                     <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -2453,11 +2748,11 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
             })
             .map((alt) => {
               const typeInfo = {
-                holiday: { bg: 'rgba(255, 62, 108, 0.08)', border: '#ff3e6c', color: '#ff3e6c', label: 'Holiday Notice' },
-                event: { bg: 'rgba(0, 240, 255, 0.08)', border: '#00f0ff', color: '#00f0ff', label: 'Club Event' },
-                maintenance: { bg: 'rgba(255, 159, 0, 0.08)', border: '#ff9f00', color: '#ff9f00', label: 'Maintenance' },
-                general: { bg: 'rgba(255, 255, 255, 0.04)', border: 'rgba(255,255,255,0.1)', color: 'var(--accent-volt)', label: 'Announcement' }
-              }[alt.type] || { bg: 'rgba(255, 255, 255, 0.04)', border: 'rgba(255,255,255,0.1)', color: 'var(--accent-volt)', label: 'Announcement' };
+                holiday: { bg: 'rgba(255, 62, 108, 0.08)', border: '#ff3e6c', color: '#ff3e6c', label: '🏖️ Holiday Notice' },
+                event: { bg: 'rgba(0, 240, 255, 0.08)', border: '#00f0ff', color: '#00f0ff', label: '🏆 Club Event' },
+                maintenance: { bg: 'rgba(255, 159, 0, 0.08)', border: '#ff9f00', color: '#ff9f00', label: '⚠️ Maintenance' },
+                general: { bg: 'rgba(255, 94, 0, 0.08)', border: 'var(--accent-volt, #ff5e00)', color: 'var(--accent-volt, #ff5e00)', label: '📢 Announcement' }
+              }[alt.type] || { bg: 'rgba(255, 94, 0, 0.08)', border: 'var(--accent-volt, #ff5e00)', color: 'var(--accent-volt, #ff5e00)', label: '📢 Announcement' };
 
               return (
                 <div key={alt.id} style={{
@@ -2469,24 +2764,25 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  gap: '1rem'
+                  gap: '1rem',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.05)'
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap' }}>
                     <span style={{
-                      fontSize: '0.68rem',
+                      fontSize: '0.72rem',
                       fontWeight: 800,
                       textTransform: 'uppercase',
                       color: typeInfo.color,
-                      padding: '0.2rem 0.5rem',
-                      background: 'rgba(0,0,0,0.35)',
+                      padding: '0.2rem 0.55rem',
+                      background: 'rgba(255, 255, 255, 0.1)',
                       borderRadius: '4px',
                       border: `1px solid ${typeInfo.border}`,
                       letterSpacing: '0.04em'
                     }}>
                       {typeInfo.label}
                     </span>
-                    <span style={{ color: 'var(--text-white)', fontWeight: 700, fontSize: '0.88rem' }}>{alt.title}</span>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>— {alt.message}</span>
+                    <span style={{ color: 'var(--text-white)', fontWeight: 800, fontSize: '0.88rem' }}>{alt.title}</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem', wordBreak: 'break-word' }}>— {alt.message}</span>
                   </div>
                   <button
                     type="button"
@@ -3148,10 +3444,10 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                         .map((inv, idx) => (
                           <tr key={idx}>
                             <td style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--accent-cyan)' }}>{inv.txId}</td>
-                            <td>{inv.plan}</td>
-                            <td><strong>₹{inv.amount.toFixed(2)}</strong></td>
-                            <td><span className="status-badge paid">{inv.status}</span></td>
-                            <td>{inv.date}</td>
+                            <td style={{ color: 'var(--text-white)' }}>{inv.plan}</td>
+                            <td><strong style={{ color: 'var(--text-white)' }}>₹{Number(inv.amount || 0).toFixed(2)}</strong></td>
+                            <td><span className="status-badge paid">{(inv.status || 'PAID').toUpperCase()}</span></td>
+                            <td style={{ color: 'var(--text-muted)' }}>{inv.date || 'Recent'}</td>
                           </tr>
                         ))
                     )}
@@ -3208,6 +3504,11 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                           {selectedTrainer.specialty || 'Certified Strength & Performance Coach'}
                         </span>
                       </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.45rem 0.8rem', background: 'rgba(0, 240, 255, 0.08)', border: '1px solid rgba(0, 240, 255, 0.25)', borderRadius: '6px', fontSize: '0.74rem', color: 'var(--accent-cyan)', marginBottom: '1rem' }}>
+                      <span>⚡ <strong>{{ monthly: '1-Month Personal Coaching', '3month': '3-Month Mentorship', '6month': '6-Month VIP Elite' }[trainerPackage] || '1-Month Personal Coaching'}</strong></span>
+                      <span style={{ fontWeight: 800, background: 'rgba(0, 240, 255, 0.15)', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>24 Days Remaining</span>
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '1.5rem' }}>
@@ -3280,7 +3581,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
             !showTrainerSelection ? (
               /* GATE STEP 1: ONE FORM WITH ONE BUTTON "SELECT YOUR TRAINER" */
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', textAlign: 'center', padding: '2rem' }}>
-                <div className="db-card" style={{ maxWidth: '500px', width: '100%', padding: '3rem', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'rgba(14,14,18,0.85)', boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)' }}>
+                <div className="db-card" style={{ maxWidth: '520px', width: '100%', padding: '3rem 2.5rem', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'var(--bg-card)' }}>
                   <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-volt) 0%, var(--accent-cyan) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', margin: '0 auto 1.5rem auto', boxShadow: 'var(--glow-volt)' }}>
                     🏋️‍♂️
                   </div>
@@ -3382,6 +3683,68 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
           ) : (
             /* PAID FLOW: DEDICATED COACH VIEWS - 3-COLUMN LAYOUT */
             <div>
+              {/* ACTIVE COACHING STATUS & EXPIRATION REMINDER BANNER */}
+              <div className="orders-hero-banner" style={{ marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.2rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(0, 240, 255, 0.12)', border: '1px solid var(--accent-cyan)', color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', boxShadow: '0 0 15px rgba(0, 240, 255, 0.2)' }}>
+                      🏋️‍♂️
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                        <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.25rem', color: 'var(--text-white)', margin: 0, textTransform: 'uppercase' }}>
+                          Active Coach: {selectedTrainer?.name || 'Assigned Coach'}
+                        </h3>
+                        <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '0.15rem 0.55rem', borderRadius: '20px', background: 'rgba(0, 255, 102, 0.12)', color: '#00ff66', border: '1px solid rgba(0, 255, 102, 0.3)' }}>
+                          ● COACHING ACTIVE
+                        </span>
+                      </div>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: '0.25rem 0 0 0' }}>
+                        Package: <strong style={{ color: 'var(--text-white)' }}>{{ monthly: '1-Month Personal Coaching', '3month': '3-Month Transformation', '6month': '6-Month VIP Elite' }[trainerPackage] || '1-Month Personal Coaching'}</strong> • <span style={{ color: trainerDaysLeft <= 7 ? '#ff9f00' : 'var(--accent-cyan)', fontWeight: 700 }}>{trainerDaysLeft} Days Remaining</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="glow-btn"
+                      onClick={() => {
+                        if (selectedTrainer) {
+                          setTrainerToHire(selectedTrainer);
+                        }
+                      }}
+                      style={{ padding: '0.55rem 1.1rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700 }}
+                    >
+                      <span>🔄</span> Renew / Extend Package
+                    </button>
+
+                    <button
+                      type="button"
+                      className="outline-btn"
+                      onClick={() => {
+                        if (selectedTrainer) {
+                          setTrainerPackage('6month');
+                          setTrainerToHire(selectedTrainer);
+                        }
+                      }}
+                      style={{ padding: '0.55rem 1.1rem', fontSize: '0.8rem', color: 'var(--accent-cyan)', borderColor: 'rgba(0, 240, 255, 0.4)', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700 }}
+                    >
+                      <span>⚡</span> Upgrade Package (VIP 6-Mo)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Coaching Expiry Reminder */}
+                <div style={{ marginTop: '1rem', paddingTop: '0.8rem', borderTop: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem', fontSize: '0.78rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-cyan)' }}>
+                    <span>⏳</span>
+                    <span><strong>Coaching Reminder:</strong> Your 1-on-1 coaching slot with {selectedTrainer?.name} is active. Priority calendar booking & real-time chat are enabled.</span>
+                  </div>
+                  <span style={{ color: 'var(--text-dim)', fontSize: '0.72rem' }}>Coach ID: {selectedTrainer?.userId || 'TRN-7788'}</span>
+                </div>
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr 0.9fr', gap: '1.5rem', alignItems: 'stretch' }}>
                 
                 {/* COLUMN 1: ASSIGNED PERSONAL COACH DETAILS */}
@@ -3430,9 +3793,16 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
                 {/* COLUMN 2: TRAINER COMMUNICATION LOG */}
                 <div className="db-card flex-card" style={{ minHeight: 'auto', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <div>
-                    <h4 style={{ margin: 0, textTransform: 'uppercase', fontFamily: 'var(--font-display)', fontWeight: 800 }}>Trainer Communication Log</h4>
-                    <p className="card-subtitle" style={{ margin: '0.2rem 0 1.2rem 0', fontSize: '0.8rem' }}>Direct chat channel with {selectedTrainer?.name || 'Coach'}</p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+                    <div>
+                      <h4 style={{ margin: 0, textTransform: 'uppercase', fontFamily: 'var(--font-display)', fontWeight: 800 }}>Trainer Communication Log</h4>
+                      <p className="card-subtitle" style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem' }}>
+                        Direct chat channel with {selectedTrainer?.name || 'Assigned Coach'}
+                      </p>
+                    </div>
+                    <span style={{ fontSize: '0.7rem', background: 'rgba(0, 255, 102, 0.1)', color: '#00ff66', border: '1px solid rgba(0, 255, 102, 0.3)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 700 }}>
+                      ● Live Sync
+                    </span>
                   </div>
 
                   <div className="coach-portal-widget" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '380px' }}>
@@ -3440,42 +3810,52 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                       className="coach-chat-box"
                       id="subview-chat-history"
                       ref={chatHistoryRef}
-                      style={{ flexGrow: 1, overflowY: 'auto', background: 'rgba(0,0,0,0.15)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.8rem', marginBottom: '1rem' }}
+                      style={{ flexGrow: 1, overflowY: 'auto', background: 'rgba(0,0,0,0.25)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.8rem', marginBottom: '1rem' }}
                     >
                       {chatHistory.length === 0 ? (
                         <div style={{ textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.85rem', padding: '2rem 1.2rem', margin: 'auto' }}>
-                          No chat history with {selectedTrainer?.name || 'Coach'}. Type below to send a direct message.
+                          💬 No chat history with <strong>{selectedTrainer?.name || 'Coach'}</strong> yet.<br />
+                          Type below to send a direct message to your coach!
                         </div>
                       ) : (
                         chatHistory.map((bubble, idx) => {
                           const isScheduleMsg = bubble.text && (bubble.text.includes('[SCHEDULE DISPATCH]') || bubble.text.includes('Scheduled for'));
+                          const isMember = bubble.sender === 'member';
                           return (
                             <div
-                              key={idx}
+                              key={bubble.id || idx}
                               className={`chat-bubble ${bubble.sender}`}
                               style={{
-                                alignSelf: bubble.sender === 'member' ? 'flex-end' : 'flex-start',
+                                alignSelf: isMember ? 'flex-end' : 'flex-start',
                                 maxWidth: isScheduleMsg ? '92%' : '85%',
-                                background: isScheduleMsg ? 'rgba(0, 240, 255, 0.08)' : (bubble.sender === 'member' ? 'var(--accent-volt)' : 'rgba(255,255,255,0.03)'),
-                                color: bubble.sender === 'member' ? 'var(--bg-black)' : 'var(--text-white)',
-                                border: isScheduleMsg ? '1px solid var(--accent-cyan)' : (bubble.sender === 'member' ? 'none' : '1px solid var(--border-color)'),
-                                padding: '0.8rem 1rem',
-                                borderRadius: bubble.sender === 'member' ? '8px 8px 0 8px' : '8px 8px 8px 0',
+                                background: isScheduleMsg
+                                  ? 'rgba(0, 240, 255, 0.08)'
+                                  : (isMember ? 'var(--accent-volt)' : 'rgba(255,255,255,0.06)'),
+                                color: isMember ? 'var(--bg-black)' : 'var(--text-white)',
+                                border: isScheduleMsg
+                                  ? '1px solid var(--accent-cyan)'
+                                  : (isMember ? 'none' : '1px solid rgba(255,255,255,0.12)'),
+                                padding: '0.75rem 1rem',
+                                borderRadius: isMember ? '12px 12px 0 12px' : '12px 12px 12px 0',
                                 fontSize: '0.85rem',
                                 lineHeight: 1.4,
-                                boxShadow: isScheduleMsg ? '0 0 15px rgba(0, 240, 255, 0.15)' : 'none'
+                                boxShadow: isScheduleMsg ? '0 0 15px rgba(0, 240, 255, 0.15)' : '0 2px 8px rgba(0,0,0,0.2)'
                               }}
                             >
-                              {isScheduleMsg && (
+                              {isScheduleMsg ? (
                                 <div style={{ fontSize: '0.7rem', color: 'var(--accent-cyan)', fontWeight: 800, textTransform: 'uppercase', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                   <span>📅 TRAINER SCHEDULE DISPATCH</span>
                                   <span style={{ fontSize: '0.62rem', background: 'rgba(0, 240, 255, 0.2)', padding: '0.1rem 0.4rem', borderRadius: '3px' }}>SYNCED</span>
                                 </div>
+                              ) : (
+                                <div style={{ fontSize: '0.68rem', fontWeight: 800, opacity: 0.8, marginBottom: '0.2rem', color: isMember ? '#000' : 'var(--accent-cyan)' }}>
+                                  {isMember ? 'You (Athlete)' : (selectedTrainer?.name || bubble.coachName || 'Coach')}
+                                </div>
                               )}
-                              <p style={{ fontWeight: bubble.sender === 'member' ? 600 : 'normal', margin: 0 }}>
+                              <p style={{ fontWeight: isMember ? 600 : 'normal', margin: 0 }}>
                                 {bubble.text}
                               </p>
-                              <span style={{ display: 'block', fontSize: '0.65rem', color: bubble.sender === 'member' ? 'rgba(8,8,10,0.6)' : 'var(--text-dim)', marginTop: '0.4rem', textAlign: 'right' }}>
+                              <span style={{ display: 'block', fontSize: '0.62rem', color: isMember ? 'rgba(8,8,10,0.65)' : 'var(--text-dim)', marginTop: '0.35rem', textAlign: 'right' }}>
                                 {bubble.time}
                               </span>
                             </div>
@@ -3594,8 +3974,8 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                   left: 0,
                   width: '100%',
                   height: '100%',
-                  background: 'rgba(5, 5, 8, 0.88)',
-                  backdropFilter: 'blur(10px)',
+                  background: 'rgba(0, 0, 0, 0.65)',
+                  backdropFilter: 'blur(8px)',
                   zIndex: 999999,
                   display: 'flex',
                   alignItems: 'center',
@@ -3603,9 +3983,9 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                   padding: '1rem'
                 }}>
                   <div style={{
-                    background: '#0d0d14',
-                    border: '1px solid var(--accent-volt)',
-                    boxShadow: '0 0 35px rgba(198, 255, 0, 0.2)',
+                    background: 'var(--bg-card, #ffffff)',
+                    border: '1px solid var(--border-color)',
+                    boxShadow: '0 20px 50px rgba(0, 0, 0, 0.3), var(--glow-volt)',
                     borderRadius: '14px',
                     width: '100%',
                     maxWidth: '650px',
@@ -3626,7 +4006,8 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                         border: 'none',
                         color: 'var(--text-muted)',
                         fontSize: '1.8rem',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        lineHeight: 1
                       }}
                     >
                       &times;
@@ -3647,20 +4028,20 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                     {memberDietPlan ? (
                       <div style={{ marginTop: '1.2rem' }}>
                         {/* Plan Title & Goal Badge */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '0.9rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '1.2rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-dark, rgba(255,255,255,0.03))', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '1.2rem' }}>
                           <div>
                             <h4 style={{ color: 'var(--text-white)', fontWeight: 800, fontSize: '1.1rem', margin: 0, textTransform: 'uppercase' }}>
                               {memberDietPlan.name}
                             </h4>
-                            <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '0.2rem 0 0 0' }}>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0.3rem 0 0 0', lineHeight: 1.4 }}>
                               {memberDietPlan.desc}
                             </p>
                           </div>
-                          <div style={{ textAlign: 'right' }}>
+                          <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '1rem' }}>
                             <span style={{ fontSize: '0.7rem', background: 'rgba(198,255,0,0.12)', color: 'var(--accent-volt)', border: '1px solid var(--accent-volt)', padding: '0.2rem 0.6rem', borderRadius: '4px', fontWeight: 800, textTransform: 'uppercase' }}>
                               {memberDietPlan.goalCategory || 'Custom'}
                             </span>
-                            <div style={{ color: 'var(--accent-cyan)', fontSize: '0.95rem', fontWeight: 800, marginTop: '0.3rem' }}>
+                            <div style={{ color: 'var(--accent-cyan)', fontSize: '1rem', fontWeight: 800, marginTop: '0.3rem' }}>
                               {memberDietPlan.calories}
                             </div>
                           </div>
@@ -3668,17 +4049,17 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
                         {/* Macros Distribution */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.8rem', marginBottom: '1.5rem' }}>
-                          <div style={{ background: '#12121e', padding: '0.8rem', borderRadius: '8px', border: '1px solid rgba(255,62,108,0.3)', textAlign: 'center' }}>
-                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>PROTEIN</span>
-                            <strong style={{ color: '#ff3e6c', fontSize: '1.2rem' }}>{memberDietPlan.protein}g</strong>
+                          <div style={{ background: 'var(--bg-dark, rgba(255,255,255,0.03))', padding: '0.9rem', borderRadius: '8px', border: '1px solid rgba(255,62,108,0.3)', textAlign: 'center' }}>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', fontWeight: 700 }}>PROTEIN</span>
+                            <strong style={{ color: '#ff3e6c', fontSize: '1.25rem' }}>{memberDietPlan.protein}g</strong>
                           </div>
-                          <div style={{ background: '#12121e', padding: '0.8rem', borderRadius: '8px', border: '1px solid rgba(198,255,0,0.3)', textAlign: 'center' }}>
-                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>CARBS</span>
-                            <strong style={{ color: 'var(--accent-volt)', fontSize: '1.2rem' }}>{memberDietPlan.carbs}g</strong>
+                          <div style={{ background: 'var(--bg-dark, rgba(255,255,255,0.03))', padding: '0.9rem', borderRadius: '8px', border: '1px solid rgba(198,255,0,0.3)', textAlign: 'center' }}>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', fontWeight: 700 }}>CARBS</span>
+                            <strong style={{ color: 'var(--accent-volt)', fontSize: '1.25rem' }}>{memberDietPlan.carbs}g</strong>
                           </div>
-                          <div style={{ background: '#12121e', padding: '0.8rem', borderRadius: '8px', border: '1px solid rgba(0,240,255,0.3)', textAlign: 'center' }}>
-                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>FATS</span>
-                            <strong style={{ color: 'var(--accent-cyan)', fontSize: '1.2rem' }}>{memberDietPlan.fats}g</strong>
+                          <div style={{ background: 'var(--bg-dark, rgba(255,255,255,0.03))', padding: '0.9rem', borderRadius: '8px', border: '1px solid rgba(0,240,255,0.3)', textAlign: 'center' }}>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', fontWeight: 700 }}>FATS</span>
+                            <strong style={{ color: 'var(--accent-cyan)', fontSize: '1.25rem' }}>{memberDietPlan.fats}g</strong>
                           </div>
                         </div>
 
@@ -3695,16 +4076,16 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                             { key: 'postWorkout', title: '🥤 Post Workout (Recovery)', items: memberDietPlan.mealsSchedule?.postWorkout },
                             { key: 'night', title: '🌙 Night (Dinner / Bedtime)', items: memberDietPlan.mealsSchedule?.night }
                           ].map((slot) => (
-                            <div key={slot.key} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.8rem' }}>
-                              <strong style={{ color: 'var(--accent-cyan)', fontSize: '0.8rem', display: 'block', marginBottom: '0.4rem' }}>
+                            <div key={slot.key} style={{ background: 'var(--bg-dark, rgba(255,255,255,0.02))', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.9rem' }}>
+                              <strong style={{ color: 'var(--accent-orange, var(--accent-volt))', fontSize: '0.85rem', display: 'block', marginBottom: '0.45rem', fontWeight: 800 }}>
                                 {slot.title}
                               </strong>
                               {(!slot.items || slot.items.length === 0) ? (
-                                <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem', fontStyle: 'italic' }}>No items scheduled</span>
+                                <span style={{ color: 'var(--text-dim)', fontSize: '0.78rem', fontStyle: 'italic' }}>No items scheduled</span>
                               ) : (
-                                <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--text-white)', fontSize: '0.8rem' }}>
+                                <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--text-white)', fontSize: '0.85rem', lineHeight: 1.5 }}>
                                   {slot.items.map((it, idx) => (
-                                    <li key={idx} style={{ marginBottom: '0.2rem' }}>{it}</li>
+                                    <li key={idx} style={{ marginBottom: '0.25rem', color: 'var(--text-white)', fontWeight: 500 }}>{it}</li>
                                   ))}
                                 </ul>
                               )}
@@ -3936,14 +4317,18 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                 <div>
                   <h5 style={{ color: 'var(--text-white)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.8rem', display: 'flex', justifyContent: 'space-between' }}>
                     <span>{selectedAttMonth} Calendar Grid</span>
-                    <span style={{ color: 'var(--accent-volt)' }}>{activeDays.length} / 31 Days Active</span>
+                    <span style={{ color: '#FF5E00', fontWeight: 800 }}>{activeDays.length} / 31 DAYS ACTIVE</span>
                   </h5>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.4rem', textAlign: 'center', fontSize: '0.72rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.45rem', textAlign: 'center', fontSize: '0.75rem' }}>
                     {renderCalendarGrid()}
                   </div>
-                  <div style={{ display: 'flex', gap: '1rem', marginTop: '0.8rem', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}><span style={{ width: '8px', height: '8px', background: 'var(--accent-volt)', borderRadius: '2px' }}></span> Checked In</span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}><span style={{ width: '8px', height: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', borderRadius: '2px' }}></span> Rest Day</span>
+                  <div style={{ display: 'flex', gap: '1.2rem', marginTop: '0.9rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, color: '#FF5E00' }}>
+                      <span style={{ width: '10px', height: '10px', background: 'linear-gradient(135deg, #FF5E00 0%, #FF8700 100%)', borderRadius: '3px', boxShadow: '0 2px 6px rgba(255, 94, 0, 0.4)' }}></span> Checked In
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ width: '10px', height: '10px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', borderRadius: '3px' }}></span> Rest Day
+                    </span>
                   </div>
                 </div>
 
@@ -4257,6 +4642,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
           <SupplementShop
             onCheckoutSuccess={handleCheckoutSuccess}
             currentUser={currentUser}
+            profileData={profileData}
             onViewOrders={() => onNavigateSubView && onNavigateSubView('orders')}
           />
         </div>
@@ -4266,17 +4652,17 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
       {(activeView === 'orders' || activeView === 'order-tracking') && (
         <div className="member-sub-view" id="member-subview-orders" style={{ display: 'block' }}>
           {/* Header Banner */}
-          <div className="db-card" style={{ marginBottom: '1.5rem', background: 'linear-gradient(135deg, rgba(20, 20, 28, 0.95) 0%, rgba(10, 10, 15, 0.95) 100%)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '1.5rem 1.8rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+          <div className="orders-hero-banner">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.2rem' }}>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                  <span style={{ fontSize: '1.5rem' }}>🚚</span>
-                  <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.3rem', color: 'var(--text-white)', margin: 0, textTransform: 'uppercase' }}>
-                    My Supplement Orders & Order Tracking
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                  <span style={{ fontSize: '1.6rem' }}>🚚</span>
+                  <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.35rem', color: 'var(--text-white)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    My Orders & Shipment Tracking
                   </h3>
                 </div>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: '0.3rem 0 0 0' }}>
-                  Track order confirmation status, packaging progress, delivery dispatch, and purchase history.
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0.35rem 0 0 0' }}>
+                  Live packaging updates, courier dispatch tracking, itemized tax invoices & order lifecycle history.
                 </p>
               </div>
 
@@ -4284,7 +4670,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                 type="button"
                 className="glow-btn"
                 onClick={() => onNavigateSubView && onNavigateSubView('supplements')}
-                style={{ padding: '0.55rem 1.2rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                style={{ padding: '0.6rem 1.3rem', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700 }}
               >
                 <span>🛒</span> Shop More Supplements
               </button>
@@ -4292,43 +4678,64 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
           </div>
 
           {/* Quick Metrics Bar */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem' }}>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total Orders</span>
-              <h4 style={{ color: 'var(--text-white)', margin: '0.3rem 0 0 0', fontWeight: 800, fontSize: '1.25rem' }}>{memberOrders.length}</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div className="orders-stat-card">
+              <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(198, 255, 0, 0.12)', border: '1px solid rgba(198, 255, 0, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                📦
+              </div>
+              <div>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Total Orders</span>
+                <h4 style={{ color: 'var(--text-white)', margin: '0.15rem 0 0 0', fontWeight: 800, fontSize: '1.35rem' }}>{memberOrders.length}</h4>
+              </div>
             </div>
 
-            <div style={{ background: 'rgba(255, 159, 0, 0.05)', border: '1px solid rgba(255, 159, 0, 0.2)', borderRadius: '8px', padding: '1rem' }}>
-              <span style={{ fontSize: '0.72rem', color: '#ff9f00', textTransform: 'uppercase' }}>Pending Confirmation</span>
-              <h4 style={{ color: '#ff9f00', margin: '0.3rem 0 0 0', fontWeight: 800, fontSize: '1.25rem' }}>
-                {memberOrders.filter(o => o.status === 'Pending Confirmation').length}
-              </h4>
+            <div className="orders-stat-card" style={{ borderColor: 'rgba(255, 159, 0, 0.3)' }}>
+              <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(255, 159, 0, 0.12)', border: '1px solid rgba(255, 159, 0, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                ⏳
+              </div>
+              <div>
+                <span style={{ fontSize: '0.72rem', color: '#ff9f00', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Pending Approval</span>
+                <h4 style={{ color: '#ff9f00', margin: '0.15rem 0 0 0', fontWeight: 800, fontSize: '1.35rem' }}>
+                  {memberOrders.filter(o => o.status === 'Pending Confirmation').length}
+                </h4>
+              </div>
             </div>
 
-            <div style={{ background: 'rgba(0, 240, 255, 0.05)', border: '1px solid rgba(0, 240, 255, 0.2)', borderRadius: '8px', padding: '1rem' }}>
-              <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', textTransform: 'uppercase' }}>In Transit / Processing</span>
-              <h4 style={{ color: 'var(--accent-cyan)', margin: '0.3rem 0 0 0', fontWeight: 800, fontSize: '1.25rem' }}>
-                {memberOrders.filter(o => ['Confirmed', 'Processing', 'Out for Delivery'].includes(o.status)).length}
-              </h4>
+            <div className="orders-stat-card" style={{ borderColor: 'rgba(0, 240, 255, 0.3)' }}>
+              <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(0, 240, 255, 0.12)', border: '1px solid rgba(0, 240, 255, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                🚚
+              </div>
+              <div>
+                <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>In Transit / Processing</span>
+                <h4 style={{ color: 'var(--accent-cyan)', margin: '0.15rem 0 0 0', fontWeight: 800, fontSize: '1.35rem' }}>
+                  {memberOrders.filter(o => ['Confirmed', 'Processing', 'Out for Delivery'].includes(o.status)).length}
+                </h4>
+              </div>
             </div>
 
-            <div style={{ background: 'rgba(0, 255, 102, 0.05)', border: '1px solid rgba(0, 255, 102, 0.2)', borderRadius: '8px', padding: '1rem' }}>
-              <span style={{ fontSize: '0.72rem', color: '#00ff66', textTransform: 'uppercase' }}>Delivered Orders</span>
-              <h4 style={{ color: '#00ff66', margin: '0.3rem 0 0 0', fontWeight: 800, fontSize: '1.25rem' }}>
-                {memberOrders.filter(o => o.status === 'Delivered').length}
-              </h4>
+            <div className="orders-stat-card" style={{ borderColor: 'rgba(0, 255, 102, 0.3)' }}>
+              <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(0, 255, 102, 0.12)', border: '1px solid rgba(0, 255, 102, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                ✅
+              </div>
+              <div>
+                <span style={{ fontSize: '0.72rem', color: '#00ff66', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Delivered</span>
+                <h4 style={{ color: '#00ff66', margin: '0.15rem 0 0 0', fontWeight: 800, fontSize: '1.35rem' }}>
+                  {memberOrders.filter(o => o.status === 'Delivered').length}
+                </h4>
+              </div>
             </div>
           </div>
 
           {/* Filter & Search Toolbar */}
           <div className="store-filter-bar" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-            <div className="filter-categories">
+            <div className="filter-categories" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {['All', 'Pending Confirmation', 'Confirmed', 'Processing', 'Out for Delivery', 'Delivered', 'Cancelled'].map((st) => (
                 <button
                   key={st}
+                  type="button"
                   className={`filter-chip ${orderStatusFilter === st ? 'active' : ''}`}
                   onClick={() => setOrderStatusFilter(st)}
-                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.8rem' }}
+                  style={{ fontSize: '0.78rem', padding: '0.4rem 0.85rem', borderRadius: '20px', cursor: 'pointer' }}
                 >
                   {st}
                 </button>
@@ -4341,7 +4748,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
               placeholder="Search Order ID, Product..."
               value={orderSearchQuery}
               onChange={(e) => setOrderSearchQuery(e.target.value)}
-              style={{ width: '220px', padding: '0.45rem 0.8rem', fontSize: '0.78rem' }}
+              style={{ width: '240px', padding: '0.5rem 0.9rem', fontSize: '0.8rem', borderRadius: '20px' }}
             />
           </div>
 
@@ -4358,10 +4765,10 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
             if (filtered.length === 0) {
               return (
-                <div className="db-card" style={{ textAlign: 'center', padding: '3.5rem 1.5rem', color: 'var(--text-muted)' }}>
-                  <div style={{ fontSize: '2.5rem', marginBottom: '0.8rem' }}>📦</div>
-                  <h4 style={{ color: 'var(--text-white)', margin: '0 0 0.4rem 0' }}>No Supplement Orders Found</h4>
-                  <p style={{ fontSize: '0.82rem', margin: 0, color: 'var(--text-muted)' }}>
+                <div className="orders-card-box" style={{ textAlign: 'center', padding: '3.5rem 1.5rem', color: 'var(--text-muted)' }}>
+                  <div style={{ fontSize: '2.8rem', marginBottom: '0.8rem' }}>📦</div>
+                  <h4 style={{ color: 'var(--text-white)', margin: '0 0 0.4rem 0', fontSize: '1.2rem', fontWeight: 700 }}>No Orders Found</h4>
+                  <p style={{ fontSize: '0.85rem', margin: 0, color: 'var(--text-muted)' }}>
                     {memberOrders.length === 0
                       ? 'You have not placed any supplement orders yet. Visit the shop to get started!'
                       : 'No orders match your filter criteria.'}
@@ -4370,7 +4777,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                     <button
                       className="glow-btn"
                       onClick={() => onNavigateSubView && onNavigateSubView('supplements')}
-                      style={{ marginTop: '1.2rem', padding: '0.66rem 1.4rem', fontSize: '0.82rem' }}
+                      style={{ marginTop: '1.4rem', padding: '0.65rem 1.5rem', fontSize: '0.85rem' }}
                     >
                       Browse Supplement Catalog →
                     </button>
@@ -4382,12 +4789,6 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
             return (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                 {filtered.map((order) => {
-                  // Determine status step index (0 to 4)
-                  // 0: Order Placed / Pending Confirmation
-                  // 1: Confirmed
-                  // 2: Processing
-                  // 3: Out for Delivery
-                  // 4: Delivered
                   const statusMap = {
                     'Pending Confirmation': 0,
                     'Confirmed': 1,
@@ -4400,60 +4801,77 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                   const isCancelled = order.status === 'Cancelled';
 
                   const steps = [
-                    { title: 'Order Placed', subtitle: 'Order Submitted' },
-                    { title: 'Admin Confirmed', subtitle: 'Confirmed by Staff' },
-                    { title: 'Packing & Process', subtitle: 'Preparing Parcel' },
-                    { title: 'Out for Delivery', subtitle: 'In Transit Courier' },
-                    { title: 'Delivered', subtitle: 'Completed & Received' }
+                    { title: 'Order Placed', subtitle: 'Submitted' },
+                    { title: 'Confirmed', subtitle: 'Verified' },
+                    { title: 'Packaging', subtitle: 'In Prep' },
+                    { title: 'Out for Delivery', subtitle: 'With Courier' },
+                    { title: 'Delivered', subtitle: 'Received' }
                   ];
+
+                  // Payment badge info
+                  const isRazorpay = String(order.paymentMethod || '').toLowerCase().includes('razorpay') || String(order.paymentMethod || '').toLowerCase().includes('online');
+                  const isCod = String(order.paymentMethod || '').toLowerCase().includes('cod') || String(order.paymentMethod || '').toLowerCase().includes('cash');
+                  const isAccount = String(order.paymentMethod || '').toLowerCase().includes('account');
+
+                  const paymentBadgeColor = isRazorpay ? 'var(--accent-cyan)' : isCod ? '#ff9f00' : 'var(--accent-volt)';
+                  const paymentBadgeBg = isRazorpay ? 'rgba(0, 240, 255, 0.08)' : isCod ? 'rgba(255, 159, 0, 0.08)' : 'rgba(198, 255, 0, 0.08)';
 
                   return (
                     <div
                       key={order.orderId || order.txId}
-                      className="db-card"
-                      style={{
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '10px',
-                        padding: '1.5rem'
-                      }}
+                      className="orders-card-box"
                     >
                       {/* Order Card Top Bar */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '1.2rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1.1rem', marginBottom: '1.2rem' }}>
                         <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                            <h4 style={{ margin: 0, color: 'var(--text-white)', fontSize: '1.1rem', fontWeight: 800, fontFamily: 'monospace' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                              ORDER ID:
+                            </span>
+                            <span style={{ color: 'var(--text-white)', fontSize: '1.05rem', fontWeight: 800, fontFamily: 'monospace' }}>
                               {order.orderId}
-                            </h4>
-                            <span style={{ fontSize: '0.7rem', color: 'var(--accent-cyan)', background: 'rgba(0, 240, 255, 0.08)', border: '1px solid rgba(0, 240, 255, 0.2)', padding: '0.15rem 0.5rem', borderRadius: '4px', fontFamily: 'monospace' }}>
-                              TxID: {order.txId}
+                            </span>
+                            {order.txId && (
+                              <span style={{ fontSize: '0.7rem', color: 'var(--accent-cyan)', background: 'rgba(0, 240, 255, 0.08)', border: '1px solid rgba(0, 240, 255, 0.25)', padding: '0.15rem 0.5rem', borderRadius: '4px', fontFamily: 'monospace' }}>
+                                Tx: {order.txId}
+                              </span>
+                            )}
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.35rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                              Placed on {order.date}
+                            </span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>•</span>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '4px', background: paymentBadgeBg, color: paymentBadgeColor, border: `1px solid ${paymentBadgeColor}44` }}>
+                              {isRazorpay ? '💳 Paid Online (Razorpay)' : isCod ? '💵 COD (Pending Delivery)' : isAccount ? '🏦 Billed to Member Account' : String(order.paymentMethod || 'Card').toUpperCase()}
                             </span>
                           </div>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem', display: 'block' }}>
-                            Placed on {order.date} • Paid via {String(order.paymentMethod || 'Card').toUpperCase()} ({order.paymentStatus || 'Paid'})
-                          </span>
                         </div>
 
-                        <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        {/* Order Right: Amount & Status Badge */}
+                        <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
                           <div>
-                            <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', display: 'block', textTransform: 'uppercase' }}>Billed Total</span>
-                            <strong style={{ color: 'var(--accent-volt)', fontSize: '1.2rem' }}>₹{Number(order.total || order.totalAmount || 0).toFixed(2)}</strong>
+                            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Billed Total</span>
+                            <strong style={{ color: 'var(--accent-volt)', fontSize: '1.25rem', fontFamily: 'monospace' }}>
+                              ₹{Number(order.total || order.totalAmount || 0).toFixed(2)}
+                            </strong>
                           </div>
 
                           <span style={{
-                            padding: '0.4rem 0.9rem',
+                            padding: '0.45rem 1rem',
                             borderRadius: '20px',
                             fontWeight: 800,
                             fontSize: '0.76rem',
                             textTransform: 'uppercase',
-                            letterSpacing: '0.04em',
+                            letterSpacing: '0.05em',
                             background: isCancelled
-                              ? 'rgba(255, 62, 108, 0.15)'
+                              ? 'rgba(255, 62, 108, 0.12)'
                               : order.status === 'Delivered'
-                              ? 'rgba(0, 255, 102, 0.15)'
+                              ? 'rgba(0, 255, 102, 0.12)'
                               : order.status === 'Pending Confirmation'
-                              ? 'rgba(255, 159, 0, 0.15)'
-                              : 'rgba(0, 240, 255, 0.15)',
+                              ? 'rgba(255, 159, 0, 0.12)'
+                              : 'rgba(0, 240, 255, 0.12)',
                             color: isCancelled
                               ? '#ff3e6c'
                               : order.status === 'Delivered'
@@ -4463,43 +4881,48 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                               : 'var(--accent-cyan)',
                             border: `1px solid ${
                               isCancelled
-                                ? '#ff3e6c'
+                                ? 'rgba(255, 62, 108, 0.4)'
                                 : order.status === 'Delivered'
-                                ? '#00ff66'
+                                ? 'rgba(0, 255, 102, 0.4)'
                                 : order.status === 'Pending Confirmation'
-                                ? '#ff9f00'
-                                : 'var(--accent-cyan)'
+                                ? 'rgba(255, 159, 0, 0.4)'
+                                : 'rgba(0, 240, 255, 0.4)'
                             }`
                           }}>
-                            {order.status}
+                            {isCancelled ? '✖ Cancelled' : order.status === 'Delivered' ? '✓ Delivered' : order.status === 'Pending Confirmation' ? '⏳ Pending Confirmation' : order.status}
                           </span>
                         </div>
                       </div>
 
                       {/* E-COMMERCE VISUAL PROGRESS TRACKER */}
                       {!isCancelled ? (
-                        <div style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.2rem 1.5rem', marginBottom: '1.2rem' }}>
-                          <h5 style={{ color: 'var(--text-white)', fontSize: '0.78rem', textTransform: 'uppercase', marginBottom: '1.2rem', letterSpacing: '0.05em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span>Live Dispatch & Tracking Progress</span>
-                            <span style={{ color: 'var(--accent-volt)', fontSize: '0.72rem', textTransform: 'none' }}>
-                              Est. Delivery: <strong>{order.estimatedDelivery || '2-3 Business Days'}</strong>
+                        <div className="orders-tracker-box">
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <span style={{ fontSize: '0.9rem' }}>📍</span>
+                              <span style={{ color: 'var(--text-white)', fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Live Dispatch & Delivery Stepper
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                              Estimated Delivery: <strong style={{ color: 'var(--accent-volt)' }}>{order.estimatedDelivery || '2-3 Business Days Priority'}</strong>
                             </span>
-                          </h5>
+                          </div>
 
-                          {/* Progress Line and Steps */}
-                          <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            {/* Background Line */}
-                            <div style={{ position: 'absolute', top: '15px', left: '5%', right: '5%', height: '3px', background: 'rgba(255,255,255,0.08)', zIndex: 1 }}></div>
+                          {/* Progress Stepper Nodes */}
+                          <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0' }}>
+                            {/* Track line background */}
+                            <div style={{ position: 'absolute', top: '20px', left: '10%', right: '10%', height: '3px', background: 'rgba(255,255,255,0.08)', zIndex: 1 }}></div>
 
-                            {/* Active Filled Line */}
+                            {/* Active filled line */}
                             <div style={{
                               position: 'absolute',
-                              top: '15px',
-                              left: '5%',
-                              width: `${Math.min(100, Math.max(0, (currentStep / 4) * 90))}%`,
+                              top: '20px',
+                              left: '10%',
+                              width: `${Math.min(80, Math.max(0, (currentStep / 4) * 80))}%`,
                               height: '3px',
                               background: 'linear-gradient(90deg, var(--accent-cyan) 0%, var(--accent-volt) 100%)',
-                              boxShadow: '0 0 10px var(--accent-volt)',
+                              boxShadow: '0 0 8px var(--accent-volt)',
                               zIndex: 2,
                               transition: 'width 0.4s ease'
                             }}></div>
@@ -4515,23 +4938,23 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                                     width: '32px',
                                     height: '32px',
                                     borderRadius: '50%',
-                                    background: isPassed ? (isCurrent ? 'var(--accent-volt)' : 'var(--accent-cyan)') : '#12131a',
-                                    color: isPassed ? '#000' : 'var(--text-dim)',
+                                    background: isPassed ? (isCurrent ? 'var(--accent-volt)' : 'var(--accent-cyan)') : 'var(--bg-dark)',
+                                    color: isPassed ? '#000' : 'var(--text-muted)',
                                     border: isPassed ? '2px solid var(--text-white)' : '1px solid var(--border-color)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     fontWeight: 800,
-                                    fontSize: '0.8rem',
-                                    boxShadow: isCurrent ? '0 0 15px var(--accent-volt)' : 'none',
+                                    fontSize: '0.75rem',
+                                    boxShadow: isCurrent ? '0 0 14px var(--accent-volt)' : 'none',
                                     transition: 'all 0.3s ease'
                                   }}>
                                     {isPassed ? (sIdx < currentStep ? '✓' : sIdx + 1) : sIdx + 1}
                                   </div>
-                                  <span style={{ fontSize: '0.75rem', fontWeight: isCurrent ? 800 : (isPassed ? 600 : 400), color: isPassed ? 'var(--text-white)' : 'var(--text-dim)', marginTop: '0.5rem' }}>
+                                  <span style={{ fontSize: '0.74rem', fontWeight: isCurrent ? 800 : (isPassed ? 700 : 500), color: isPassed ? 'var(--text-white)' : 'var(--text-muted)', marginTop: '0.45rem' }}>
                                     {st.title}
                                   </span>
-                                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+                                  <span style={{ fontSize: '0.65rem', color: 'var(--text-dim)', marginTop: '0.1rem' }}>
                                     {st.subtitle}
                                   </span>
                                 </div>
@@ -4539,77 +4962,137 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                             })}
                           </div>
 
-                          {/* Courier details if assigned */}
+                          {/* Courier details badge if available */}
                           {order.trackingNumber && (
-                            <div style={{ background: 'rgba(0, 240, 255, 0.05)', border: '1px solid rgba(0, 240, 255, 0.2)', borderRadius: '6px', padding: '0.6rem 0.9rem', marginTop: '1.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem' }}>
-                              <span>Courier Service: <strong>{order.courierName || 'Apex Express Logistics'}</strong></span>
-                              <span>Tracking Number: <strong style={{ fontFamily: 'monospace', color: 'var(--accent-cyan)' }}>{order.trackingNumber}</strong></span>
+                            <div style={{ background: 'rgba(0, 240, 255, 0.06)', border: '1px solid rgba(0, 240, 255, 0.25)', borderRadius: '6px', padding: '0.6rem 1rem', marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem' }}>
+                              <span>Courier Logistics: <strong style={{ color: 'var(--text-white)' }}>{order.courierName || 'Apex Express Logistics'}</strong></span>
+                              <span>Tracking AWB: <strong style={{ fontFamily: 'monospace', color: 'var(--accent-cyan)' }}>{order.trackingNumber}</strong></span>
                             </div>
                           )}
                         </div>
                       ) : (
-                        <div style={{ background: 'rgba(255, 62, 108, 0.08)', border: '1px solid rgba(255, 62, 108, 0.2)', borderRadius: '6px', padding: '1rem', marginBottom: '1.2rem', color: '#ff3e6c', fontSize: '0.82rem', textAlign: 'center' }}>
-                          🛑 <strong>This order has been cancelled.</strong> Any billed amounts are queued for refund processing.
+                        <div style={{ background: 'rgba(255, 62, 108, 0.08)', border: '1px solid rgba(255, 62, 108, 0.25)', borderRadius: '8px', padding: '0.9rem 1.2rem', marginBottom: '1.2rem', color: '#ff3e6c', fontSize: '0.82rem', textAlign: 'center' }}>
+                          🛑 <strong>This order was cancelled.</strong> Any payment amounts will be refunded or reversed.
                         </div>
                       )}
 
-                      {/* Items & Shipping Detail */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '1.2rem', background: 'rgba(0,0,0,0.15)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem' }}>
+                      {/* Items & Shipping Detail Grid */}
+                      <div className="orders-details-grid">
                         {/* Purchased Items List */}
                         <div>
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', display: 'block', marginBottom: '0.5rem' }}>Purchased Items</span>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.6rem' }}>
+                            <span style={{ fontSize: '0.85rem' }}>🛍️</span>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
+                              Purchased Items ({order.items?.length || 1})
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                             {order.items && order.items.length > 0 ? (
                               order.items.map((item, idx) => (
-                                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', fontSize: '0.8rem' }}>
+                                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.5rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '6px' }}>
                                   <img
                                     src={item.image || '/assets/images/gallery_weights.png'}
                                     alt={item.name}
                                     onError={(e) => { e.target.src = '/assets/images/gallery_weights.png'; }}
-                                    style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--border-color)' }}
+                                    style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--border-color)' }}
                                   />
-                                  <div style={{ flex: 1 }}>
-                                    <strong style={{ color: 'var(--text-white)', display: 'block' }}>{item.name}</strong>
-                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>Qty: {item.quantity} × ₹{Number(item.price).toFixed(2)}</span>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <strong style={{ color: 'var(--text-white)', display: 'block', fontSize: '0.82rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                      {item.name}
+                                    </strong>
+                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                                      Qty: <strong>{item.quantity || item.qty || 1}</strong> × ₹{Number(item.price).toFixed(2)}
+                                    </span>
                                   </div>
-                                  <span style={{ color: 'var(--accent-volt)', fontWeight: 700 }}>₹{(Number(item.price) * Number(item.quantity)).toFixed(2)}</span>
+                                  <span style={{ color: 'var(--accent-volt)', fontWeight: 800, fontSize: '0.85rem', fontFamily: 'monospace' }}>
+                                    ₹{(Number(item.price) * Number(item.quantity || item.qty || 1)).toFixed(2)}
+                                  </span>
                                 </div>
                               ))
                             ) : (
-                              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{order.itemsSummary}</span>
+                              <div style={{ padding: '0.6rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '6px', color: 'var(--text-white)', fontSize: '0.82rem' }}>
+                                {order.itemsSummary || 'Supplement Items'}
+                              </div>
                             )}
                           </div>
                         </div>
 
                         {/* Shipping Destination */}
-                        <div style={{ borderLeft: '1px solid var(--border-color)', paddingLeft: '1rem' }}>
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', display: 'block', marginBottom: '0.4rem' }}>Shipping Address</span>
-                          {order.shippingInfo ? (
-                            <div style={{ fontSize: '0.78rem', color: 'var(--text-white)', lineHeight: 1.4 }}>
-                              <strong>{order.shippingInfo.fullName}</strong> ({order.shippingInfo.phone})
-                              <div style={{ color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                                {order.shippingInfo.address}, {order.shippingInfo.city}, {order.shippingInfo.state} - {order.shippingInfo.pincode}
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.6rem' }}>
+                            <span style={{ fontSize: '0.85rem' }}>📍</span>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
+                              Delivery Destination
+                            </span>
+                          </div>
+
+                          <div style={{ padding: '0.7rem 0.9rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '6px' }}>
+                            {order.shippingInfo ? (
+                              <div style={{ fontSize: '0.8rem', color: 'var(--text-white)', lineHeight: 1.45 }}>
+                                <div style={{ fontWeight: 800 }}>{order.shippingInfo.fullName}</div>
+                                <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem' }}>📞 {order.shippingInfo.phone}</div>
+                                <div style={{ color: 'var(--text-muted)', marginTop: '0.35rem', fontSize: '0.76rem' }}>
+                                  {order.shippingInfo.address}, {order.shippingInfo.city}, {order.shippingInfo.state} - <strong>{order.shippingInfo.pincode}</strong>
+                                </div>
+                                <div style={{ marginTop: '0.45rem', display: 'inline-block', fontSize: '0.7rem', padding: '0.15rem 0.5rem', borderRadius: '4px', background: order.shippingInfo.deliveryType === 'express' ? 'rgba(255, 94, 0, 0.12)' : 'rgba(0, 240, 255, 0.08)', color: order.shippingInfo.deliveryType === 'express' ? 'var(--accent-orange)' : 'var(--accent-cyan)', border: `1px solid ${order.shippingInfo.deliveryType === 'express' ? 'rgba(255, 94, 0, 0.3)' : 'rgba(0, 240, 255, 0.2)'}` }}>
+                                  {order.shippingInfo.deliveryType === 'express' ? '⚡ VIP Fast-Track Delivery' : '📦 Standard Priority Delivery'}
+                                </div>
                               </div>
-                              <span style={{ color: 'var(--accent-cyan)', fontSize: '0.7rem', marginTop: '0.3rem', display: 'block' }}>
-                                Delivery Speed: {order.shippingInfo.deliveryType === 'express' ? 'VIP Fast-Track ⚡' : 'Standard Delivery (Free)'}
-                              </span>
-                            </div>
-                          ) : (
-                            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>Default Member Gym Address</span>
-                          )}
+                            ) : (
+                              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                Default Gym Member Reception Pickup / Delivery
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
 
                       {/* Card Bottom Actions */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '0.8rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                        <button
-                          type="button"
-                          className="outline-btn"
-                          onClick={() => setSelectedOrderTracking(order)}
-                          style={{ padding: '0.35rem 0.8rem', fontSize: '0.76rem', color: 'var(--accent-cyan)', borderColor: 'rgba(0, 240, 255, 0.4)' }}
-                        >
-                          View Status Timeline Log 📜
-                        </button>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.2rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)', flexWrap: 'wrap', gap: '0.8rem' }}>
+                        <div style={{ display: 'flex', gap: '0.7rem', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="outline-btn"
+                            onClick={() => {
+                              const numTotal = Number(order.total || order.totalAmount || 0);
+                              const subNet = Math.round((numTotal / 1.18) * 100) / 100;
+                              const gstAmt = Math.round((numTotal - subNet) * 100) / 100;
+                              setActiveReceipt({
+                                receiptNumber: order.receiptNumber || order.txId || `MH-RCP-${order.orderId}`,
+                                orderId: order.orderId,
+                                paymentId: order.txId,
+                                title: `MuScLe HuB Store: ${order.itemsSummary || 'Supplement Order'}`,
+                                amount: numTotal,
+                                userName: order.userName || profileData?.name || currentUser?.name || 'Athlete Member',
+                                userEmail: order.userEmail || profileData?.email || currentUser?.email || 'thepcworkshop1@gmail.com',
+                                userPhone: order.userPhone || (order.shippingInfo && order.shippingInfo.phone) || '+91 98765 43210',
+                                paymentMethod: order.paymentMethod || 'Online Payment (Razorpay)',
+                                paymentType: 'supplement_order',
+                                status: order.paymentStatus === 'Pending (COD)' ? 'pending' : (order.paymentStatus === 'Billed to Member Account' ? 'billed_to_account' : 'paid'),
+                                createdAt: new Date().toISOString(),
+                                items: (order.items && order.items.length > 0)
+                                  ? order.items.map(i => ({ name: i.name, qty: i.quantity || i.qty || 1, unitPrice: Number(i.price), total: Number(i.price) * Number(i.quantity || i.qty || 1) }))
+                                  : [{ name: order.itemsSummary || 'Supplement Items', qty: 1, unitPrice: numTotal, total: numTotal }],
+                                subtotal: subNet,
+                                gstAmount: gstAmt,
+                                netAmount: numTotal
+                              });
+                            }}
+                            style={{ padding: '0.45rem 1rem', fontSize: '0.78rem', color: 'var(--accent-volt)', borderColor: 'rgba(198, 255, 0, 0.4)', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700 }}
+                          >
+                            <span>📄</span> View Tax Invoice
+                          </button>
+
+                          <button
+                            type="button"
+                            className="outline-btn"
+                            onClick={() => setSelectedOrderTracking(order)}
+                            style={{ padding: '0.45rem 1rem', fontSize: '0.78rem', color: 'var(--accent-cyan)', borderColor: 'rgba(0, 240, 255, 0.4)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                          >
+                            <span>📜</span> Audit Timeline History
+                          </button>
+                        </div>
 
                         {order.status === 'Pending Confirmation' && (
                           <button
@@ -4625,9 +5108,9 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                                 alert("Order has been cancelled.");
                               }
                             }}
-                            style={{ padding: '0.35rem 0.8rem', fontSize: '0.76rem', color: '#ff3e6c', borderColor: 'rgba(255, 62, 108, 0.4)' }}
+                            style={{ padding: '0.45rem 1rem', fontSize: '0.78rem', color: '#ff3e6c', borderColor: 'rgba(255, 62, 108, 0.4)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
                           >
-                            Cancel Pending Order ✖
+                            <span>✖</span> Cancel Pending Order
                           </button>
                         )}
                       </div>
@@ -4640,31 +5123,34 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
           {/* STATUS TIMELINE MODAL */}
           {selectedOrderTracking && (
-            <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.88)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div className="db-card" style={{ maxWidth: '520px', width: '90%', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1.8rem', position: 'relative' }}>
+            <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', backdropFilter: 'blur(4px)' }}>
+              <div className="orders-card-box" style={{ maxWidth: '520px', width: '100%', position: 'relative', border: '1px solid var(--accent-cyan)', boxShadow: '0 0 30px rgba(0, 240, 255, 0.2)' }}>
                 <button
                   type="button"
                   onClick={() => setSelectedOrderTracking(null)}
-                  style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}
+                  style={{ position: 'absolute', top: '1.2rem', right: '1.2rem', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1 }}
                 >
                   &times;
                 </button>
 
-                <h4 style={{ color: 'var(--text-white)', margin: '0 0 0.3rem 0', fontSize: '1.1rem', fontWeight: 800 }}>
-                  Order Status Audit History
-                </h4>
-                <p style={{ color: 'var(--accent-cyan)', fontFamily: 'monospace', fontSize: '0.8rem', margin: '0 0 1.2rem 0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+                  <span style={{ fontSize: '1.3rem' }}>📜</span>
+                  <h4 style={{ color: 'var(--text-white)', margin: 0, fontSize: '1.15rem', fontWeight: 800 }}>
+                    Order Lifecycle Audit Log
+                  </h4>
+                </div>
+                <p style={{ color: 'var(--accent-cyan)', fontFamily: 'monospace', fontSize: '0.82rem', margin: '0 0 1.2rem 0' }}>
                   Order ID: {selectedOrderTracking.orderId}
                 </p>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', maxHeight: '320px', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', maxHeight: '320px', overflowY: 'auto', paddingRight: '0.3rem' }}>
                   {(selectedOrderTracking.statusTimeline || []).map((log, lIdx) => (
-                    <div key={lIdx} style={{ background: 'rgba(255,255,255,0.02)', borderLeft: '3px solid var(--accent-volt)', padding: '0.6rem 0.9rem', borderRadius: '4px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--accent-volt)', fontWeight: 800, textTransform: 'uppercase' }}>
+                    <div key={lIdx} style={{ background: 'rgba(255,255,255,0.03)', borderLeft: '3px solid var(--accent-volt)', padding: '0.7rem 0.9rem', borderRadius: '4px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem', color: 'var(--accent-volt)', fontWeight: 800, textTransform: 'uppercase' }}>
                         <span>{log.status}</span>
                         <span style={{ color: 'var(--text-muted)' }}>{log.timestamp}</span>
                       </div>
-                      <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.78rem', color: 'var(--text-white)' }}>{log.note}</p>
+                      <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem', color: 'var(--text-white)' }}>{log.note}</p>
                     </div>
                   ))}
                 </div>
@@ -4672,9 +5158,9 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                 <button
                   className="outline-btn"
                   onClick={() => setSelectedOrderTracking(null)}
-                  style={{ width: '100%', marginTop: '1.2rem', padding: '0.6rem' }}
+                  style={{ width: '100%', marginTop: '1.4rem', padding: '0.65rem' }}
                 >
-                  Close Log
+                  Close Audit Log
                 </button>
               </div>
             </div>
@@ -4690,8 +5176,8 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
             !showMembershipSelection ? (
               /* GATE STEP 1: ONE FORM WITH ONE BUTTON "SELECT YOUR PLAN" */
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', textAlign: 'center', padding: '2rem' }}>
-                <div className="db-card" style={{ maxWidth: '500px', width: '100%', padding: '3rem', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'rgba(14,14,18,0.85)', boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)' }}>
-                  <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(198, 255, 0, 0.05)', border: '1px solid var(--accent-volt)', color: 'var(--accent-volt)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', margin: '0 auto 1.5rem auto', boxShadow: 'var(--glow-volt)' }}>
+                <div className="db-card" style={{ maxWidth: '520px', width: '100%', padding: '3rem 2.5rem', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'var(--bg-card)' }}>
+                  <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(198, 255, 0, 0.1)', border: '1px solid var(--accent-volt)', color: 'var(--accent-volt)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', margin: '0 auto 1.5rem auto', boxShadow: '0 0 20px rgba(198, 255, 0, 0.2)' }}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
                     </svg>
@@ -4711,83 +5197,154 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
               </div>
             ) : (
               /* GATE STEP 2: SHOW MEMBERSHIP PLANS TO CHOOSE & PAY */
-              <div className="db-card" style={{ maxWidth: '850px', margin: '1rem auto', padding: '2.5rem' }}>
-                <style>{`
-                  .plan-selector-card {
-                    transition: all 0.3s ease;
-                  }
-                  .plan-selector-card:hover {
-                    border-color: var(--accent-volt) !important;
-                    background: rgba(198, 255, 0, 0.02) !important;
-                    box-shadow: 0 4px 20px rgba(198, 255, 0, 0.05);
-                    transform: translateY(-2px);
-                  }
-                `}</style>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
+              <div className="db-card" style={{ maxWidth: '1100px', margin: '1rem auto', padding: '2.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
                   <div style={{ textAlign: 'left' }}>
-                    <h3 style={{
-                      fontFamily: 'var(--font-display)',
-                      fontWeight: 800,
-                      fontSize: '1.5rem',
-                      color: 'var(--text-white)',
-                      textTransform: 'uppercase',
-                      margin: 0
-                    }}>
-                      Select Your Membership Plan
-                    </h3>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.3rem' }}>
-                      Select a membership tier to continue to the checkout and activate your account.
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <span style={{ fontSize: '1.4rem' }}>🎟️</span>
+                      <h3 style={{
+                        fontFamily: 'var(--font-display)',
+                        fontWeight: 800,
+                        fontSize: '1.5rem',
+                        color: 'var(--text-white)',
+                        textTransform: 'uppercase',
+                        margin: 0,
+                        letterSpacing: '0.04em'
+                      }}>
+                        Select Your Membership Plan
+                      </h3>
+                    </div>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.35rem' }}>
+                      Choose your membership tier to activate your biometric digital pass and unlock certified gym access.
                     </p>
                   </div>
                   <button
                     className="outline-btn"
                     onClick={() => setShowMembershipSelection(false)}
-                    style={{ padding: '0.4rem 1rem', fontSize: '0.8rem', cursor: 'pointer' }}
+                    style={{ padding: '0.45rem 1.1rem', fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
                   >
-                    ← Back
+                    <span>←</span> Back
                   </button>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
-                  {[plans['Muscle Core'], plans['Muscle Pro'], plans['Muscle Elite']].map((plan) => {
+                <div className="membership-plans-grid">
+                  {[
+                    {
+                      ...plans['Muscle Core'],
+                      badge: 'STARTER PASS',
+                      badgeColor: 'var(--accent-cyan)',
+                      badgeBg: 'rgba(0, 240, 255, 0.1)',
+                      features: [
+                        'Full Gym Floor & Free Weights Access',
+                        'Cardio Zone & Functional Rig Access',
+                        'Day Locker & Shower Facilities',
+                        'Complimentary High-Speed Wi-Fi',
+                        'Digital Workout Journal'
+                      ]
+                    },
+                    {
+                      ...plans['Muscle Pro'],
+                      featured: true,
+                      badge: '⭐ MOST POPULAR',
+                      badgeColor: 'var(--accent-volt)',
+                      badgeBg: 'rgba(198, 255, 0, 0.15)',
+                      features: [
+                        'All Muscle Core Benefits Included',
+                        'Unlimited Group Classes (HIIT, Spin, Yoga)',
+                        'Sauna & Cryo Cold Plunge Recovery',
+                        'Monthly Nutrition & Diet Consultation',
+                        'Bi-Weekly InBody Scan & Progress Tracking'
+                      ]
+                    },
+                    {
+                      ...plans['Muscle Elite'],
+                      badge: '👑 BEST VALUE (YEARLY)',
+                      badgeColor: 'var(--accent-orange)',
+                      badgeBg: 'rgba(255, 94, 0, 0.15)',
+                      features: [
+                        '24/7 VIP Biometric Keycard Access',
+                        'All Group Classes + Sauna/Recovery Zone',
+                        '2 Free Guest Day Passes per Month',
+                        '1 Dedicated Master Coach 1-on-1 Session / Quarter',
+                        '10% Discount on All Store Supplements',
+                        'Reserved VIP Locker & Priority Parking'
+                      ]
+                    }
+                  ].map((plan) => {
                     return (
                       <div
                         key={plan.name}
-                        style={{
-                          background: 'rgba(255,255,255,0.01)',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: '10px',
-                          padding: '1.8rem',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          justifyContent: 'space-between',
-                          minHeight: '280px'
-                        }}
-                        className="plan-selector-card"
+                        className={`membership-plan-card ${plan.featured ? 'featured' : ''}`}
                       >
                         <div>
-                          <h4 style={{ color: 'var(--text-white)', fontWeight: 800, fontSize: '1.1rem', margin: '0 0 0.5rem 0' }}>{plan.name}</h4>
-                          <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', lineHeight: '1.4', margin: '0 0 1.5rem 0' }}>{plan.desc}</p>
+                          {/* Plan Badge */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
+                            <span style={{
+                              fontSize: '0.7rem',
+                              fontWeight: 800,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.06em',
+                              padding: '0.2rem 0.6rem',
+                              borderRadius: '4px',
+                              background: plan.badgeBg,
+                              color: plan.badgeColor,
+                              border: `1px solid ${plan.badgeColor}44`
+                            }}>
+                              {plan.badge}
+                            </span>
+                          </div>
+
+                          <h4 style={{ color: 'var(--text-white)', fontWeight: 800, fontSize: '1.25rem', margin: '0 0 0.4rem 0', textTransform: 'uppercase' }}>
+                            {plan.name}
+                          </h4>
+                          <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', lineHeight: '1.4', margin: '0 0 1.2rem 0' }}>
+                            {plan.desc}
+                          </p>
+
+                          {/* Price Tag */}
+                          <div style={{ padding: '1rem 0', borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', marginBottom: '1.2rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem' }}>
+                              <span style={{ fontSize: '2rem', color: 'var(--text-white)', fontWeight: 900, fontFamily: 'monospace' }}>
+                                ₹{plan.price.toLocaleString('en-IN')}
+                              </span>
+                              <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                /{plan.period || 'month'}
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)', display: 'block', marginTop: '0.2rem' }}>
+                              Includes all taxes & biometric digital pass ID
+                            </span>
+                          </div>
+
+                          {/* Plan Highlights */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', marginBottom: '1.8rem' }}>
+                            {plan.features.map((feat, fIdx) => (
+                              <div key={fIdx} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.78rem', color: 'var(--text-white)' }}>
+                                <span style={{ color: plan.featured ? 'var(--accent-volt)' : 'var(--accent-cyan)', fontWeight: 800, lineHeight: 1 }}>✓</span>
+                                <span style={{ color: 'var(--text-muted)', lineHeight: 1.3 }}>{feat}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
 
                         <div>
-                          <div style={{ marginBottom: '1.5rem' }}>
-                            <span style={{ fontSize: '1.8rem', color: 'var(--text-white)', fontWeight: 800 }}>₹{plan.price}</span>
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}> /{plan.period || 'month'}</span>
-                          </div>
                           <button
+                            type="button"
                             onClick={() => handlePlanChange(plan.name)}
                             className="glow-btn"
                             style={{
                               width: '100%',
-                              padding: '0.75rem',
-                              fontSize: '0.85rem',
-                              fontWeight: 700,
+                              padding: '0.85rem',
+                              fontSize: '0.88rem',
+                              fontWeight: 800,
                               textTransform: 'uppercase',
-                              cursor: 'pointer'
+                              letterSpacing: '0.04em',
+                              cursor: 'pointer',
+                              background: plan.featured ? 'var(--accent-volt)' : undefined,
+                              color: plan.featured ? '#000' : undefined
                             }}
                           >
-                            Select plan
+                            Select {plan.name} →
                           </button>
                         </div>
                       </div>
@@ -4799,6 +5356,64 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
           ) : (
             /* PAID VIEW: KEYCARD PASS & SUBSCRIPTION MANAGEMENT */
             <>
+              {/* ACTIVE MEMBERSHIP STATUS & EXPIRATION REMINDER BANNER */}
+              <div className="orders-hero-banner" style={{ marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.2rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(198, 255, 0, 0.12)', border: '1px solid var(--accent-volt)', color: 'var(--accent-volt)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', boxShadow: '0 0 15px rgba(198, 255, 0, 0.2)' }}>
+                      🎟️
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                        <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.25rem', color: 'var(--text-white)', margin: 0, textTransform: 'uppercase' }}>
+                          Active Pass: {membershipTier}
+                        </h3>
+                        <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '0.15rem 0.55rem', borderRadius: '20px', background: 'rgba(0, 255, 102, 0.12)', color: '#00ff66', border: '1px solid rgba(0, 255, 102, 0.3)' }}>
+                          ● VALID & ACTIVE
+                        </span>
+                      </div>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: '0.25rem 0 0 0' }}>
+                        Biometric digital keycard valid until <strong>{membershipExpiryDate}</strong> • <span style={{ color: 'var(--accent-volt)', fontWeight: 700 }}>{daysLeft} Days Remaining</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="glow-btn"
+                      onClick={() => handleRenew()}
+                      style={{ padding: '0.55rem 1.1rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700 }}
+                    >
+                      <span>🔄</span> Quick Renew (₹{plans[membershipTier]?.price || 3500})
+                    </button>
+
+                    <button
+                      type="button"
+                      className="outline-btn"
+                      onClick={() => {
+                        const nextTier = membershipTier === 'Muscle Core' ? 'Muscle Pro' : 'Muscle Elite';
+                        handlePlanChange(nextTier);
+                      }}
+                      style={{ padding: '0.55rem 1.1rem', fontSize: '0.8rem', color: 'var(--accent-volt)', borderColor: 'rgba(198, 255, 0, 0.4)', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700 }}
+                    >
+                      <span>⚡</span> Upgrade Plan
+                    </button>
+                  </div>
+                </div>
+
+                {/* Expiry Proactive Reminder Notice */}
+                <div style={{ marginTop: '1rem', paddingTop: '0.8rem', borderTop: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem', fontSize: '0.78rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#ff9f00' }}>
+                    <span>⏳</span>
+                    <span><strong>Renewal Notice:</strong> Your pass cycle is active. Autorenewal is {autoRenew ? 'ON (Card will be charged automatically)' : 'OFF (Manual renewal required)'}.</span>
+                  </div>
+                  <span style={{ color: 'var(--text-white)', fontSize: '0.78rem', fontWeight: 800 }}>
+                    Pass ID: <code style={{ color: 'var(--accent-cyan)', background: 'rgba(0,240,255,0.1)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>{currentUser?.rfid || profileData?.rfid || (currentUser?.email ? 'RF-' + (8000 + (Math.abs(currentUser.email.split('').reduce((a, b) => a + b.charCodeAt(0), 0)) % 90)) : 'RF-8000')}</code>
+                  </span>
+                </div>
+              </div>
+
               <div className="db-grid-row membership-layout-row" style={{ gridTemplateColumns: '1fr 1.2fr', gap: '1.8rem' }}>
                 {/* Left: Digital Pass Card */}
                 <div className="db-card pass-card-container" style={{ minHeight: 'auto', display: 'flex', flexDirection: 'column' }}>
@@ -4810,7 +5425,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                       <div className="pass-card-glow"></div>
                       <div className="pass-card-inner">
                         <div className="pass-card-header">
-                          <span className="pass-brand">MUSCLE <span>HUB</span></span>
+                          <span className="pass-brand">APEX <span>ATHLETICS</span></span>
                           <span className="pass-badge">ACTIVE PASS</span>
                         </div>
 
@@ -4824,11 +5439,13 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                         <div className="pass-card-details">
                           <div className="pass-detail-col">
                             <span className="pass-label">MEMBER</span>
-                            <span className="pass-value">{currentUser.name}</span>
+                            <span className="pass-value">{currentUser.name || profileData.name || 'Member'}</span>
                           </div>
                           <div className="pass-detail-col" style={{ textAlign: 'right' }}>
-                            <span className="pass-label">MEMBER ID</span>
-                            <span className="pass-value" style={{ fontFamily: 'monospace' }}>MEM-90210</span>
+                            <span className="pass-label">MEMBER RFID</span>
+                            <span className="pass-value" style={{ fontFamily: 'monospace', color: 'var(--accent-volt)' }}>
+                              {currentUser?.rfid || profileData?.rfid || (currentUser?.email ? 'RF-' + (8000 + (Math.abs(currentUser.email.split('').reduce((a, b) => a + b.charCodeAt(0), 0)) % 90)) : 'RF-8000')}
+                            </span>
                           </div>
                         </div>
 
@@ -4850,11 +5467,15 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                               <span className="barcode-bar"></span>
                               <span className="barcode-bar"></span>
                             </div>
-                            <span className="barcode-text">9021083921038</span>
+                            <span className="barcode-text">
+                              {currentUser?.rfid ? 'RF-' + currentUser.rfid.replace(/[^0-9]/g, '') : '8000902108392'}
+                            </span>
                           </div>
                           <div className="pass-expiry-container" style={{ textAlign: 'right' }}>
                             <span className="pass-label">EXPIRES</span>
-                            <span className="pass-value">07/17/2026</span>
+                            <span className="pass-value">
+                              {new Date(Date.now() + (daysLeft || 180) * 86400000).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -4966,74 +5587,117 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
               {/* BILLING & INVOICES HISTORY TABLE */}
               <div className="db-card" style={{ marginTop: '1.8rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '0.8rem' }}>
                   <div>
                     <h4 style={{ margin: 0, color: 'var(--text-white)' }}>Billing & Payment Receipts History</h4>
-                    <p className="card-subtitle" style={{ margin: '0.2rem 0 0 0' }}>Transaction statements for pass renewals and supplement purchases</p>
+                    <p className="card-subtitle" style={{ margin: '0.2rem 0 0 0' }}>Transaction statements for pass renewals, personal coaching, and supplement purchases</p>
                   </div>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{billingInvoices.length} Total Receipts</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)', background: 'var(--bg-card-hover, rgba(255,255,255,0.03))', padding: '0.3rem 0.7rem', borderRadius: '20px', border: '1px solid var(--border-color)' }}>
+                      📑 {billingInvoices.length} {billingInvoices.length === 1 ? 'Receipt' : 'Receipts'}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="table-wrapper">
-                  <table className="db-table">
+                <div className="table-wrapper" style={{ overflowX: 'auto' }}>
+                  <table className="db-table" style={{ width: '100%' }}>
                     <thead>
                       <tr>
-                        <th>Receipt ID</th>
-                        <th>Description</th>
-                        <th>Amount Paid</th>
-                        <th>Payment Date</th>
-                        <th>Status</th>
-                        <th>Action</th>
+                        <th style={{ minWidth: '150px' }}>Receipt ID</th>
+                        <th style={{ minWidth: '220px' }}>Description / Plan</th>
+                        <th style={{ minWidth: '120px' }}>Amount Paid</th>
+                        <th style={{ minWidth: '110px' }}>Date</th>
+                        <th style={{ minWidth: '130px' }}>Payment Method</th>
+                        <th style={{ minWidth: '90px' }}>Status</th>
+                        <th style={{ minWidth: '120px', textAlign: 'center' }}>Tax Invoice</th>
                       </tr>
                     </thead>
                     <tbody>
                       {billingInvoices.length === 0 ? (
                         <tr>
-                          <td colSpan="6" style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '1.5rem', fontSize: '0.82rem' }}>
-                            No billing history recorded.
+                          <td colSpan="7" style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '2rem 1rem', fontSize: '0.85rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ fontSize: '1.8rem' }}>🧾</span>
+                              <span>No billing history recorded yet.</span>
+                            </div>
                           </td>
                         </tr>
                       ) : (
                         billingInvoices
                           .slice((membershipInvoicePage - 1) * ITEMS_PER_PAGE, membershipInvoicePage * ITEMS_PER_PAGE)
-                          .map((inv, idx) => (
-                            <tr key={idx}>
-                              <td style={{ fontFamily: 'monospace', color: 'var(--accent-cyan)', fontWeight: 700 }}>{inv.txId}</td>
-                              <td><strong>{inv.plan}</strong></td>
-                              <td style={{ color: 'var(--text-white)', fontWeight: 800 }}>₹{Number(inv.amount).toFixed(2)}</td>
-                              <td>{inv.date || 'Today'}</td>
-                              <td>
-                                <span className="status-badge paid" style={{ fontSize: '0.68rem', padding: '0.2rem 0.5rem' }}>
-                                  {inv.status ? inv.status.toUpperCase() : 'PAID'} ✓
-                                </span>
-                              </td>
-                              <td>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveReceipt(inv.fullReceipt || {
-                                      receiptNumber: inv.txId,
-                                      orderId: inv.orderId || 'ORD-MEM-PRO',
-                                      paymentId: inv.paymentId || 'PAY-VERIFIED',
-                                      title: inv.plan,
-                                      amount: inv.amount,
-                                      userName: profileData?.name || currentUser?.name || 'Athlete Member',
-                                      userEmail: profileData?.email || currentUser?.email || 'athlete@apex.club',
-                                      userPhone: profileData?.phone || '+91 98765 43210',
-                                      paymentMethod: 'Razorpay Online (UPI/Cards)',
-                                      paymentType: 'membership',
-                                      createdAt: inv.date === 'Today' ? new Date().toISOString() : new Date(inv.date || Date.now()).toISOString(),
-                                      items: [{ name: inv.plan, qty: 1, unitPrice: inv.amount, total: inv.amount }]
-                                    });
-                                  }}
-                                  className="outline-btn"
-                                  style={{ padding: '0.35rem 0.8rem', fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                                >
-                                  <span>📄</span> View Receipt
-                                </button>
-                              </td>
-                            </tr>
-                          ))
+                          .map((inv, idx) => {
+                            const pMethod = inv.fullReceipt?.paymentMethod || (inv.paymentId?.startsWith('pay_') ? 'Razorpay Online' : 'Online Gateway');
+                            const isMembership = inv.plan?.toLowerCase().includes('pass') || inv.plan?.toLowerCase().includes('core') || inv.plan?.toLowerCase().includes('pro') || inv.plan?.toLowerCase().includes('elite');
+                            const isSupp = inv.plan?.toLowerCase().includes('store') || inv.plan?.toLowerCase().includes('supp') || inv.plan?.toLowerCase().includes('whey') || inv.plan?.toLowerCase().includes('creatine');
+                            const isCoach = inv.plan?.toLowerCase().includes('coach') || inv.plan?.toLowerCase().includes('trainer');
+
+                            return (
+                              <tr key={idx}>
+                                <td>
+                                  <span style={{ fontFamily: 'monospace', color: 'var(--accent-cyan)', fontWeight: 800, fontSize: '0.82rem', letterSpacing: '0.03em', background: 'rgba(0, 240, 255, 0.06)', padding: '0.2rem 0.5rem', borderRadius: '4px', border: '1px solid rgba(0, 240, 255, 0.2)' }}>
+                                    {inv.txId}
+                                  </span>
+                                </td>
+                                <td>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                                    <strong style={{ color: 'var(--text-white)', fontSize: '0.85rem' }}>
+                                      {isMembership && '⚡ '}
+                                      {isSupp && '📦 '}
+                                      {isCoach && '🥋 '}
+                                      {inv.plan}
+                                    </strong>
+                                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                      {isMembership ? 'Gym Access & Floor Pass' : isSupp ? 'Store Item Delivery' : isCoach ? 'Personal Training Package' : 'Verified Service'}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td>
+                                  <strong style={{ color: 'var(--text-white)', fontSize: '0.92rem', fontWeight: 800 }}>
+                                    ₹{Number(inv.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </strong>
+                                </td>
+                                <td style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                                  {inv.date || 'Recent'}
+                                </td>
+                                <td>
+                                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', background: 'var(--bg-card-hover, rgba(255,255,255,0.03))', border: '1px solid var(--border-color)', padding: '0.2rem 0.5rem', borderRadius: '4px', whiteSpace: 'nowrap' }}>
+                                    💳 {pMethod.length > 22 ? pMethod.slice(0, 20) + '...' : pMethod}
+                                  </span>
+                                </td>
+                                <td>
+                                  <span className="status-badge paid" style={{ fontSize: '0.68rem', padding: '0.25rem 0.55rem', fontWeight: 800, letterSpacing: '0.04em' }}>
+                                    {(inv.status || 'PAID').toUpperCase()} ✓
+                                  </span>
+                                </td>
+                                <td style={{ textAlign: 'center' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const fallbackFull = {
+                                        receiptNumber: inv.txId,
+                                        orderId: inv.orderId || ('ORD-' + Math.random().toString(36).substr(2, 8).toUpperCase()),
+                                        paymentId: inv.paymentId || ('pay_' + Math.random().toString(36).substr(2, 10)),
+                                        title: inv.plan,
+                                        amount: Number(inv.amount || 0),
+                                        userName: profileData?.name || currentUser?.name || 'Athlete Member',
+                                        userEmail: profileData?.email || currentUser?.email || 'athlete@musclehub.club',
+                                        userPhone: profileData?.phone || currentUser?.phone || '+91 98801 56947',
+                                        paymentMethod: pMethod,
+                                        paymentType: isMembership ? 'membership' : isSupp ? 'supplement_order' : 'trainer_hire',
+                                        createdAt: inv.date && inv.date !== 'Today' ? new Date(inv.date).toISOString() : new Date().toISOString(),
+                                        items: inv.fullReceipt?.items || [{ name: inv.plan, qty: 1, unitPrice: inv.amount, total: inv.amount }]
+                                      };
+                                      setActiveReceipt(inv.fullReceipt || fallbackFull);
+                                    }}
+                                    className="outline-btn"
+                                    style={{ padding: '0.35rem 0.85rem', fontSize: '0.75rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 700, borderRadius: '6px' }}
+                                  >
+                                    <span>📄</span> View Tax Invoice
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })
                       )}
                     </tbody>
                   </table>
@@ -5193,7 +5857,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                     e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.04)';
                   }}
                 >
-                  <div style={{ height: '190px', background: '#0a0a0f', borderBottom: '1px solid var(--border-color)', overflow: 'hidden', position: 'relative' }}>
+                  <div style={{ height: '190px', background: 'var(--bg-dark)', borderBottom: '1px solid var(--border-color)', overflow: 'hidden', position: 'relative' }}>
                     <img src={eq.image} alt={eq.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     <span style={{
                       position: 'absolute',

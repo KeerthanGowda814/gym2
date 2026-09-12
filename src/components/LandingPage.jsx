@@ -427,12 +427,12 @@ export default function LandingPage({ navigate }) {
           <div className="pricing-grid">
             {/* Basic Plan */}
             <div className="pricing-card reveal active">
-              <h3 className="plan-name">MuScLe Core</h3>
-              <p className="plan-desc">Essential access for structured lifters.</p>
+              <h3 className="plan-name">Muscle Core (Monthly)</h3>
+              <p className="plan-desc">Essential monthly access for structured lifters.</p>
               <div className="plan-price-wrapper">
                 <span className="plan-currency">₹</span>
                 <span className="plan-price" style={{ transition: 'all 0.15s ease' }}>
-                  {billingPeriod === 'monthly' ? '600' : '31'}
+                  {billingPeriod === 'monthly' ? '800' : '7,600'}
                 </span>
                 <span className="plan-period">/{billingPeriod === 'monthly' ? 'mo' : 'yr'}</span>
               </div>
@@ -473,14 +473,14 @@ export default function LandingPage({ navigate }) {
             
             {/* Popular Plan */}
             <div className="pricing-card popular reveal active">
-              <h3 className="plan-name">MuScLe Pro</h3>
+              <h3 className="plan-name">Muscle Pro (6-Month)</h3>
               <p className="plan-desc">For driven members looking to accelerate.</p>
               <div className="plan-price-wrapper">
                 <span className="plan-currency">₹</span>
                 <span className="plan-price" style={{ transition: 'all 0.15s ease' }}>
-                  {billingPeriod === 'monthly' ? '700' : '63'}
+                  {billingPeriod === 'monthly' ? '3,500' : '3,500'}
                 </span>
-                <span className="plan-period">/{billingPeriod === 'monthly' ? 'mo' : 'yr'}</span>
+                <span className="plan-period">/{billingPeriod === 'monthly' ? '6 mos' : '6 mos'}</span>
               </div>
               <ul className="plan-features">
                 <li className="plan-feature-item">
@@ -519,14 +519,14 @@ export default function LandingPage({ navigate }) {
 
             {/* Premium Plan */}
             <div className="pricing-card reveal active">
-              <h3 className="plan-name">MuScLe Elite</h3>
+              <h3 className="plan-name">Muscle Elite (Yearly)</h3>
               <p className="plan-desc">Complete bespoke training & nutrition program.</p>
               <div className="plan-price-wrapper">
                 <span className="plan-currency">₹</span>
                 <span className="plan-price" style={{ transition: 'all 0.15s ease' }}>
-                  {billingPeriod === 'monthly' ? '900' : '119'}
+                  {billingPeriod === 'monthly' ? '7,500' : '7,500'}
                 </span>
-                <span className="plan-period">/{billingPeriod === 'monthly' ? 'mo' : 'yr'}</span>
+                <span className="plan-period">/{billingPeriod === 'monthly' ? 'yr' : 'yr'}</span>
               </div>
               <ul className="plan-features">
                 <li className="plan-feature-item">

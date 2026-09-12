@@ -56,7 +56,7 @@ const PaymentReceiptSchema = new mongoose.Schema({
   },
   status: { 
     type: String, 
-    enum: ['paid', 'captured', 'failed', 'refunded'], 
+    enum: ['paid', 'pending', 'captured', 'failed', 'refunded', 'billed_to_account'], 
     default: 'paid' 
   },
   paymentMethod: { 

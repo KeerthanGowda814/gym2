@@ -4,12 +4,12 @@
     "name": "Jeery",
     "email": "thepcworkshop1@gmail.com",
     "role": "member",
-    "membershipTier": "Muscle Pro",
+    "membershipTier": "Muscle Core",
     "autoRenew": true,
-    "daysLeft": 5,
-    "expiryDate": "July 17, 2026",
+    "daysLeft": 30,
+    "expiryDate": "October 12, 2026",
     "nextChargeDate": "August 10, 2026",
-    "renewed": false,
+    "renewed": true,
     "attendanceStreak": 14,
     "attendanceRate": 92,
     "registeredFacePhoto": "data:image/png;base64,REGISTERED_ETHAN_HUNT_REF_PHOTO_DATA",
@@ -74,6 +74,50 @@
   },
   "invoices": [
     {
+      "txId": "TX-9315",
+      "userEmail": "thepcworkshop1@gmail.com",
+      "plan": "Muscle Core Subscription",
+      "amount": 800,
+      "status": "paid",
+      "date": "Sep 12, 2026"
+    },
+    {
+      "id": "MH-RCP-2026-581717",
+      "date": "Sep 12, 2026",
+      "desc": "Muscle Core Pass Subscription",
+      "amount": "₹800",
+      "status": "Paid",
+      "userEmail": "thepcworkshop1@gmail.com",
+      "receiptNumber": "MH-RCP-2026-581717",
+      "category": "membership",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)"
+    },
+    {
+      "id": "MH-RCP-2026-109825",
+      "txId": "pay_TazeLguWJ4O5rs",
+      "receiptNumber": "MH-RCP-2026-109825",
+      "plan": "Supplements: 1x Apex Whey Protein Isolate...",
+      "desc": "Supp Store: 1x Apex Whey Protein Isolate...",
+      "amount": "₹102.991",
+      "numAmount": 102.991,
+      "status": "Paid",
+      "paymentMethod": "Online Payment (Razorpay)",
+      "userEmail": "thepcworkshop1@gmail.com",
+      "userName": "Jeery",
+      "date": "Sep 12, 2026, 09:58 AM"
+    },
+    {
+      "id": "MH-RCP-2026-109825",
+      "date": "Sep 12, 2026",
+      "desc": "MuScLe HuB Supplement Store Order",
+      "amount": "₹102.991",
+      "status": "Paid",
+      "userEmail": "thepcworkshop1@gmail.com",
+      "receiptNumber": "MH-RCP-2026-109825",
+      "category": "supplement_order",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)"
+    },
+    {
       "id": "MH-RCP-2026-631549",
       "date": "Sep 10, 2026",
       "desc": "Hire Coach: Coach Marcus Vance (1-Month Personal Coaching)",
@@ -118,6 +162,47 @@
         "sender": "coach",
         "text": "Welcome Jeery! I am excited to coach you. I have received your booking and will prepare your custom workout & diet plan today!",
         "time": "09:41 PM"
+      },
+      {
+        "id": "c-1789131171181",
+        "memberName": "Jeery",
+        "sender": "member",
+        "text": "sss",
+        "time": "Sep 11, 06:22 PM",
+        "read": true
+      },
+      {
+        "id": "c-1789194188874",
+        "memberName": "Jeery",
+        "clientEmail": "thepcworkshop1@gmail.com",
+        "coachName": "Coach Marcus Vance",
+        "sender": "coach",
+        "text": "retry",
+        "time": "Sep 12, 11:53 AM",
+        "read": false,
+        "createdAt": "2026-09-12T06:23:08.874Z"
+      },
+      {
+        "id": "c-1789195115439",
+        "memberName": "Jeery",
+        "clientEmail": "thepcworkshop1@gmail.com",
+        "coachName": "Coach Marcus Vance",
+        "sender": "coach",
+        "text": "🏋️‍♂️ [WORKOUT ASSIGNED] Coach Coach Marcus Vance has assigned you the training program: \"Hypertrophy Upper/Lower Split\" (6 weeks). Check your Prescribed Workout Program terminal!",
+        "time": "Sep 12, 12:08 PM",
+        "read": false,
+        "createdAt": "2026-09-12T06:38:35.439Z"
+      },
+      {
+        "id": "c-1789195362954",
+        "memberName": "Jeery",
+        "clientEmail": "thepcworkshop1@gmail.com",
+        "coachName": "Coach Marcus Vance",
+        "sender": "coach",
+        "text": "🥗 [DIET PLAN ASSIGNED] Coach Coach Marcus Vance has assigned you the nutrition protocol: \"High-Protein Bulking Plan\" (3,200 kcal). Check your Prescribed Diet Plan terminal!",
+        "time": "Sep 12, 12:12 PM",
+        "read": false,
+        "createdAt": "2026-09-12T06:42:42.954Z"
       }
     ],
     "members": [
@@ -174,7 +259,7 @@
         "target": "Muscle Mass",
         "duration": "6 weeks",
         "exercises": "Bench Press, Bent Rows, Overhead Press, Incline DB Press",
-        "clientsAssigned": 3,
+        "clientsAssigned": 4,
         "date": "Jul 15, 2026"
       },
       {
@@ -196,7 +281,7 @@
         "carbs": "350g",
         "fats": "85g",
         "desc": "Optimal caloric surplus for lean muscle mass accretion.",
-        "clientsAssigned": 2
+        "clientsAssigned": 3
       },
       {
         "id": "dp-2",
@@ -218,7 +303,7 @@
         "timeBlock": "Tomorrow 10:00 AM",
         "time": "Tomorrow 10:00 AM",
         "shiftCategory": "Morning Shift",
-        "status": "Confirmed"
+        "status": "Completed"
       },
       {
         "id": "ag-1",
@@ -237,14 +322,26 @@
     ],
     "attendanceLogs": [
       {
+        "id": "att-1789194549100",
+        "name": "Jeery",
+        "code": "#1789048351915-CARD",
+        "scanMethod": "Manual Entry (Trainer)",
+        "inTime": "11:57 AM",
+        "outTime": "01:46 PM",
+        "duration": "1h 30m",
+        "date": "Sep 12, 2026",
+        "status": "done"
+      },
+      {
         "id": "att-1",
         "name": "Ethan Hunt",
         "code": "#90210-FACE",
         "scanMethod": "AI Face Biometrics",
         "inTime": "09:05 AM",
-        "outTime": "--",
+        "outTime": "11:59 AM",
         "date": "Today",
-        "status": "active"
+        "status": "done",
+        "duration": "1h 30m"
       },
       {
         "id": "att-2",
@@ -389,7 +486,77 @@
         }
       }
     ],
-    "orders": []
+    "orders": [
+      {
+        "_id": "6aa4d4d5f27866ddfc803759",
+        "orderId": "ORD-1789187285085",
+        "txId": "pay_TazeLguWJ4O5rs",
+        "userEmail": "thepcworkshop1@gmail.com",
+        "userName": "Jeery",
+        "userPhone": "+919880156947",
+        "items": [
+          {
+            "id": "whey-isolate",
+            "name": "Apex Whey Protein Isolate",
+            "price": 59.99,
+            "quantity": 1,
+            "image": "assets/images/whey_protein.png",
+            "_id": "6aa4d4d5f27866ddfc80375a"
+          }
+        ],
+        "itemsSummary": "1x Apex Whey Protein Isolate",
+        "subtotal": 59.99,
+        "memberDiscount": 5.9990000000000006,
+        "promoDiscount": 0,
+        "shippingFee": 49,
+        "total": 102.991,
+        "totalAmount": 102.991,
+        "shippingInfo": {
+          "fullName": "Jeery",
+          "phone": "+919880156947",
+          "address": "742 Evergreen Terrace, Sector 4",
+          "city": "Bangalore",
+          "state": "Karnataka",
+          "pincode": "560001",
+          "deliveryType": "express"
+        },
+        "paymentMethod": "Online Payment (Razorpay)",
+        "paymentStatus": "Paid",
+        "courierName": "Apex Express Logistics",
+        "trackingNumber": "",
+        "estimatedDelivery": "24 Hours Priority",
+        "status": "Confirmed",
+        "statusTimeline": [
+          {
+            "status": "Pending Confirmation",
+            "timestamp": "Sep 12, 2026, 09:58 AM",
+            "note": "Payment received & verified via Razorpay. Pending admin packing & dispatch.",
+            "_id": "6aa4d4d5f27866ddfc80375b"
+          },
+          {
+            "status": "Confirmed",
+            "timestamp": "Sep 12, 2026, 01:04 PM",
+            "note": "Order confirmed by Admin",
+            "_id": "6aa50076dada5c94fd234981"
+          },
+          {
+            "status": "Confirmed",
+            "timestamp": "Sep 12, 2026, 01:04 PM",
+            "note": "Status updated to Confirmed by Admin",
+            "_id": "6aa50079dada5c94fd2349a6"
+          },
+          {
+            "status": "Confirmed",
+            "timestamp": "Sep 12, 2026, 01:04 PM",
+            "note": "Status updated to Confirmed by Admin"
+          }
+        ],
+        "date": "Sep 12, 2026, 09:58 AM",
+        "createdAt": "2026-09-12T04:28:05.098Z",
+        "updatedAt": "2026-09-12T07:34:17.883Z",
+        "__v": 0
+      }
+    ]
   },
   "equipment": [
     {
@@ -592,7 +759,7 @@
       "password": "google_oauth_112904906917774012126",
       "role": "member",
       "picture": "https://lh3.googleusercontent.com/a/ACg8ocImkhSRyrK4RRCZryr31NDu3dsFSRh-XJJp5uE5GpqPRK1JSGQ=s96-c",
-      "membershipTier": "Muscle Pro",
+      "membershipTier": "Muscle Core",
       "status": "Active",
       "joinedDate": "Sep 2026",
       "authProvider": "google",
@@ -601,23 +768,90 @@
   ],
   "alerts": [
     {
-      "id": "alt-1788169035124",
-      "title": "efefe",
-      "message": "defevedcxd",
-      "type": "general",
-      "date": "Aug 31, 2026, 03:07 PM",
-      "active": true
-    },
-    {
-      "id": "alt-1788168781366",
-      "title": "testuu",
-      "message": "testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest",
-      "type": "general",
-      "date": "Aug 31, 2026, 03:03 PM",
+      "id": "alt-1789200926426",
+      "title": "test",
+      "message": "test",
+      "type": "holiday",
+      "date": "Sep 12, 2026, 01:45 PM",
       "active": true
     }
   ],
   "receipts": [
+    {
+      "receiptNumber": "MH-RCP-2026-581717",
+      "orderId": "order_direct_dxBVsqjO_3404",
+      "paymentId": "pay_TazxZ2dxBVsqjO",
+      "signature": "VERIFIED_GATEWAY",
+      "userId": "MEM-90210",
+      "userName": "Jeery",
+      "userEmail": "thepcworkshop1@gmail.com",
+      "userPhone": "+919880156947",
+      "userRole": "member",
+      "paymentType": "membership",
+      "title": "Muscle Core Pass Subscription",
+      "amount": 800,
+      "currency": "INR",
+      "status": "paid",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)",
+      "bankRrn": "RRN-503614244134",
+      "items": [
+        {
+          "name": "Muscle Core Pass Subscription",
+          "qty": 1,
+          "unitPrice": 800,
+          "total": 800
+        }
+      ],
+      "subtotal": 677.97,
+      "gstRate": 18,
+      "gstAmount": 122.03,
+      "discountAmount": 0,
+      "netAmount": 800,
+      "createdAt": "2026-09-12T04:46:13.404Z",
+      "metadata": {
+        "planTier": "Muscle Core",
+        "durationDays": 30,
+        "method": "Razorpay Online (UPI/Cards/NetBanking)",
+        "verifiedAt": "2026-09-12T04:46:13.404Z"
+      }
+    },
+    {
+      "receiptNumber": "MH-RCP-2026-109825",
+      "orderId": "ORD-1789187285085",
+      "paymentId": "pay_TazeLguWJ4O5rs",
+      "signature": "GATEWAY_VERIFIED",
+      "userId": "MEM-90210",
+      "userName": "Jeery",
+      "userEmail": "thepcworkshop1@gmail.com",
+      "userPhone": "+919880156947",
+      "userRole": "member",
+      "paymentType": "supplement_order",
+      "title": "MuScLe HuB Store: 1x Apex Whey Protein Isolate",
+      "amount": 102.991,
+      "currency": "INR",
+      "status": "paid",
+      "paymentMethod": "Online Payment (Razorpay)",
+      "bankRrn": "RRN-608073104901",
+      "items": [
+        {
+          "name": "Apex Whey Protein Isolate",
+          "qty": 1,
+          "unitPrice": 59.99,
+          "total": 59.99
+        }
+      ],
+      "subtotal": 87.28,
+      "gstRate": 18,
+      "gstAmount": 15.71,
+      "discountAmount": 5.9990000000000006,
+      "netAmount": 102.991,
+      "createdAt": "2026-09-12T04:28:05.086Z",
+      "metadata": {
+        "deliveryType": "express",
+        "shippingAddress": "742 Evergreen Terrace, Sector 4, Bangalore, Karnataka - 560001",
+        "orderId": "ORD-1789187285085"
+      }
+    },
     {
       "receiptNumber": "MH-RCP-2026-631549",
       "orderId": "order_direct_EvtlpN8k_4712",
@@ -656,6 +890,40 @@
         "method": "Razorpay Online (UPI/Cards/NetBanking)",
         "verifiedAt": "2026-09-10T16:11:54.712Z"
       }
+    }
+  ],
+  "attendanceLogs": [
+    {
+      "id": "att-1789194552931",
+      "userEmail": "ethan@apex.com",
+      "memberName": "Ethan Hunt",
+      "code": "#90210-CARD",
+      "scanMethod": "Manual Trainer Entry",
+      "gateAction": "Gate Exit Check-out",
+      "inTime": "09:00 AM",
+      "outTime": "11:59 AM",
+      "duration": "1h 30m",
+      "hoursLogged": "1h 30m",
+      "date": "Sep 12, 2026",
+      "monthYear": "September 2026",
+      "dayOfMonth": 12,
+      "status": "Completed"
+    },
+    {
+      "id": "att-1789194549101",
+      "userEmail": "thepcworkshop1@gmail.com",
+      "memberName": "Jeery",
+      "code": "#1789048351915-CARD",
+      "scanMethod": "Manual Trainer Entry",
+      "gateAction": "Gate Exit Check-out",
+      "inTime": "11:57 AM",
+      "outTime": "01:46 PM",
+      "duration": "1h 30m",
+      "hoursLogged": "1h 30m",
+      "date": "Sep 12, 2026",
+      "monthYear": "September 2026",
+      "dayOfMonth": 12,
+      "status": "Completed"
     }
   ]
 }

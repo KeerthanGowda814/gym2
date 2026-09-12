@@ -53,7 +53,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
   useEffect(() => {
     const fetchTrainerPayments = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/payment/receipts?type=trainer_booking');
+        const res = await fetch('http://localhost:5000/api/payment/receipts?type=all');
         const data = await res.json();
         if (data.success && data.receipts) {
           setTrainerClientPayments(data.receipts);
@@ -96,6 +96,18 @@ export default function TrainerPanel({ activeView, currentUser }) {
   // --- STATE INITIALIZATION WITH LOCALSTORAGE PERSISTENCE ---
 
   const defaultMembers = [
+    {
+      id: 'MEM-98801',
+      name: 'Jeery',
+      email: 'thepcworkshop1@gmail.com',
+      tier: 'Muscle Core Member',
+      status: 'Active',
+      joined: '01 Sep 2024',
+      goal: 'Form Consultation & Baseline Testing',
+      diet: 'Lean Calorie Deficit Plan',
+      workout: 'Hypertrophy Split Alpha (Upper/Lower)',
+      attendance: 96
+    },
     {
       id: 'MEM-10892',
       name: 'Ethan Hunt',
@@ -307,7 +319,13 @@ export default function TrainerPanel({ activeView, currentUser }) {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) baseList = parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          parsed.forEach((m) => {
+            if (m.name && !baseList.some((b) => b.name.toLowerCase() === m.name.toLowerCase())) {
+              baseList.push(m);
+            }
+          });
+        }
       } catch (e) {
         console.error("Failed to parse apex_trainer_members:", e);
       }
@@ -336,6 +354,82 @@ export default function TrainerPanel({ activeView, currentUser }) {
     return baseList;
   };
 
+  // Helper to dynamically calculate client subscription expiry from live payment receipts
+  const calculateClientExpiry = (member, receiptsList = []) => {
+    if (!member) return { daysRemaining: 28, expiryDateStr: 'Oct 10, 2026' };
+
+    if (typeof member.daysLeft === 'number') {
+      const remaining = member.daysLeft;
+      const expTime = Date.now() + (remaining * 24 * 60 * 60 * 1000);
+      return {
+        daysRemaining: remaining,
+        expiryDateStr: member.expiryDate || new Date(expTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      };
+    }
+
+    const mEmail = (member.email || '').toLowerCase().trim();
+    const mName = (member.name || '').toLowerCase().trim();
+
+    const matched = (receiptsList || []).filter(r => {
+      if (!r) return false;
+      const rEmail = (r.userEmail || r.email || '').toLowerCase().trim();
+      const rName = (r.userName || r.name || r.memberName || '').toLowerCase().trim();
+      return (mEmail && rEmail && (rEmail === mEmail || rEmail.includes(mEmail))) ||
+             (mName && rName && (rName === mName || rName.includes(mName)));
+    });
+
+    if (matched.length > 0) {
+      matched.sort((a, b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0));
+      const latest = matched[0];
+      const rawDate = latest.createdAt || latest.metadata?.verifiedAt || latest.date;
+      const purchaseDate = rawDate ? new Date(rawDate) : null;
+
+      if (purchaseDate && !isNaN(purchaseDate.getTime())) {
+        let durationDays = 30; // 1 month default
+        const text = `${latest.title || ''} ${latest.plan || ''} ${latest.metadata?.package || ''} ${latest.items?.[0]?.name || ''}`.toLowerCase();
+        
+        if (text.includes('quarter') || text.includes('3-month') || text.includes('3 month') || text.includes('90-day')) {
+          durationDays = 90;
+        } else if (text.includes('annual') || text.includes('year') || text.includes('12-month') || text.includes('365')) {
+          durationDays = 365;
+        } else if (text.includes('week') || text.includes('7-day')) {
+          durationDays = 7;
+        } else if (text.includes('monthly') || text.includes('1-month') || text.includes('1 month') || text.includes('30-day') || text.includes('muscle core') || text.includes('pro')) {
+          durationDays = 30;
+        }
+
+        const expiryTime = purchaseDate.getTime() + (durationDays * 24 * 60 * 60 * 1000);
+        const daysLeft = Math.ceil((expiryTime - Date.now()) / (1000 * 60 * 60 * 24));
+        const expiryDateStr = new Date(expiryTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+        return {
+          daysRemaining: daysLeft,
+          expiryDateStr
+        };
+      }
+    }
+
+    if (member.joined || member.joinedDate) {
+      try {
+        const parsedJoined = new Date(member.joined || member.joinedDate);
+        if (!isNaN(parsedJoined.getTime())) {
+          const expiryTime = parsedJoined.getTime() + (30 * 24 * 60 * 60 * 1000);
+          const daysLeft = Math.ceil((expiryTime - Date.now()) / (1000 * 60 * 60 * 24));
+          return {
+            daysRemaining: daysLeft > -300 ? daysLeft : 28,
+            expiryDateStr: new Date(expiryTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          };
+        }
+      } catch (e) {}
+    }
+
+    const defaultExpiryTime = Date.now() + (28 * 24 * 60 * 60 * 1000);
+    return {
+      daysRemaining: 28,
+      expiryDateStr: new Date(defaultExpiryTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    };
+  };
+
   // 1. Members List (Loaded dynamically from real registered users)
   const [members, setMembers] = useState(() => getRegisteredMembers());
 
@@ -359,12 +453,12 @@ export default function TrainerPanel({ activeView, currentUser }) {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       } catch (e) {
         console.error("Failed to parse apex_trainer_diets:", e);
       }
     }
-    return [];
+    return defaultDiets;
   });
 
   // 4. Agenda/Appointments (Schedule)
@@ -412,68 +506,103 @@ export default function TrainerPanel({ activeView, currentUser }) {
   const [selectedChatMember, setSelectedChatMember] = useState('Ethan Hunt');
   const [singleChatInput, setSingleChatInput] = useState('');
   const [memberInputs, setMemberInputs] = useState({});
+  const [unreadChatsByMember, setUnreadChatsByMember] = useState({});
+  const prevTrainerChatCountRef = useRef(0);
+  const trainerChatScrollRef = useRef(null);
 
-  // Sync real-time member chats automatically (deduplicating local and remote)
+  const currentCoachName = currentUser?.name || 'Coach Marcus Vance';
+
+  // Mark chat as read when selecting member or on mount
+  useEffect(() => {
+    if (selectedChatMember) {
+      const currentMemberObj = members.find((m) => m.name.toLowerCase() === selectedChatMember.toLowerCase());
+      trainerApi.markChatRead(selectedChatMember, currentMemberObj?.email || '', currentCoachName);
+      setUnreadChatsByMember((prev) => ({ ...prev, [selectedChatMember]: 0 }));
+    }
+  }, [selectedChatMember, currentCoachName]);
+
+  // Scroll trainer chat box to bottom when member or chats change
+  useEffect(() => {
+    if (trainerChatScrollRef.current) {
+      trainerChatScrollRef.current.scrollTop = trainerChatScrollRef.current.scrollHeight;
+    }
+  }, [selectedChatMember, allMemberChats]);
+
+  // Sync real-time member chats automatically
   useEffect(() => {
     const syncChat = async () => {
-      let localSaved = [];
       try {
-        localSaved = JSON.parse(localStorage.getItem('apex_trainer_chat_history') || '[]');
-      } catch (e) {}
+        const res = await trainerApi.getChatHistory('', '', currentCoachName);
+        if (res && res.success) {
+          const chatData = Array.isArray(res.allHistory) ? res.allHistory : (Array.isArray(res.data) ? res.data : []);
+          
+          if (res.unreadByMember) {
+            setUnreadChatsByMember(res.unreadByMember);
+          }
 
-      let remoteChat = [];
-      try {
-        const res = await trainerApi.getChatHistory();
-        if (res && Array.isArray(res)) remoteChat = res;
-      } catch (e) {}
+          // Trigger toast alert for newly arrived athlete messages
+          if (chatData.length > prevTrainerChatCountRef.current && prevTrainerChatCountRef.current > 0) {
+            const newMemberMsgs = chatData.filter(m => m.sender === 'member' && !m.read);
+            if (newMemberMsgs.length > 0) {
+              const latest = newMemberMsgs[newMemberMsgs.length - 1];
+              CustomSwal.fire({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 4500,
+                timerProgressBar: true,
+                icon: 'info',
+                title: `💬 New Message from ${latest.memberName || 'Athlete'}`,
+                text: latest.text,
+                background: '#121319',
+                color: '#fff'
+              });
+            }
+          }
+          prevTrainerChatCountRef.current = chatData.length;
 
-      const map = new Map();
-      [...localSaved, ...remoteChat].forEach((item) => {
-        if (item && item.id) map.set(item.id, item);
-        else if (item && item.text) map.set(item.text + (item.time || ''), item);
-      });
+          if (chatData.length > 0) {
+            setAllMemberChats(chatData);
 
-      const combined = Array.from(map.values());
-      if (combined.length > 0) {
-        setAllMemberChats(combined);
-        try {
-          localStorage.setItem('apex_trainer_chat_history', JSON.stringify(combined));
-        } catch (e) {}
-
-        // Dynamically add any member who sent a message to the members list if not already present
-        combined.forEach((msg) => {
-          if (msg.memberName && msg.memberName !== 'Coach Marcus Vance') {
-            setMembers((prev) => {
-              if (!prev.some((m) => m.name.toLowerCase() === msg.memberName.toLowerCase())) {
-                return [
-                  ...prev,
-                  {
-                    id: `MEM-${10890 + prev.length}`,
-                    name: msg.memberName,
-                    email: `${msg.memberName.toLowerCase().replace(/\s+/g, '.')}@apex.com`,
-                    tier: 'Pro Member',
-                    status: 'Active',
-                    joined: 'Today',
-                    goal: 'General Fitness & Performance',
-                    diet: 'Prescribed Protocol',
-                    workout: 'Prescribed Program',
-                    attendance: 100
+            // Dynamically add any member who sent a message to the members list if not already present
+            chatData.forEach((msg) => {
+              if (msg.memberName && !msg.memberName.toLowerCase().startsWith('coach')) {
+                setMembers((prev) => {
+                  if (!prev.some((m) => m.name.toLowerCase() === msg.memberName.toLowerCase())) {
+                    return [
+                      ...prev,
+                      {
+                        id: `MEM-${10890 + prev.length}`,
+                        name: msg.memberName,
+                        email: msg.clientEmail || `${msg.memberName.toLowerCase().replace(/\s+/g, '.')}@apex.com`,
+                        tier: 'Pro Member',
+                        status: 'Active',
+                        joined: 'Today',
+                        goal: 'General Fitness & Performance',
+                        diet: 'Prescribed Protocol',
+                        workout: 'Prescribed Program',
+                        attendance: 100
+                      }
+                    ];
                   }
-                ];
+                  return prev;
+                });
               }
-              return prev;
             });
           }
-        });
-      }
+        }
+      } catch (e) {}
     };
+
     syncChat();
     const interval = setInterval(syncChat, 2000);
     return () => clearInterval(interval);
-  }, []);
+  }, [currentCoachName]);
 
   const handleSendTrainerMsgToMember = async (targetMemberName) => {
     const activeMember = targetMemberName || selectedChatMember || 'Ethan Hunt';
+    const targetMemberObj = members.find((m) => m.name.toLowerCase() === activeMember.toLowerCase());
+    const clientEmail = targetMemberObj?.email || '';
     const inputVal = singleChatInput.trim() || (memberInputs[activeMember] || '').trim();
     if (!inputVal) return;
 
@@ -483,23 +612,21 @@ export default function TrainerPanel({ activeView, currentUser }) {
     const newMsg = {
       id: `c-${Date.now()}`,
       memberName: activeMember,
+      clientEmail: clientEmail,
+      coachName: currentCoachName,
       sender: 'coach',
       text: inputVal,
-      time: timeStr
+      time: timeStr,
+      read: false
     };
 
     const updatedChats = [...allMemberChats, newMsg];
     setAllMemberChats(updatedChats);
     setSingleChatInput('');
     setMemberInputs((prev) => ({ ...prev, [activeMember]: '' }));
+    prevTrainerChatCountRef.current = prevTrainerChatCountRef.current + 1;
 
-    try {
-      localStorage.setItem('apex_trainer_chat_history', JSON.stringify(updatedChats));
-    } catch (e) {
-      console.warn("Storage chat sync error:", e);
-    }
-
-    await trainerApi.sendChatMessage(inputVal, 'coach', activeMember);
+    await trainerApi.sendChatMessage(inputVal, 'coach', activeMember, clientEmail, currentCoachName);
   };
 
   // --- TRAINER PANEL PAGINATION STATES ---
@@ -550,15 +677,33 @@ export default function TrainerPanel({ activeView, currentUser }) {
     async function loadTrainerBackendData() {
       // 1. Members Roster
       const fetchedMembers = await trainerApi.getMembers();
-      if (fetchedMembers && fetchedMembers.length > 0) setMembers(fetchedMembers);
+      if (fetchedMembers && fetchedMembers.length > 0) {
+        setMembers((prev) => {
+          const merged = [...prev];
+          fetchedMembers.forEach((fm) => {
+            if (fm.name && !merged.some((m) => m.name.toLowerCase() === fm.name.toLowerCase())) {
+              merged.push(fm);
+            }
+          });
+          return merged;
+        });
+      }
 
       // 2. Workout Plans
       const fetchedWorkouts = await trainerApi.getWorkouts();
-      if (fetchedWorkouts && fetchedWorkouts.length > 0) setWorkoutPlans(fetchedWorkouts);
+      if (fetchedWorkouts && fetchedWorkouts.length > 0) {
+        setWorkoutPlans(fetchedWorkouts);
+      } else {
+        setWorkoutPlans(defaultWorkouts);
+      }
 
       // 3. Diet Plans
       const fetchedDiets = await trainerApi.getDiets();
-      if (fetchedDiets && fetchedDiets.length > 0) setDietPlans(fetchedDiets);
+      if (fetchedDiets && fetchedDiets.length > 0) {
+        setDietPlans(fetchedDiets);
+      } else {
+        setDietPlans((prev) => (prev && prev.length > 0 ? prev : defaultDiets));
+      }
 
       // 4. Schedule Agenda
       const fetchedAgenda = await trainerApi.getSchedule();
@@ -570,6 +715,34 @@ export default function TrainerPanel({ activeView, currentUser }) {
     }
     loadTrainerBackendData();
   }, []);
+
+  // Auto-sync client names from schedule agenda into members roster
+  useEffect(() => {
+    if (agenda && agenda.length > 0) {
+      setMembers((prev) => {
+        let changed = false;
+        const updated = [...prev];
+        agenda.forEach((item) => {
+          if (item.client && !updated.some((m) => m.name.toLowerCase() === item.client.toLowerCase())) {
+            updated.push({
+              id: `MEM-${Math.floor(10000 + Math.random() * 90000)}`,
+              name: item.client,
+              email: `${item.client.toLowerCase().replace(/\s+/g, '.')}@apex.com`,
+              tier: 'Pro Member',
+              status: 'Active',
+              joined: 'Recent Schedule',
+              goal: item.objective || item.routine || 'Personal Coaching',
+              diet: 'Prescribed Protocol',
+              workout: item.routine || 'Custom Training Block',
+              attendance: 96
+            });
+            changed = true;
+          }
+        });
+        return changed ? updated : prev;
+      });
+    }
+  }, [agenda]);
 
   // Auto-sync state edits back to localStorage
   useEffect(() => {
@@ -703,8 +876,8 @@ export default function TrainerPanel({ activeView, currentUser }) {
     night: ''
   });
 
-  // Food Menu Catalog Items
-  const FOOD_MENU_CATALOG = [
+  // Food Menu Catalog Items State
+  const initialFoodCatalog = [
     { id: 'f1', category: 'Proteins', name: 'Grilled Chicken Breast', portion: '200g', calories: 220, protein: 42, carbs: 0, fats: 5, icon: '🍗' },
     { id: 'f2', category: 'Proteins', name: 'Egg White Omelet', portion: '6 whites', calories: 120, protein: 24, carbs: 2, fats: 1, icon: '🥚' },
     { id: 'f3', category: 'Proteins', name: 'Baked Salmon Fillet', portion: '180g', calories: 340, protein: 34, carbs: 0, fats: 20, icon: '🐟' },
@@ -730,6 +903,21 @@ export default function TrainerPanel({ activeView, currentUser }) {
     { id: 'f19', category: 'Night', name: 'Micellar Casein Protein Pudding', portion: '1 scoop', calories: 140, protein: 28, carbs: 3, fats: 2, icon: '🌙' },
     { id: 'f20', category: 'Night', name: 'Greek Yogurt & Honey', portion: '200g', calories: 190, protein: 18, carbs: 22, fats: 2, icon: '🏺' }
   ];
+
+  const [foodCatalog, setFoodCatalog] = useState(() => {
+    const saved = localStorage.getItem('apex_food_menu_catalog');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return initialFoodCatalog;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('apex_food_menu_catalog', JSON.stringify(foodCatalog));
+  }, [foodCatalog]);
 
   // Quick Preset Buttons Handler (Weight Gain, Weight Loss, Cutting)
   const applyDietPreset = (goalType) => {
@@ -807,6 +995,98 @@ export default function TrainerPanel({ activeView, currentUser }) {
     }));
   };
 
+  // Add Custom Food Item into Catalog
+  const handleAddNewCatalogFood = async () => {
+    const { value: formValues } = await CustomSwal.fire({
+      title: 'Add New Food Item to Catalog',
+      html: `
+        <div style="text-align:left; color:#fff; display:flex; flex-direction:column; gap:0.6rem;">
+          <div>
+            <label style="font-size:0.75rem; color:#aaa; display:block; margin-bottom:0.2rem;">Food Item Name:</label>
+            <input id="swal-food-name" class="swal2-input" placeholder="e.g. Quinoa Bowl" style="margin:0; width:100%; box-sizing:border-box;">
+          </div>
+          <div style="display:flex; gap:0.5rem;">
+            <div style="flex:1;">
+              <label style="font-size:0.75rem; color:#aaa; display:block; margin-bottom:0.2rem;">Category:</label>
+              <select id="swal-food-cat" class="swal2-input" style="margin:0; width:100%; background:#12121c; color:#fff; box-sizing:border-box;">
+                <option value="Proteins">Proteins</option>
+                <option value="Carbs">Carbs</option>
+                <option value="Fats">Fats</option>
+                <option value="Pre/Post Workout">Pre/Post Workout</option>
+                <option value="Night">Night</option>
+              </select>
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:0.75rem; color:#aaa; display:block; margin-bottom:0.2rem;">Emoji Icon:</label>
+              <input id="swal-food-icon" class="swal2-input" placeholder="🥗" value="🥗" style="margin:0; width:100%; box-sizing:border-box;">
+            </div>
+          </div>
+          <div style="display:flex; gap:0.5rem;">
+            <div style="flex:1;">
+              <label style="font-size:0.75rem; color:#aaa; display:block; margin-bottom:0.2rem;">Portion:</label>
+              <input id="swal-food-portion" class="swal2-input" placeholder="1 cup (180g)" style="margin:0; width:100%; box-sizing:border-box;">
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:0.75rem; color:#aaa; display:block; margin-bottom:0.2rem;">Calories (kcal):</label>
+              <input id="swal-food-cals" type="number" class="swal2-input" placeholder="220" style="margin:0; width:100%; box-sizing:border-box;">
+            </div>
+          </div>
+          <div style="display:flex; gap:0.5rem;">
+            <div style="flex:1;">
+              <label style="font-size:0.75rem; color:#aaa; display:block; margin-bottom:0.2rem;">Protein (g):</label>
+              <input id="swal-food-p" type="number" class="swal2-input" placeholder="15" style="margin:0; width:100%; box-sizing:border-box;">
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:0.75rem; color:#aaa; display:block; margin-bottom:0.2rem;">Carbs (g):</label>
+              <input id="swal-food-c" type="number" class="swal2-input" placeholder="30" style="margin:0; width:100%; box-sizing:border-box;">
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:0.75rem; color:#aaa; display:block; margin-bottom:0.2rem;">Fats (g):</label>
+              <input id="swal-food-f" type="number" class="swal2-input" placeholder="5" style="margin:0; width:100%; box-sizing:border-box;">
+            </div>
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: 'Add to Catalog 🥗',
+      confirmButtonColor: '#00f0ff',
+      preConfirm: () => {
+        const name = document.getElementById('swal-food-name').value.trim();
+        const category = document.getElementById('swal-food-cat').value;
+        const icon = document.getElementById('swal-food-icon').value.trim() || '🥗';
+        const portion = document.getElementById('swal-food-portion').value.trim() || '1 serving';
+        const calories = parseInt(document.getElementById('swal-food-cals').value) || 150;
+        const protein = parseInt(document.getElementById('swal-food-p').value) || 10;
+        const carbs = parseInt(document.getElementById('swal-food-c').value) || 20;
+        const fats = parseInt(document.getElementById('swal-food-f').value) || 5;
+
+        if (!name) {
+          CustomSwal.showValidationMessage('Please enter a food item name');
+          return false;
+        }
+
+        return { name, category, icon, portion, calories, protein, carbs, fats };
+      }
+    });
+
+    if (formValues) {
+      const newItem = {
+        id: `f-custom-${Date.now()}`,
+        ...formValues
+      };
+      setFoodCatalog((prev) => [...prev, newItem]);
+      CustomSwal.fire({
+        icon: 'success',
+        title: 'Food Item Added! 🥗',
+        text: `"${formValues.name}" has been added to the Food Items Catalog!`
+      });
+    }
+  };
+
+  const handleDeleteCatalogFood = (foodId) => {
+    setFoodCatalog((prev) => prev.filter((item) => item.id !== foodId));
+  };
+
   // Share & Assign Diet Plan to specific athlete member
   const handleShareAndAssignDiet = (dietObj, memberNameInput) => {
     let targetName = memberNameInput || prompt(`Assign & Share "${dietObj.name}" to which member name?`);
@@ -840,7 +1120,30 @@ export default function TrainerPanel({ activeView, currentUser }) {
     // 2. Store full structured diet plan details for this specific member in localStorage
     localStorage.setItem(`apex_member_assigned_diet_${targetName.toLowerCase()}`, JSON.stringify(dietObj));
 
-    // 3. Call Node.js Express backend API
+    // 3. Dispatch chat notification to client terminal
+    const targetMemberObj = members.find(m => m.name && m.name.toLowerCase() === targetName.toLowerCase());
+    const clientEmail = targetMemberObj?.email || `${targetName.toLowerCase().replace(/\s+/g, '')}@apex.com`;
+
+    const dispatchMsg = {
+      id: `c-${Date.now()}`,
+      sender: 'coach',
+      memberName: targetName,
+      clientEmail: clientEmail,
+      coachName: currentCoachName,
+      text: `🥗 [DIET PLAN ASSIGNED] Coach ${currentCoachName} has assigned you the nutrition protocol: "${dietObj.name}" (${dietObj.calories || 'Custom kcal'}). Check your Prescribed Diet Plan terminal!`,
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      read: false
+    };
+
+    try {
+      const savedChat = JSON.parse(localStorage.getItem('apex_trainer_chat_history') || '[]');
+      savedChat.push(dispatchMsg);
+      localStorage.setItem('apex_trainer_chat_history', JSON.stringify(savedChat));
+      setAllMemberChats((prev) => [...prev, dispatchMsg]);
+      trainerApi.sendChatMessage(dispatchMsg.text, 'coach', targetName, clientEmail, currentCoachName);
+    } catch (e) {}
+
+    // 4. Call Node.js Express backend API
     trainerApi.assignDiet(dietObj.id || dietObj.name, targetName);
 
     if (CustomSwal) {
@@ -854,6 +1157,31 @@ export default function TrainerPanel({ activeView, currentUser }) {
             ✓ Member ${targetName} can now view this plan on their Member Panel -> Prescribed Diet Plan Page!
           </div>
         </div>`
+      });
+    }
+  };
+
+  const handleDeleteDiet = async (dObj) => {
+    if (!dObj) return;
+    const confirmRes = await CustomSwal.fire({
+      icon: 'warning',
+      title: `Delete Diet Plan?`,
+      html: `<span style="color:#fff;">Are you sure you want to remove <strong>${dObj.name}</strong> from nutrition protocols?</span>`,
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Delete',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#ff3e6c'
+    });
+
+    if (confirmRes.isConfirmed) {
+      setDietPlans((prev) => prev.filter((d) => (d.id ? d.id !== dObj.id : d.name !== dObj.name)));
+      if (dObj.id) {
+        await trainerApi.deleteDiet(dObj.id);
+      }
+      CustomSwal.fire({
+        icon: 'success',
+        title: 'Diet Plan Deleted 🗑️',
+        text: `Diet plan "${dObj.name}" has been removed.`
       });
     }
   };
@@ -889,6 +1217,14 @@ export default function TrainerPanel({ activeView, currentUser }) {
     return `${hh}:${min}`;
   });
 
+  useEffect(() => {
+    if (members && members.length > 0) {
+      if (!attMemberName || !members.some(m => m.name === attMemberName)) {
+        setAttMemberName(members[0].name);
+      }
+    }
+  }, [members]);
+
   // Roster Program Assignment state
   const [assignmentMemberId, setAssignmentMemberId] = useState(null); // id of member currently being assigned to
   const [selectedAssignedWorkout, setSelectedAssignedWorkout] = useState('');
@@ -904,6 +1240,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
   // Handle Agenda/Schedule submission
   const handleAgendaSubmit = async (e) => {
     e.preventDefault();
+    const targetClient = client || (members[0]?.name || 'Athlete');
     const routineText = routine.trim();
     const timeText = timeBlock.trim() || `${selectedShiftDay} ${selectedShiftSlot}`;
     if (!routineText || !timeText) return;
@@ -914,7 +1251,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
       id: `ag-${Date.now()}`,
       timeBlock: timeText,
       time: timeText,
-      client: client,
+      client: targetClient,
       routine: routineText,
       objective: routineText,
       shiftCategory: shiftCat,
@@ -928,22 +1265,31 @@ export default function TrainerPanel({ activeView, currentUser }) {
     // Call Node.js Backend API
     await trainerApi.createScheduleSession(newItem);
 
-    // Persist schedule item and dispatch notification message to localStorage so member panel updates instantly
+    // Persist schedule item and dispatch chat notification to member terminal
     try {
       const savedAgenda = JSON.parse(localStorage.getItem('apex_trainer_agenda') || '[]');
       savedAgenda.unshift(newItem);
       localStorage.setItem('apex_trainer_agenda', JSON.stringify(savedAgenda));
 
+      const targetMemberObj = members.find(m => m.name && m.name.toLowerCase() === targetClient.toLowerCase());
+      const clientEmail = targetMemberObj?.email || `${targetClient.toLowerCase().replace(/\s+/g, '')}@apex.com`;
+
       const dispatchMsg = {
         id: `c-${Date.now()}`,
         sender: 'coach',
-        text: `📅 [SCHEDULE DISPATCH] Coaching Session Scheduled for ${client}: "${routineText}" on ${timeText} (${shiftCat}).`,
-        time: 'Just Now'
+        memberName: targetClient,
+        clientEmail: clientEmail,
+        coachName: currentCoachName,
+        text: `📅 [SCHEDULE DISPATCH] Coach ${currentCoachName} scheduled session for ${targetClient}: "${routineText}" on ${timeText} (${shiftCat}). Check your Schedule & Trainer tab!`,
+        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        read: false
       };
 
       const savedChat = JSON.parse(localStorage.getItem('apex_trainer_chat_history') || '[]');
       savedChat.push(dispatchMsg);
       localStorage.setItem('apex_trainer_chat_history', JSON.stringify(savedChat));
+      setAllMemberChats((prev) => [...prev, dispatchMsg]);
+      trainerApi.sendChatMessage(dispatchMsg.text, 'coach', targetClient, clientEmail, currentCoachName);
     } catch (err) {
       console.warn("Schedule sync storage error:", err);
     }
@@ -953,10 +1299,10 @@ export default function TrainerPanel({ activeView, currentUser }) {
         icon: 'success',
         title: 'Training Session Scheduled & Shared 📅',
         html: `<div style="text-align:center;color:#fff;">
-          <p style="margin-bottom:0.8rem;">Session reserved for <strong>${client}</strong> during <strong>${shiftCat}</strong> (${timeText})!</p>
+          <p style="margin-bottom:0.8rem;">Session reserved for <strong>${targetClient}</strong> during <strong>${shiftCat}</strong> (${timeText})!</p>
           <div style="background:rgba(0,240,255,0.08);border:1px solid #00f0ff;padding:0.8rem;border-radius:6px;font-size:0.85rem;color:#00f0ff;">
-            ✓ Shared to Member Panel -> Trainer Block<br/>
-            ✓ Schedule dispatch notification sent to ${client}'s terminal
+            ✓ Synced to Member Panel -> Trainer & Schedule tab<br/>
+            ✓ Dispatch notification sent to ${targetClient}'s terminal
           </div>
         </div>`
       });
@@ -964,20 +1310,99 @@ export default function TrainerPanel({ activeView, currentUser }) {
   };
 
   // Remove/Complete agenda sessions
-  const handleCompleteSession = async (index, item) => {
-    setAgenda((prev) =>
-      prev.map((it, idx) => (idx === index ? { ...it, status: 'Completed' } : it))
-    );
-    if (item && item.id) {
+  const handleCompleteSession = async (item) => {
+    if (!item) return;
+    const updatedAgenda = agenda.map((it) => (it.id === item.id ? { ...it, status: 'Completed' } : it));
+    setAgenda(updatedAgenda);
+    localStorage.setItem('apex_trainer_agenda', JSON.stringify(updatedAgenda));
+
+    if (item.id) {
       await trainerApi.updateScheduleStatus(item.id, 'Completed');
     }
+
+    // Notify client via chat
+    const targetClient = item.client;
+    const targetMemberObj = members.find(m => m.name && m.name.toLowerCase() === targetClient.toLowerCase());
+    const clientEmail = targetMemberObj?.email || `${targetClient.toLowerCase().replace(/\s+/g, '')}@apex.com`;
+
+    const dispatchMsg = {
+      id: `c-${Date.now()}`,
+      sender: 'coach',
+      memberName: targetClient,
+      clientEmail: clientEmail,
+      coachName: currentCoachName,
+      text: `✅ [SESSION COMPLETED] Coach ${currentCoachName} has marked your session "${item.routine || item.objective}" (${item.timeBlock || item.time}) as Completed! Great job! 💪`,
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      read: false
+    };
+
+    try {
+      const savedChat = JSON.parse(localStorage.getItem('apex_trainer_chat_history') || '[]');
+      savedChat.push(dispatchMsg);
+      localStorage.setItem('apex_trainer_chat_history', JSON.stringify(savedChat));
+      setAllMemberChats((prev) => [...prev, dispatchMsg]);
+      trainerApi.sendChatMessage(dispatchMsg.text, 'coach', targetClient, clientEmail, currentCoachName);
+    } catch (e) {}
+
+    CustomSwal.fire({
+      icon: 'success',
+      title: 'Session Marked Completed ✅',
+      text: `Training session for ${targetClient} is completed!`
+    });
   };
 
-  const handleCancelSession = async (index, item) => {
-    setAgenda((prev) => prev.filter((_, idx) => idx !== index));
-    if (item && item.id) {
+  const handleCancelSession = async (item) => {
+    if (!item) return;
+
+    const confirmRes = await CustomSwal.fire({
+      icon: 'warning',
+      title: `Cancel Session?`,
+      html: `<span style="color:#fff;">Are you sure you want to cancel session for <strong>${item.client}</strong> (${item.timeBlock || item.time})?</span>`,
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Cancel',
+      cancelButtonText: 'No, Keep',
+      confirmButtonColor: '#ff3e6c'
+    });
+
+    if (!confirmRes.isConfirmed) return;
+
+    const updatedAgenda = agenda.filter((it) => it.id !== item.id);
+    setAgenda(updatedAgenda);
+    localStorage.setItem('apex_trainer_agenda', JSON.stringify(updatedAgenda));
+
+    if (item.id) {
       await trainerApi.cancelScheduleSession(item.id);
     }
+
+    // Notify client via chat
+    const targetClient = item.client;
+    const targetMemberObj = members.find(m => m.name && m.name.toLowerCase() === targetClient.toLowerCase());
+    const clientEmail = targetMemberObj?.email || `${targetClient.toLowerCase().replace(/\s+/g, '')}@apex.com`;
+
+    const dispatchMsg = {
+      id: `c-${Date.now()}`,
+      sender: 'coach',
+      memberName: targetClient,
+      clientEmail: clientEmail,
+      coachName: currentCoachName,
+      text: `⚠️ [SESSION CANCELLED] Session "${item.routine || item.objective}" (${item.timeBlock || item.time}) was cancelled by Coach ${currentCoachName}.`,
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      read: false
+    };
+
+    try {
+      const savedChat = JSON.parse(localStorage.getItem('apex_trainer_chat_history') || '[]');
+      savedChat.push(dispatchMsg);
+      localStorage.setItem('apex_trainer_chat_history', JSON.stringify(savedChat));
+      setAllMemberChats((prev) => [...prev, dispatchMsg]);
+      trainerApi.sendChatMessage(dispatchMsg.text, 'coach', targetClient, clientEmail, currentCoachName);
+    } catch (e) {}
+
+    CustomSwal.fire({
+      icon: 'info',
+      title: 'Session Cancelled 🗑️',
+      text: `Session for ${targetClient} has been cancelled.`
+    });
   };
 
   // Create Workout Plan
@@ -1004,6 +1429,31 @@ export default function TrainerPanel({ activeView, currentUser }) {
       title: 'Workout Program Created',
       text: `Successfully created program: ${newPlan.name}!`
     });
+  };
+
+  const handleDeleteWorkout = async (wObj) => {
+    if (!wObj) return;
+    const confirmRes = await CustomSwal.fire({
+      icon: 'warning',
+      title: `Delete Workout Program?`,
+      html: `<span style="color:#fff;">Are you sure you want to remove <strong>${wObj.name}</strong> from conditioning templates?</span>`,
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Delete',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#ff3e6c'
+    });
+
+    if (confirmRes.isConfirmed) {
+      setWorkoutPlans((prev) => prev.filter((w) => (w.id ? w.id !== wObj.id : w.name !== wObj.name)));
+      if (wObj.id) {
+        await trainerApi.deleteWorkout(wObj.id);
+      }
+      CustomSwal.fire({
+        icon: 'success',
+        title: 'Program Deleted 🗑️',
+        text: `Program "${wObj.name}" has been removed.`
+      });
+    }
   };
 
   // Create Diet Plan
@@ -1272,52 +1722,79 @@ export default function TrainerPanel({ activeView, currentUser }) {
       {currentTab === 'overview' && (
         <div style={{ animation: 'slideTimelineItem 0.4s ease forwards' }}>
 
-          {/* BROADCASTED SYSTEM ALERTS BANNER */}
-          {broadcastAlerts.filter(a => !dismissedAlerts.includes(a.id)).map((alt) => {
-            const typeInfo = {
-              holiday: { bg: 'rgba(255, 62, 108, 0.15)', border: '#ff3e6c', icon: '🛑' },
-              event: { bg: 'rgba(0, 240, 255, 0.15)', border: '#00f0ff', icon: '🎉' },
-              maintenance: { bg: 'rgba(255, 159, 0, 0.15)', border: '#ff9f00', icon: '⚙️' },
-              general: { bg: 'rgba(255, 255, 255, 0.05)', border: '#8e919f', icon: '📢' }
-            }[alt.type] || { bg: 'rgba(255, 255, 255, 0.05)', border: '#8e919f', icon: '📢' };
+          {/* BROADCASTED SYSTEM ALERTS BANNER (Compact & Non-intrusive, Same as Member Panel) */}
+          {broadcastAlerts
+            .filter(a => {
+              if (!a || !a.id) return false;
+              if (dismissedAlerts.includes(a.id)) return false;
+              if (a.date) {
+                const alertTime = new Date(a.date).getTime();
+                if (!isNaN(alertTime) && (Date.now() - alertTime > 7 * 24 * 60 * 60 * 1000)) {
+                  return false;
+                }
+              }
+              return true;
+            })
+            .map((alt) => {
+              const typeInfo = {
+                holiday: { bg: 'rgba(255, 62, 108, 0.08)', border: '#ff3e6c', color: '#ff3e6c', label: '🏖️ Holiday Notice' },
+                event: { bg: 'rgba(0, 240, 255, 0.08)', border: '#00f0ff', color: '#00f0ff', label: '🏆 Club Event' },
+                maintenance: { bg: 'rgba(255, 159, 0, 0.08)', border: '#ff9f00', color: '#ff9f00', label: '⚠️ Maintenance' },
+                general: { bg: 'rgba(255, 94, 0, 0.08)', border: 'var(--accent-orange, #ff5e00)', color: 'var(--accent-orange, #ff5e00)', label: '📢 Announcement' }
+              }[alt.type] || { bg: 'rgba(255, 94, 0, 0.08)', border: 'var(--accent-orange, #ff5e00)', color: 'var(--accent-orange, #ff5e00)', label: '📢 Announcement' };
 
-            return (
-              <div key={alt.id} className="db-card member-alert-card" style={{
-                background: typeInfo.bg,
-                border: `1.5px solid ${typeInfo.border}`,
-                boxShadow: `0 0 15px ${typeInfo.bg}`,
-                marginBottom: '1.2rem',
-                position: 'relative',
-                padding: '1.2rem 1.5rem',
-                borderRadius: '8px'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '1rem' }}>
-                  <div style={{ fontSize: '1.8rem' }}>{typeInfo.icon}</div>
-                  <div className="alert-details" style={{ flexGrow: 1 }}>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', color: typeInfo.border }}>{alt.type} Announcement</span>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>• {alt.date}</span>
-                    </div>
-                    <h4 style={{ color: 'var(--text-white)', fontWeight: 800, margin: '0.2rem 0', fontSize: '1.15rem' }}>{alt.title}</h4>
-                    <p style={{ color: 'var(--text-white)', fontSize: '0.85rem', margin: 0 }}>{alt.message}</p>
+              return (
+                <div key={alt.id} style={{
+                  background: typeInfo.bg,
+                  border: `1px solid ${typeInfo.border}`,
+                  marginBottom: '1rem',
+                  padding: '0.75rem 1.2rem',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '1rem',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.05)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap' }}>
+                    <span style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      textTransform: 'uppercase',
+                      color: typeInfo.color,
+                      padding: '0.2rem 0.55rem',
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      borderRadius: '4px',
+                      border: `1px solid ${typeInfo.border}`,
+                      letterSpacing: '0.04em'
+                    }}>
+                      {typeInfo.label}
+                    </span>
+                    <span style={{ color: 'var(--text-white)', fontWeight: 800, fontSize: '0.88rem' }}>{alt.title}</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem', wordBreak: 'break-word' }}>— {alt.message}</span>
                   </div>
-                  <button onClick={() => {
-                    const updatedDismissed = [...dismissedAlerts, alt.id];
-                    setDismissedAlerts(updatedDismissed);
-                    localStorage.setItem('dismissed_trainer_alerts', JSON.stringify(updatedDismissed));
-                  }} style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--text-muted)',
-                    fontSize: '1.5rem',
-                    cursor: 'pointer',
-                    alignSelf: 'flex-start',
-                    padding: '0 0.5rem'
-                  }}>&times;</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updatedDismissed = [...dismissedAlerts, alt.id];
+                      setDismissedAlerts(updatedDismissed);
+                      localStorage.setItem('dismissed_trainer_alerts', JSON.stringify(updatedDismissed));
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      fontSize: '1.3rem',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      lineHeight: 1
+                    }}
+                  >
+                    &times;
+                  </button>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
 
           {/* Metrics Grid */}
           <div className="metrics-grid col-3">
@@ -1359,8 +1836,8 @@ export default function TrainerPanel({ activeView, currentUser }) {
           </div>
 
           {/* CLIENT SUBSCRIPTION EXPIRATIONS & 1-WEEK RENEWAL WATCHLIST */}
-          <div className="db-card" style={{ marginBottom: '1.5rem', border: '1px solid rgba(255, 94, 0, 0.3)', background: 'linear-gradient(135deg, rgba(20, 16, 12, 0.95) 0%, rgba(10, 10, 15, 0.98) 100%)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.8rem', flexWrap: 'wrap', gap: '0.8rem' }}>
+          <div className="db-card" style={{ marginBottom: '1.5rem', border: '1px solid rgba(255, 94, 0, 0.3)', background: 'var(--bg-card)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.8rem', flexWrap: 'wrap', gap: '0.8rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <span style={{ fontSize: '1.4rem' }}>⏳</span>
                 <div>
@@ -1368,7 +1845,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
                   <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Automated tracking for clients expiring within 7 days or requiring package renewal</span>
                 </div>
               </div>
-              <span style={{ fontSize: '0.72rem', background: 'rgba(255, 94, 0, 0.15)', color: '#ff5e00', border: '1px solid rgba(255, 94, 0, 0.3)', padding: '0.25rem 0.7rem', borderRadius: '20px', fontWeight: 700, textTransform: 'uppercase' }}>
+              <span style={{ fontSize: '0.72rem', background: 'rgba(255, 94, 0, 0.12)', color: '#ff5e00', border: '1px solid rgba(255, 94, 0, 0.3)', padding: '0.25rem 0.7rem', borderRadius: '20px', fontWeight: 700, textTransform: 'uppercase' }}>
                 🔔 7-Day Advance Alert Engine
               </span>
             </div>
@@ -1378,11 +1855,11 @@ export default function TrainerPanel({ activeView, currentUser }) {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {members.map((m, idx) => {
-                  // Compute or assign staggered test days for realistic testing (e.g. 4 days, 6 days, 2 days, 15 days)
-                  const daysRemaining = m.daysLeft !== undefined ? m.daysLeft : [4, 6, 2, 18, 5][idx % 5];
+                  const expiryInfo = calculateClientExpiry(m, trainerClientPayments);
+                  const daysRemaining = expiryInfo.daysRemaining;
+                  const expiryDateStr = expiryInfo.expiryDateStr;
                   const isExpiringSoon = daysRemaining <= 7 && daysRemaining > 0;
                   const isExpired = daysRemaining <= 0;
-                  const expiryDateStr = new Date(Date.now() + daysRemaining * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                   const isSent = sentReminders[m.email || m.name];
 
                   return (
@@ -1392,8 +1869,8 @@ export default function TrainerPanel({ activeView, currentUser }) {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        background: isExpired ? 'rgba(239, 68, 68, 0.05)' : isExpiringSoon ? 'rgba(255, 94, 0, 0.05)' : 'rgba(255, 255, 255, 0.02)',
-                        border: `1px solid ${isExpired ? 'rgba(239, 68, 68, 0.25)' : isExpiringSoon ? 'rgba(255, 94, 0, 0.25)' : 'var(--border-color)'}`,
+                        background: isExpired ? 'rgba(239, 68, 68, 0.08)' : isExpiringSoon ? 'rgba(255, 94, 0, 0.08)' : 'var(--bg-card-hover, rgba(255, 255, 255, 0.03))',
+                        border: `1px solid ${isExpired ? 'rgba(239, 68, 68, 0.3)' : isExpiringSoon ? 'rgba(255, 94, 0, 0.3)' : 'var(--border-color)'}`,
                         borderRadius: '8px',
                         padding: '0.85rem 1.1rem',
                         gap: '1rem',
@@ -1417,13 +1894,13 @@ export default function TrainerPanel({ activeView, currentUser }) {
                         </div>
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.15rem' }}>
-                            <strong style={{ color: '#fff', fontSize: '0.92rem' }}>{m.name}</strong>
-                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>({m.email || 'client@apex.com'})</span>
+                            <strong style={{ color: 'var(--text-white)', fontSize: '0.92rem', fontWeight: 800 }}>{m.name}</strong>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>({m.email || 'client@apex.com'})</span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-                            <span>📋 {m.tier || 'Personal Coaching Package'}</span>
+                            <span style={{ color: 'var(--text-white)', fontWeight: 600 }}>📋 {m.tier || 'Personal Coaching Package'}</span>
                             <span>•</span>
-                            <span>Expires: <strong style={{ color: '#fff' }}>{expiryDateStr}</strong></span>
+                            <span>Expires: <strong style={{ color: 'var(--text-white)', fontWeight: 700 }}>{expiryDateStr}</strong></span>
                           </div>
                         </div>
                       </div>
@@ -1451,7 +1928,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
                             fontWeight: 700,
                             borderRadius: '6px',
                             background: isSent ? 'rgba(255,255,255,0.05)' : isExpired ? '#ef4444' : '#ff5e00',
-                            color: isSent ? 'var(--text-muted)' : '#000',
+                            color: isSent ? 'var(--text-muted)' : '#ffffff',
                             border: 'none',
                             cursor: isSent ? 'default' : 'pointer',
                             display: 'flex',
@@ -1479,58 +1956,123 @@ export default function TrainerPanel({ activeView, currentUser }) {
 
               <ul className="agenda-list" style={{ listStyle: 'none', padding: 0 }}>
                 {agenda.length === 0 ? (
-                  <li style={{ textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.85rem', padding: '2rem 1.2rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '4px' }}>
+                  <li style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', padding: '2rem 1.2rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '6px' }}>
                     No coaching appointments scheduled for today.
                   </li>
                 ) : (
-                  agenda.map((item, idx) => (
-                    <li
-                      key={idx}
-                      className="agenda-item"
-                      style={{
-                        animation: 'slideTimelineItem 0.4s ease forwards',
-                        opacity: 1,
-                        transform: 'translateY(0)',
-                        marginBottom: '0.8rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
-                        <div className="agenda-time">{(item.time || item.timeBlock || 'Today 09:00 AM').replace('Today ', '')}</div>
-                        <div className="agenda-details">
-                          <h5>{item.client}</h5>
-                          <p>{item.objective || item.routine || 'Coaching Session'}</p>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                        <span className={`agenda-badge check ${item.status === 'Completed' ? 'paid' : ''}`} style={{
-                          background: item.status === 'Completed' ? 'rgba(0, 255, 102, 0.08)' : 'rgba(0, 240, 255, 0.08)',
-                          color: item.status === 'Completed' ? '#00ff66' : 'var(--accent-cyan)',
-                          border: item.status === 'Completed' ? '1px solid rgba(0, 255, 102, 0.2)' : '1px solid rgba(0, 240, 255, 0.2)'
-                        }}>
-                          {item.status}
-                        </span>
-                        {item.status === 'Ready' && (
-                          <div style={{ display: 'flex', gap: '0.3rem' }}>
-                            <button
-                              onClick={() => handleCompleteSession(idx)}
-                              style={{ cursor: 'pointer', padding: '0.2rem 0.5rem', background: 'rgba(0,255,102,0.1)', border: '1px solid rgba(0,255,102,0.2)', borderRadius: '4px', color: '#00ff66', fontSize: '0.75rem', fontWeight: 'bold' }}
-                            >
-                              ✓
-                            </button>
-                            <button
-                              onClick={() => handleCancelSession(idx)}
-                              style={{ cursor: 'pointer', padding: '0.2rem 0.5rem', background: 'rgba(255,62,108,0.1)', border: '1px solid rgba(255,62,108,0.2)', borderRadius: '4px', color: '#ff3e6c', fontSize: '0.75rem', fontWeight: 'bold' }}
-                            >
-                              &times;
-                            </button>
+                  agenda.map((item, idx) => {
+                    const rawTime = item.time || item.timeBlock || '09:00 AM';
+                    const isTomorrow = rawTime.toLowerCase().includes('tomorrow');
+                    const cleanTime = rawTime.replace(/today\s*/i, '').replace(/tomorrow\s*/i, '').trim();
+                    const isCompleted = item.status === 'Completed' || item.status === 'completed';
+                    const statusText = (item.status || 'CONFIRMED').toUpperCase();
+
+                    return (
+                      <li
+                        key={item.id || idx}
+                        className="agenda-item"
+                        style={{
+                          animation: 'slideTimelineItem 0.4s ease forwards',
+                          opacity: 1,
+                          transform: 'translateY(0)',
+                          marginBottom: '0.8rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '0.9rem 1.1rem',
+                          background: 'var(--bg-card, rgba(255,255,255,0.02))',
+                          border: isTomorrow ? '1px solid rgba(255, 159, 0, 0.3)' : '1px solid var(--border-color)',
+                          borderRadius: '8px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.2rem' }}>
+                            <span style={{
+                              fontSize: '0.62rem',
+                              fontWeight: 800,
+                              textTransform: 'uppercase',
+                              padding: '0.1rem 0.45rem',
+                              borderRadius: '3px',
+                              background: isTomorrow ? 'rgba(255, 159, 0, 0.15)' : 'rgba(0, 240, 255, 0.12)',
+                              color: isTomorrow ? '#ff9f00' : 'var(--accent-cyan)',
+                              border: isTomorrow ? '1px solid rgba(255, 159, 0, 0.3)' : '1px solid rgba(0, 240, 255, 0.2)'
+                            }}>
+                              {isTomorrow ? 'Tomorrow' : 'Today'}
+                            </span>
+                            <div className="agenda-time" style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-white)' }}>
+                              {cleanTime}
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    </li>
-                  ))
+
+                          <div className="agenda-details">
+                            <h5 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-white)' }}>{item.client}</h5>
+                            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.3 }}>{item.objective || item.routine || 'Coaching Session'}</p>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                          <span className={`agenda-badge check ${isCompleted ? 'paid' : ''}`} style={{
+                            background: isCompleted ? 'rgba(0, 255, 102, 0.1)' : isTomorrow ? 'rgba(255, 159, 0, 0.1)' : 'rgba(0, 240, 255, 0.1)',
+                            color: isCompleted ? '#00ff66' : isTomorrow ? '#ff9f00' : 'var(--accent-cyan)',
+                            border: isCompleted ? '1px solid rgba(0, 255, 102, 0.3)' : isTomorrow ? '1px solid rgba(255, 159, 0, 0.3)' : '1px solid rgba(0, 240, 255, 0.3)',
+                            padding: '0.25rem 0.6rem',
+                            borderRadius: '4px',
+                            fontWeight: 800,
+                            fontSize: '0.68rem',
+                            letterSpacing: '0.5px'
+                          }}>
+                            {statusText}
+                          </span>
+
+                          {!isCompleted ? (
+                            <div style={{ display: 'flex', gap: '0.35rem' }}>
+                              <button
+                                type="button"
+                                title="Mark Session Completed"
+                                onClick={() => handleCompleteSession(item)}
+                                style={{
+                                  cursor: 'pointer',
+                                  padding: '0.3rem 0.6rem',
+                                  background: 'rgba(0, 255, 102, 0.12)',
+                                  border: '1px solid rgba(0, 255, 102, 0.3)',
+                                  borderRadius: '5px',
+                                  color: '#00ff66',
+                                  fontSize: '0.78rem',
+                                  fontWeight: 800,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem',
+                                  transition: 'all 0.2s ease'
+                                }}
+                              >
+                                ✓ Complete
+                              </button>
+                              <button
+                                type="button"
+                                title="Cancel Session"
+                                onClick={() => handleCancelSession(item)}
+                                style={{
+                                  cursor: 'pointer',
+                                  padding: '0.3rem 0.5rem',
+                                  background: 'rgba(255, 62, 108, 0.12)',
+                                  border: '1px solid rgba(255, 62, 108, 0.3)',
+                                  borderRadius: '5px',
+                                  color: '#ff3e6c',
+                                  fontSize: '0.78rem',
+                                  fontWeight: 800,
+                                  transition: 'all 0.2s ease'
+                                }}
+                              >
+                                ✖
+                              </button>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: '0.72rem', color: '#00ff66', fontWeight: 700, padding: '0 0.3rem' }}>Done ✓</span>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })
                 )}
               </ul>
             </div>
@@ -1723,7 +2265,8 @@ export default function TrainerPanel({ activeView, currentUser }) {
                   <thead>
                     <tr>
                       <th>Athlete ID</th>
-                      <th>Name</th>
+                      <th>Name & Email</th>
+                      <th>Membership Tier</th>
                       <th>Level</th>
                       <th>Active Workout</th>
                       <th>Active Diet</th>
@@ -1737,15 +2280,38 @@ export default function TrainerPanel({ activeView, currentUser }) {
                       .map((m) => (
                         <tr key={m.id}>
                           <td style={{ fontFamily: 'monospace', color: 'var(--accent-cyan)', fontWeight: 700 }}>{m.id}</td>
-                          <td><strong>{m.name}</strong><br /><span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{m.tier}</span></td>
                           <td>
-                            <span style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', borderRadius: '4px' }}>
-                              {m.level}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <strong style={{ color: 'var(--text-white)' }}>{m.name}</strong>
+                              {unreadChatsByMember[m.name] > 0 && (
+                                <span style={{ fontSize: '0.62rem', background: 'var(--accent-volt)', color: '#000', padding: '0.1rem 0.4rem', borderRadius: '10px', fontWeight: 800 }}>
+                                  {unreadChatsByMember[m.name]} new
+                                </span>
+                              )}
+                            </div>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{m.email || 'client@apex.com'}</span>
+                          </td>
+                          <td>
+                            <span style={{
+                              fontSize: '0.72rem',
+                              padding: '0.2rem 0.6rem',
+                              borderRadius: '4px',
+                              fontWeight: 800,
+                              background: m.tier?.includes('VIP') ? 'rgba(0, 240, 255, 0.12)' : m.tier?.includes('Elite') ? 'rgba(198, 255, 0, 0.12)' : 'rgba(255, 94, 0, 0.12)',
+                              color: m.tier?.includes('VIP') ? 'var(--accent-cyan)' : m.tier?.includes('Elite') ? 'var(--accent-volt)' : '#ff5e00',
+                              border: `1px solid ${m.tier?.includes('VIP') ? 'var(--accent-cyan)' : m.tier?.includes('Elite') ? 'var(--accent-volt)' : '#ff5e00'}`
+                            }}>
+                              👑 {m.tier || 'Pro Member'}
                             </span>
                           </td>
-                          <td>{m.workout !== 'None' ? <span style={{ color: 'var(--accent-volt)' }}>{m.workout}</span> : <span style={{ color: 'var(--text-dim)' }}>None</span>}</td>
-                          <td>{m.diet !== 'None' ? <span style={{ color: 'var(--accent-cyan)' }}>{m.diet}</span> : <span style={{ color: 'var(--text-dim)' }}>None</span>}</td>
-                          <td><strong>{m.attendance}%</strong></td>
+                          <td>
+                            <span style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', borderRadius: '4px' }}>
+                              {m.level || 'Intermediate'}
+                            </span>
+                          </td>
+                          <td>{m.workout !== 'None' ? <span style={{ color: 'var(--accent-volt)', fontWeight: 700 }}>{m.workout}</span> : <span style={{ color: 'var(--text-dim)' }}>None</span>}</td>
+                          <td>{m.diet !== 'None' ? <span style={{ color: 'var(--accent-cyan)', fontWeight: 700 }}>{m.diet}</span> : <span style={{ color: 'var(--text-dim)' }}>None</span>}</td>
+                          <td><strong style={{ color: 'var(--text-white)' }}>{m.attendance}%</strong></td>
                           <td>
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
                               <button
@@ -1766,9 +2332,14 @@ export default function TrainerPanel({ activeView, currentUser }) {
                                   if (el) el.scrollIntoView({ behavior: 'smooth' });
                                 }}
                                 className="glow-btn"
-                                style={{ padding: '0.4rem 0.7rem', fontSize: '0.72rem', textTransform: 'uppercase' }}
+                                style={{ padding: '0.4rem 0.7rem', fontSize: '0.72rem', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
                               >
-                                💬 Chat
+                                <span>💬 Chat</span>
+                                {unreadChatsByMember[m.name] > 0 && (
+                                  <span style={{ background: '#000', color: '#fff', fontSize: '0.62rem', padding: '0.05rem 0.35rem', borderRadius: '8px' }}>
+                                    {unreadChatsByMember[m.name]}
+                                  </span>
+                                )}
                               </button>
                             </div>
                           </td>
@@ -1811,11 +2382,14 @@ export default function TrainerPanel({ activeView, currentUser }) {
                     onChange={(e) => setSelectedChatMember(e.target.value)}
                     style={{ background: 'var(--bg-black)', border: '1px solid var(--accent-cyan)', color: 'var(--text-white)', padding: '0.45rem 0.8rem', fontSize: '0.82rem', fontWeight: 700, borderRadius: '6px' }}
                   >
-                    {members.map((m) => (
-                      <option key={m.id} value={m.name}>
-                        {m.name} ({m.tier})
-                      </option>
-                    ))}
+                    {members.map((m) => {
+                      const unread = unreadChatsByMember[m.name] || 0;
+                      return (
+                        <option key={m.id} value={m.name}>
+                          {m.name} ({m.tier}){unread > 0 ? ` [${unread} unread]` : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               </div>
@@ -1873,6 +2447,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
 
                     {/* Chat Scroll Viewport */}
                     <div
+                      ref={trainerChatScrollRef}
                       style={{
                         height: '320px',
                         overflowY: 'auto',
@@ -2064,72 +2639,154 @@ export default function TrainerPanel({ activeView, currentUser }) {
           <div className="db-grid-row">
             {/* Workout Roster View */}
             <div className="db-card flex-card">
-              <h4>Conditioning Programs</h4>
-              <p className="card-subtitle">Active workout periods, target muscle split, and exercise sequencing profiles</p>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.2rem', marginTop: '0.5rem' }}>
-                {workoutPlans
-                  .slice((workoutPlanPage - 1) * TRAINER_ITEMS_PER_PAGE, workoutPlanPage * TRAINER_ITEMS_PER_PAGE)
-                  .map((w, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        background: 'rgba(255, 255, 255, 0.01)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '8px',
-                        padding: '1.2rem',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between'
-                      }}
-                    >
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                          <h5 style={{ color: 'var(--text-white)', fontWeight: 800, fontSize: '0.98rem', textTransform: 'uppercase' }}>
-                            {w.name}
-                          </h5>
-                          <span style={{ fontSize: '0.65rem', background: 'rgba(198,255,0,0.1)', color: 'var(--accent-volt)', padding: '0.15rem 0.4rem', borderRadius: '4px', fontWeight: 800 }}>
-                            {w.duration}
-                          </span>
-                        </div>
-                        <p style={{ color: 'var(--accent-cyan)', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, margin: '0.1rem 0 0.8rem 0' }}>
-                          Split: {w.target}
-                        </p>
-                        <div style={{ background: 'rgba(0,0,0,0.1)', border: '1px solid var(--border-color)', padding: '0.8rem', borderRadius: '6px', fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                          {w.exercises}
-                        </div>
-                      </div>
-
-                      <div style={{ marginTop: '1.2rem', display: 'flex', justifyContent: 'flex-end' }}>
-                        <button
-                          onClick={() => {
-                            const nameToFind = prompt(`Assign "${w.name}" to which member name?`);
-                            if (!nameToFind) return;
-                            const found = members.find(m => m.name.toLowerCase() === nameToFind.toLowerCase());
-                            if (found) {
-                              setMembers(prev => prev.map(m => m.id === found.id ? { ...m, workout: w.name } : m));
-                              alert(`Assigned ${w.name} to ${found.name}!`);
-                            } else {
-                              alert(`Member "${nameToFind}" not found in current roster registry.`);
-                            }
-                          }}
-                          className="outline-btn"
-                          style={{ padding: '0.35rem 0.75rem', fontSize: '0.7rem', textTransform: 'uppercase' }}
-                        >
-                          Quick Assign
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <div>
+                  <h4>Conditioning Programs</h4>
+                  <p className="card-subtitle" style={{ margin: 0 }}>Active workout periods, target muscle split, and exercise sequencing profiles</p>
+                </div>
+                <span style={{ fontSize: '0.75rem', background: 'rgba(0, 240, 255, 0.1)', color: 'var(--accent-cyan)', padding: '0.25rem 0.6rem', borderRadius: '4px', border: '1px solid rgba(0, 240, 255, 0.2)' }}>
+                  Total Plans: {((workoutPlans && workoutPlans.length > 0) ? workoutPlans : defaultWorkouts).length}
+                </span>
               </div>
 
-              {renderTrainerPagination(
-                workoutPlanPage,
-                Math.ceil(workoutPlans.length / TRAINER_ITEMS_PER_PAGE) || 1,
-                workoutPlans.length,
-                setWorkoutPlanPage,
-                TRAINER_ITEMS_PER_PAGE
-              )}
+              {(() => {
+                const activeList = (workoutPlans && workoutPlans.length > 0) ? workoutPlans : defaultWorkouts;
+                const pagedList = activeList.slice((workoutPlanPage - 1) * TRAINER_ITEMS_PER_PAGE, workoutPlanPage * TRAINER_ITEMS_PER_PAGE);
+
+                return (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.2rem', marginTop: '0.8rem' }}>
+                      {pagedList.map((w, idx) => (
+                        <div
+                          key={w.id || idx}
+                          style={{
+                            background: 'var(--bg-card, rgba(255, 255, 255, 0.02))',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '8px',
+                            padding: '1.2rem',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                              <h5 style={{ color: 'var(--text-white)', fontWeight: 800, fontSize: '0.98rem', textTransform: 'uppercase', margin: 0 }}>
+                                {w.name}
+                              </h5>
+                              <span style={{ fontSize: '0.65rem', background: 'rgba(198,255,0,0.12)', color: 'var(--accent-volt)', padding: '0.15rem 0.45rem', borderRadius: '4px', fontWeight: 800, border: '1px solid rgba(198,255,0,0.2)' }}>
+                                {w.duration || '4 weeks'}
+                              </span>
+                            </div>
+                            <p style={{ color: 'var(--accent-cyan)', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, margin: '0.2rem 0 0.8rem 0' }}>
+                              Target Split: {w.target}
+                            </p>
+                            <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', padding: '0.8rem', borderRadius: '6px', fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                              {w.exercises}
+                            </div>
+                          </div>
+
+                          <div style={{ marginTop: '1.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteWorkout(w)}
+                              style={{ background: 'rgba(255,62,108,0.1)', border: '1px solid rgba(255,62,108,0.25)', color: '#ff3e6c', padding: '0.35rem 0.6rem', borderRadius: '5px', fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer' }}
+                              title="Delete Program Template"
+                            >
+                              🗑️ Delete
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!members || members.length === 0) {
+                                  CustomSwal.fire({ icon: 'warning', title: 'No Athletes Available', text: 'No registered athletes found in roster.' });
+                                  return;
+                                }
+
+                                const inputOptions = {};
+                                members.forEach((m) => {
+                                  inputOptions[m.id || m.name] = `${m.name} (${m.tier || 'Pro Member'})`;
+                                });
+
+                                const { value: selectedMemberId } = await CustomSwal.fire({
+                                  title: `Assign Program: ${w.name}`,
+                                  text: 'Select an athlete from your roster to receive this program:',
+                                  input: 'select',
+                                  inputOptions,
+                                  inputPlaceholder: '-- Select Athlete Member --',
+                                  showCancelButton: true,
+                                  confirmButtonText: 'Assign & Dispatch 🚀',
+                                  cancelButtonText: 'Cancel',
+                                  confirmButtonColor: '#ff5e00',
+                                  inputValidator: (val) => !val && 'Please select a member!'
+                                });
+
+                                if (selectedMemberId) {
+                                  const targetMember = members.find((m) => m.id === selectedMemberId || m.name === selectedMemberId);
+                                  if (targetMember) {
+                                    // 1. Update roster state
+                                    setMembers((prev) => prev.map((m) => (m.id === targetMember.id ? { ...m, workout: w.name } : m)));
+
+                                    // 2. Persist member assigned workout in localStorage for real-time synchronization
+                                    localStorage.setItem(`apex_member_assigned_workout_${targetMember.name.toLowerCase()}`, JSON.stringify(w));
+
+                                    // 3. Dispatch auto notification message into trainer/member chat
+                                    const dispatchMsg = {
+                                      id: `c-${Date.now()}`,
+                                      sender: 'coach',
+                                      memberName: targetMember.name,
+                                      clientEmail: targetMember.email || '',
+                                      coachName: currentCoachName,
+                                      text: `🏋️‍♂️ [WORKOUT ASSIGNED] Coach ${currentCoachName} has assigned you the training program: "${w.name}" (${w.duration || '4 weeks'}). Check your Prescribed Workout Program terminal!`,
+                                      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                                      read: false
+                                    };
+
+                                    const savedChat = JSON.parse(localStorage.getItem('apex_trainer_chat_history') || '[]');
+                                    savedChat.push(dispatchMsg);
+                                    localStorage.setItem('apex_trainer_chat_history', JSON.stringify(savedChat));
+                                    setAllMemberChats((prev) => [...prev, dispatchMsg]);
+
+                                    // 4. API sync
+                                    await trainerApi.assignWorkout(w.id || w.name, targetMember.id);
+                                    await trainerApi.sendChatMessage(dispatchMsg.text, 'coach', targetMember.name, targetMember.email, currentCoachName);
+
+                                    CustomSwal.fire({
+                                      icon: 'success',
+                                      title: 'Program Assigned & Shared! 🚀',
+                                      html: `<div style="text-align:center;color:#fff;">
+                                        <p style="margin-bottom:0.8rem;">Program <strong>${w.name}</strong> assigned to athlete <strong>${targetMember.name}</strong>!</p>
+                                        <div style="background:rgba(198,255,0,0.08);border:1px solid #c6ff00;padding:0.8rem;border-radius:6px;font-size:0.85rem;color:#c6ff00;">
+                                          ✓ Synced to Athlete Member Terminal<br/>
+                                          ✓ Program notification sent to ${targetMember.name}'s chat!
+                                        </div>
+                                      </div>`
+                                    });
+                                  }
+                                }
+                              }}
+                              className="outline-btn"
+                              style={{ padding: '0.35rem 0.75rem', fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--accent-volt)', borderColor: 'var(--accent-volt)' }}
+                            >
+                              Quick Assign
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {renderTrainerPagination(
+                      workoutPlanPage,
+                      Math.ceil(activeList.length / TRAINER_ITEMS_PER_PAGE) || 1,
+                      activeList.length,
+                      setWorkoutPlanPage,
+                      TRAINER_ITEMS_PER_PAGE
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             {/* Create/Architect Program Card */}
@@ -2213,12 +2870,12 @@ export default function TrainerPanel({ activeView, currentUser }) {
                   <p className="card-subtitle">Prescribed diet plans, nutritional macros balance and calorie guides</p>
                 </div>
                 <span style={{ fontSize: '0.75rem', background: 'rgba(0, 240, 255, 0.1)', color: 'var(--accent-cyan)', padding: '0.25rem 0.6rem', borderRadius: '4px', border: '1px solid rgba(0, 240, 255, 0.2)' }}>
-                  Total Plans: {dietPlans.length}
+                  Total Plans: {((dietPlans && dietPlans.length > 0) ? dietPlans : defaultDiets).length}
                 </span>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.2rem', marginTop: '0.8rem' }}>
-                {dietPlans
+                {((dietPlans && dietPlans.length > 0) ? dietPlans : defaultDiets)
                   .slice((dietPlanPage - 1) * TRAINER_ITEMS_PER_PAGE, dietPlanPage * TRAINER_ITEMS_PER_PAGE)
                   .map((d, idx) => {
                     const totalGrams = (parseInt(d.protein) || 0) + (parseInt(d.carbs) || 0) + (parseInt(d.fats) || 0) || 1;
@@ -2319,7 +2976,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
                               </button>
 
                               {isExpanded && (
-                                <div style={{ marginTop: '0.6rem', padding: '0.8rem', background: '#0a0a0f', borderRadius: '6px', border: '1px solid rgba(0, 240, 255, 0.2)', fontSize: '0.75rem' }}>
+                                <div style={{ marginTop: '0.6rem', padding: '0.8rem', background: 'var(--bg-dark, rgba(255,255,255,0.03))', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.75rem' }}>
                                   {[
                                     { key: 'morning', label: '🌅 Morning', items: d.mealsSchedule.morning },
                                     { key: 'lunch', label: '🥗 Lunch', items: d.mealsSchedule.lunch },
@@ -2328,13 +2985,13 @@ export default function TrainerPanel({ activeView, currentUser }) {
                                     { key: 'night', label: '🌙 Night', items: d.mealsSchedule.night }
                                   ].map((slot) => (
                                     <div key={slot.key} style={{ marginBottom: '0.6rem' }}>
-                                      <strong style={{ color: 'var(--accent-volt)', fontSize: '0.72rem', textTransform: 'uppercase' }}>{slot.label}:</strong>
+                                      <strong style={{ color: 'var(--accent-volt)', fontSize: '0.75rem', textTransform: 'uppercase' }}>{slot.label}:</strong>
                                       {(!slot.items || slot.items.length === 0) ? (
                                         <div style={{ color: 'var(--text-dim)', fontStyle: 'italic', fontSize: '0.7rem', paddingLeft: '0.5rem' }}>No items scheduled</div>
                                       ) : (
                                         <ul style={{ margin: '0.2rem 0 0 0', paddingLeft: '1.2rem', color: 'var(--text-white)' }}>
                                           {slot.items.map((it, i) => (
-                                            <li key={i} style={{ marginBottom: '0.15rem' }}>{it}</li>
+                                            <li key={i} style={{ marginBottom: '0.15rem', color: 'var(--text-white)' }}>{it}</li>
                                           ))}
                                         </ul>
                                       )}
@@ -2346,23 +3003,49 @@ export default function TrainerPanel({ activeView, currentUser }) {
                           )}
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
                           <button
-                            onClick={() => {
-                              const nameToFind = prompt(`Assign "${d.name}" to which member name?`);
-                              if (!nameToFind) return;
-                              const found = members.find(m => m.name.toLowerCase() === nameToFind.toLowerCase());
-                              if (found) {
-                                setMembers(prev => prev.map(m => m.id === found.id ? { ...m, diet: d.name } : m));
-                                alert(`Assigned ${d.name} to ${found.name}!`);
-                              } else {
-                                alert(`Member "${nameToFind}" not found in current roster registry.`);
+                            type="button"
+                            onClick={async () => {
+                              const memberOptions = members.map(m => `<option value="${m.name}">${m.name} (${m.tier || 'Member'})</option>`).join('');
+                              const { value: selectedMember } = await CustomSwal.fire({
+                                title: `Assign "${d.name}"`,
+                                html: `
+                                  <div style="text-align:left; color: #fff;">
+                                    <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.8rem;">
+                                      Select an athlete from the roster to assign this diet plan to:
+                                    </p>
+                                    <select id="swal-assign-member-select" style="width:100%; padding:0.6rem; background:rgba(0,0,0,0.5); color:#fff; border:1px solid var(--accent-volt); border-radius:6px; font-size:0.9rem;">
+                                      ${memberOptions}
+                                    </select>
+                                  </div>
+                                `,
+                                showCancelButton: true,
+                                confirmButtonText: 'Assign Plan 🚀',
+                                confirmButtonColor: '#c6ff00',
+                                preConfirm: () => {
+                                  const sel = document.getElementById('swal-assign-member-select');
+                                  return sel ? sel.value : null;
+                                }
+                              });
+
+                              if (selectedMember) {
+                                handleShareAndAssignDiet(d, selectedMember);
                               }
                             }}
                             className="outline-btn"
                             style={{ padding: '0.35rem 0.85rem', fontSize: '0.72rem', textTransform: 'uppercase', borderColor: 'var(--accent-volt)', color: 'var(--accent-volt)' }}
                           >
                             Quick Assign
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteDiet(d)}
+                            className="outline-btn"
+                            style={{ padding: '0.35rem 0.65rem', fontSize: '0.72rem', textTransform: 'uppercase', borderColor: '#ff3e6c', color: '#ff3e6c' }}
+                            title="Delete Diet Plan"
+                          >
+                            🗑️ Delete
                           </button>
                         </div>
                       </div>
@@ -2372,8 +3055,8 @@ export default function TrainerPanel({ activeView, currentUser }) {
 
               {renderTrainerPagination(
                 dietPlanPage,
-                Math.ceil(dietPlans.length / TRAINER_ITEMS_PER_PAGE) || 1,
-                dietPlans.length,
+                Math.ceil((((dietPlans && dietPlans.length > 0) ? dietPlans : defaultDiets).length) / TRAINER_ITEMS_PER_PAGE) || 1,
+                ((dietPlans && dietPlans.length > 0) ? dietPlans : defaultDiets).length,
                 setDietPlanPage,
                 TRAINER_ITEMS_PER_PAGE
               )}
@@ -2524,13 +3207,49 @@ export default function TrainerPanel({ activeView, currentUser }) {
                   </div>
                 </div>
 
+                {/* --- LIVE FORM MACRO SPLIT PREVIEW --- */}
+                {((parseInt(newDietProtein) || 0) + (parseInt(newDietCarbs) || 0) + (parseInt(newDietFats) || 0)) > 0 && (() => {
+                  const pGrams = parseInt(newDietProtein) || 0;
+                  const cGrams = parseInt(newDietCarbs) || 0;
+                  const fGrams = parseInt(newDietFats) || 0;
+                  const totalG = pGrams + cGrams + fGrams || 1;
+                  const pPct = Math.round((pGrams / totalG) * 100);
+                  const cPct = Math.round((cGrams / totalG) * 100);
+                  const fPct = Math.round((fGrams / totalG) * 100);
+                  return (
+                    <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.6rem 0.8rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-white)', fontWeight: 700, marginBottom: '0.3rem' }}>
+                        <span style={{ color: '#ff3e6c' }}>Protein: {pPct}% ({pGrams}g)</span>
+                        <span style={{ color: 'var(--accent-volt)' }}>Carbs: {cPct}% ({cGrams}g)</span>
+                        <span style={{ color: 'var(--accent-cyan)' }}>Fats: {fPct}% ({fGrams}g)</span>
+                      </div>
+                      <div style={{ display: 'flex', height: '6px', borderRadius: '3px', overflow: 'hidden', background: 'rgba(255,255,255,0.05)' }}>
+                        <div style={{ width: `${pPct}%`, background: '#ff3e6c' }}></div>
+                        <div style={{ width: `${cPct}%`, background: 'var(--accent-volt)' }}></div>
+                        <div style={{ width: `${fPct}%`, background: 'var(--accent-cyan)' }}></div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* --- 5-SLOT MEAL PLANNER SCHEDULE MODULE --- */}
-                <div style={{ background: '#0a0a0f', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem' }}>
+                <div style={{ background: 'var(--bg-dark, rgba(255,255,255,0.02))', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
                     <h5 style={{ textTransform: 'uppercase', color: 'var(--accent-volt)', fontSize: '0.85rem', fontWeight: 800, margin: 0 }}>
                       Meal Planner Schedule
                     </h5>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>5 Meal Times</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                      5 Meal Times • Scheduled: {
+                        Object.values(mealSchedule).reduce((total, items) => {
+                          let slotCal = 0;
+                          (items || []).forEach(it => {
+                            const m = it.match(/- (\d+)\s*kcal/);
+                            if (m) slotCal += parseInt(m[1]);
+                          });
+                          return total + slotCal;
+                        }, 0)
+                      } kcal
+                    </span>
                   </div>
 
                   {/* Slot selector tabs */}
@@ -2556,7 +3275,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
                             borderRadius: '4px',
                             cursor: 'pointer',
                             whiteSpace: 'nowrap',
-                            background: isActive ? 'var(--accent-volt)' : 'rgba(255,255,255,0.03)',
+                            background: isActive ? 'var(--accent-volt)' : 'var(--bg-card, rgba(255,255,255,0.03))',
                             color: isActive ? '#000' : 'var(--text-white)',
                             border: isActive ? '1px solid var(--accent-volt)' : '1px solid var(--border-color)'
                           }}
@@ -2568,7 +3287,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
                   </div>
 
                   {/* Active Meal Slot Content */}
-                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.8rem', borderRadius: '6px', border: '1px dashed var(--border-color)' }}>
+                  <div style={{ background: 'var(--bg-card, rgba(255,255,255,0.02))', padding: '0.8rem', borderRadius: '6px', border: '1px dashed var(--border-color)' }}>
                     <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--accent-cyan)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>
                       Active Slot: {
                         activeMealSlot === 'morning' ? '🌅 Morning (Breakfast)' :
@@ -2592,8 +3311,8 @@ export default function TrainerPanel({ activeView, currentUser }) {
                               display: 'flex',
                               justifyContent: 'space-between',
                               alignItems: 'center',
-                              background: '#12121c',
-                              border: '1px solid rgba(255,255,255,0.06)',
+                              background: 'var(--bg-dark, #12121c)',
+                              border: '1px solid var(--border-color)',
                               padding: '0.4rem 0.6rem',
                               borderRadius: '4px',
                               marginBottom: '0.35rem',
@@ -2637,12 +3356,19 @@ export default function TrainerPanel({ activeView, currentUser }) {
                 </div>
 
                 {/* --- INTERACTIVE FOOD ITEMS MENU CATALOG --- */}
-                <div style={{ background: '#0a0a0f', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem' }}>
+                <div style={{ background: 'var(--bg-dark, rgba(255,255,255,0.02))', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
                     <h5 style={{ textTransform: 'uppercase', color: 'var(--accent-cyan)', fontSize: '0.85rem', fontWeight: 800, margin: 0 }}>
                       Food Items Menu Catalog
                     </h5>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Click + Add to insert to {activeMealSlot}</span>
+                    <button
+                      type="button"
+                      onClick={handleAddNewCatalogFood}
+                      className="outline-btn"
+                      style={{ padding: '0.25rem 0.55rem', fontSize: '0.68rem', borderColor: 'var(--accent-cyan)', color: 'var(--accent-cyan)', cursor: 'pointer' }}
+                    >
+                      + Custom Item
+                    </button>
                   </div>
 
                   {/* Filter Pills */}
@@ -2658,9 +3384,9 @@ export default function TrainerPanel({ activeView, currentUser }) {
                           borderRadius: '4px',
                           cursor: 'pointer',
                           whiteSpace: 'nowrap',
-                          background: foodMenuFilter === cat ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.03)',
-                          color: foodMenuFilter === cat ? '#000' : 'var(--text-muted)',
-                          border: 'none',
+                          background: foodMenuFilter === cat ? 'var(--accent-cyan)' : 'var(--bg-card, rgba(255,255,255,0.03))',
+                          color: foodMenuFilter === cat ? '#fff' : 'var(--text-muted)',
+                          border: foodMenuFilter === cat ? '1px solid var(--accent-cyan)' : '1px solid var(--border-color)',
                           fontWeight: 700
                         }}
                       >
@@ -2670,15 +3396,15 @@ export default function TrainerPanel({ activeView, currentUser }) {
                   </div>
 
                   {/* Food Items Grid */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.5rem', maxHeight: '220px', overflowY: 'auto', paddingRight: '0.3rem' }}>
-                    {FOOD_MENU_CATALOG
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.5rem', maxHeight: '240px', overflowY: 'auto', paddingRight: '0.3rem' }}>
+                    {foodCatalog
                       .filter((f) => foodMenuFilter === 'All' || f.category === foodMenuFilter)
                       .map((food) => (
                         <div
                           key={food.id}
                           style={{
-                            background: 'rgba(255,255,255,0.02)',
-                            border: '1px solid rgba(255,255,255,0.05)',
+                            background: 'var(--bg-card, rgba(255,255,255,0.02))',
+                            border: '1px solid var(--border-color)',
                             borderRadius: '6px',
                             padding: '0.5rem',
                             display: 'flex',
@@ -2687,8 +3413,18 @@ export default function TrainerPanel({ activeView, currentUser }) {
                           }}
                         >
                           <div>
-                            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-white)' }}>
-                              {food.icon} {food.name}
+                            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-white)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <span>{food.icon} {food.name}</span>
+                              {food.id.startsWith('f-custom-') && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteCatalogFood(food.id)}
+                                  style={{ background: 'none', border: 'none', color: '#ff3e6c', cursor: 'pointer', fontSize: '0.75rem', padding: '0', opacity: 0.8 }}
+                                  title="Delete Custom Item"
+                                >
+                                  ✕
+                                </button>
+                              )}
                             </div>
                             <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
                               {food.portion} • <span style={{ color: 'var(--accent-volt)' }}>{food.calories} kcal</span>
@@ -2714,11 +3450,11 @@ export default function TrainerPanel({ activeView, currentUser }) {
                     className="form-input"
                     value={targetAssignMember}
                     onChange={(e) => setTargetAssignMember(e.target.value)}
-                    style={{ background: 'var(--bg-black)', border: '1px solid var(--border-color)', color: 'var(--text-white)' }}
+                    style={{ background: 'var(--bg-card, #12121c)', border: '1px solid var(--border-color)', color: 'var(--text-white)' }}
                   >
                     <option value="">-- Do Not Assign Yet (Save to Templates) --</option>
                     {members.map((m) => (
-                      <option key={m.id} value={m.name}>{m.name} ({m.tier})</option>
+                      <option key={m.id} value={m.name}>{m.name} ({m.tier || 'Member'})</option>
                     ))}
                   </select>
                 </div>
@@ -2731,13 +3467,32 @@ export default function TrainerPanel({ activeView, currentUser }) {
                     placeholder="Describe main meals or nutritional guidelines..."
                     value={newDietDesc}
                     onChange={(e) => setNewDietDesc(e.target.value)}
-                    style={{ height: '60px', resize: 'none', background: 'var(--bg-black)', border: '1px solid var(--border-color)', color: 'var(--text-white)', padding: '0.8rem' }}
+                    style={{ height: '60px', resize: 'none', background: 'var(--bg-card, #12121c)', border: '1px solid var(--border-color)', color: 'var(--text-white)', padding: '0.8rem' }}
                   />
                 </div>
 
-                <button type="submit" className="glow-btn" style={{ padding: '0.85rem', fontSize: '0.85rem', textTransform: 'uppercase' }}>
-                  Deploy Diet Plan
-                </button>
+                <div style={{ display: 'flex', gap: '0.6rem' }}>
+                  <button type="submit" className="glow-btn" style={{ flex: 2, padding: '0.85rem', fontSize: '0.85rem', textTransform: 'uppercase' }}>
+                    Deploy Diet Plan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewDietName('');
+                      setNewDietCalories('');
+                      setNewDietProtein('');
+                      setNewDietCarbs('');
+                      setNewDietFats('');
+                      setNewDietDesc('');
+                      setSelectedGoalCategory('Custom');
+                      setMealSchedule({ morning: [], lunch: [], preWorkout: [], postWorkout: [], night: [] });
+                    }}
+                    className="outline-btn"
+                    style={{ flex: 1, padding: '0.85rem', fontSize: '0.75rem', textTransform: 'uppercase', borderColor: 'var(--text-muted)', color: 'var(--text-muted)' }}
+                  >
+                    Reset Form
+                  </button>
+                </div>
               </form>
             </div>
           </div>
@@ -2796,25 +3551,35 @@ export default function TrainerPanel({ activeView, currentUser }) {
                     { key: 'All', label: 'All Shifts' },
                     { key: 'Morning', label: '🌅 Morning (5-10 AM)' },
                     { key: 'Evening', label: '🌙 Evening (4-10 PM)' }
-                  ].map((f) => (
-                    <button
-                      key={f.key}
-                      type="button"
-                      onClick={() => setScheduleShiftFilter(f.key)}
-                      style={{
-                        padding: '0.3rem 0.6rem',
-                        fontSize: '0.72rem',
-                        fontWeight: 700,
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        background: scheduleShiftFilter === f.key ? (f.key === 'Morning' ? 'var(--accent-volt)' : f.key === 'Evening' ? 'var(--accent-cyan)' : 'var(--text-white)') : 'rgba(255,255,255,0.04)',
-                        color: scheduleShiftFilter === f.key ? '#000' : 'var(--text-white)',
-                        border: 'none'
-                      }}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
+                  ].map((f) => {
+                    const isActive = scheduleShiftFilter === f.key;
+                    return (
+                      <button
+                        key={f.key}
+                        type="button"
+                        onClick={() => setScheduleShiftFilter(f.key)}
+                        style={{
+                          padding: '0.35rem 0.7rem',
+                          fontSize: '0.72rem',
+                          fontWeight: 800,
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          background: isActive
+                            ? (f.key === 'Morning' ? 'var(--accent-volt)' : f.key === 'Evening' ? 'var(--accent-cyan)' : '#ff5e00')
+                            : 'var(--bg-card, rgba(255,255,255,0.03))',
+                          color: isActive
+                            ? (f.key === 'All' ? '#ffffff' : '#000000')
+                            : 'var(--text-white)',
+                          border: isActive
+                            ? (f.key === 'Morning' ? '1px solid var(--accent-volt)' : f.key === 'Evening' ? '1px solid var(--accent-cyan)' : '1px solid #ff5e00')
+                            : '1px solid var(--border-color)',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        {f.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -2893,14 +3658,14 @@ export default function TrainerPanel({ activeView, currentUser }) {
                                     <button
                                       className="outline-btn"
                                       style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem', borderColor: 'rgba(0,255,102,0.2)', color: '#00ff66' }}
-                                      onClick={() => handleCompleteSession(idx, item)}
+                                      onClick={() => handleCompleteSession(item)}
                                     >
                                       Complete
                                     </button>
                                     <button
                                       className="outline-btn"
                                       style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem', borderColor: 'rgba(255,62,108,0.2)', color: '#ff3e6c' }}
-                                      onClick={() => handleCancelSession(idx, item)}
+                                      onClick={() => handleCancelSession(item)}
                                     >
                                       Cancel
                                     </button>
@@ -2993,14 +3758,14 @@ export default function TrainerPanel({ activeView, currentUser }) {
                     className="form-input"
                     value={client}
                     onChange={(e) => setClient(e.target.value)}
-                    style={{ background: 'var(--bg-black)', border: '1px solid var(--border-color)', color: 'var(--text-white)' }}
+                    style={{ background: 'var(--bg-card, #12121c)', border: '1px solid var(--border-color)', color: 'var(--text-white)' }}
                     required
                   >
                     {members.length === 0 ? (
                       <option value="">No registered athletes</option>
                     ) : (
                       members.map((m) => (
-                        <option key={m.id} value={m.name}>{m.name} ({m.tier})</option>
+                        <option key={m.id} value={m.name}>{m.name} ({m.tier || 'Member'})</option>
                       ))
                     )}
                   </select>
@@ -3013,7 +3778,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
                     className="form-input"
                     value={routine}
                     onChange={(e) => setRoutine(e.target.value)}
-                    style={{ background: 'var(--bg-black)', border: '1px solid var(--border-color)', color: 'var(--text-white)', marginBottom: '0.5rem' }}
+                    style={{ background: 'var(--bg-card, #12121c)', border: '1px solid var(--border-color)', color: 'var(--text-white)', marginBottom: '0.5rem' }}
                   >
                     <option value="">-- Choose Program Template --</option>
                     {workoutPlans.map((w, idx) => (
@@ -3032,7 +3797,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
                 </div>
 
                 {/* QUICK TIME SLOT PICKER GRID */}
-                <div style={{ background: '#0a0a0f', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.8rem' }}>
+                <div style={{ background: 'var(--bg-dark, rgba(255,255,255,0.02))', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.8rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                     <label className="form-label" style={{ margin: 0, fontSize: '0.75rem', color: selectedShiftWindow === 'Morning' ? 'var(--accent-volt)' : 'var(--accent-cyan)', fontWeight: 800 }}>
                       {selectedShiftWindow === 'Morning' ? '🌅 Morning Shift Slots (5 AM - 10 AM)' : '🌙 Evening Shift Slots (4 PM - 10 PM)'}
@@ -3055,9 +3820,9 @@ export default function TrainerPanel({ activeView, currentUser }) {
                           fontWeight: 700,
                           borderRadius: '4px',
                           cursor: 'pointer',
-                          background: selectedShiftDay === d ? 'var(--text-white)' : 'rgba(255,255,255,0.03)',
+                          background: selectedShiftDay === d ? 'var(--accent-volt)' : 'var(--bg-card, rgba(255,255,255,0.03))',
                           color: selectedShiftDay === d ? '#000' : 'var(--text-muted)',
-                          border: 'none'
+                          border: selectedShiftDay === d ? '1px solid var(--accent-volt)' : '1px solid var(--border-color)'
                         }}
                       >
                         {d}
@@ -3081,18 +3846,19 @@ export default function TrainerPanel({ activeView, currentUser }) {
                             setTimeBlock(`${selectedShiftDay} ${slot}`);
                           }}
                           style={{
-                            padding: '0.35rem 0.2rem',
+                            padding: '0.35rem 0.5rem',
                             fontSize: '0.72rem',
                             fontWeight: 700,
                             borderRadius: '4px',
                             cursor: 'pointer',
                             background: isSelected
                               ? (selectedShiftWindow === 'Morning' ? 'var(--accent-volt)' : 'var(--accent-cyan)')
-                              : 'rgba(255,255,255,0.03)',
+                              : 'var(--bg-card, rgba(255,255,255,0.03))',
                             color: isSelected ? '#000' : 'var(--text-white)',
                             border: isSelected
                               ? (selectedShiftWindow === 'Morning' ? '1px solid var(--accent-volt)' : '1px solid var(--accent-cyan)')
-                              : '1px solid var(--border-color)'
+                              : '1px solid var(--border-color)',
+                            transition: 'all 0.2s'
                           }}
                         >
                           {slot}
@@ -3289,9 +4055,14 @@ export default function TrainerPanel({ activeView, currentUser }) {
                     {members.length === 0 ? (
                       <option value="">No registered athletes</option>
                     ) : (
-                      members.map((m) => (
-                        <option key={m.id} value={m.name}>{m.name} (RFID Code: #{m.id.split('-')[1]})</option>
-                      ))
+                      members.map((m, idx) => {
+                        const rfidCode = (m.id && typeof m.id === 'string' && m.id.includes('-')) ? m.id.split('-')[1] : (m.id ? String(m.id).slice(-5) : `90${idx + 10}`);
+                        return (
+                          <option key={m.id || idx} value={m.name}>
+                            {m.name} (RFID Code: #{rfidCode})
+                          </option>
+                        );
+                      })
                     )}
                   </select>
                 </div>

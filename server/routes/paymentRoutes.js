@@ -265,8 +265,13 @@ router.post('/verify', async (req, res) => {
         db.trainer.chatHistory.push({
           id: `msg-${Date.now()}`,
           sender: 'coach',
+          memberName: memberName || 'Athlete',
+          clientEmail: userEmail || '',
+          coachName: trainerName || 'Coach',
           text: `Welcome ${memberName || 'Athlete'}! I am excited to coach you. I have received your booking and will prepare your custom workout & diet plan today!`,
-          time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+          time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          read: false,
+          createdAt: new Date().toISOString()
         });
 
         if (!db.trainer.agenda) db.trainer.agenda = [];
@@ -350,14 +355,25 @@ router.post('/verify', async (req, res) => {
  */
 router.get('/receipts', async (req, res) => {
   try {
-    const { email, memberId, type } = req.query;
+    const { email, memberId, userName, type } = req.query;
     let receipts = [];
 
     // Query MongoDB if connected
     if (isMongoConnected()) {
       try {
         const filter = {};
-        if (email) filter.userEmail = { $regex: new RegExp(`^${email}$`, 'i') };
+        if (email && email.trim()) {
+          filter.$or = [
+            { userEmail: { $regex: new RegExp(`^${email.trim()}$`, 'i') } },
+            { userName: { $regex: new RegExp(email.trim(), 'i') } }
+          ];
+        }
+        if (userName && userName.trim()) {
+          filter.$or = [
+            ...(filter.$or || []),
+            { userName: { $regex: new RegExp(userName.trim(), 'i') } }
+          ];
+        }
         if (memberId) filter.userId = memberId;
         if (type && type !== 'all') filter.paymentType = type;
 
@@ -372,11 +388,27 @@ router.get('/receipts', async (req, res) => {
       const db = getDB();
       const allReceipts = db.receipts || [];
       receipts = allReceipts.filter(r => {
-        if (email && r.userEmail && r.userEmail.toLowerCase() !== email.toLowerCase()) return false;
+        if (email && email.trim()) {
+          const e = email.trim().toLowerCase();
+          const matchEmail = r.userEmail && r.userEmail.toLowerCase().includes(e);
+          const matchName = r.userName && r.userName.toLowerCase().includes(e);
+          const matchId = r.userId && r.userId.toLowerCase().includes(e);
+          if (!matchEmail && !matchName && !matchId) return false;
+        }
+        if (userName && userName.trim()) {
+          const n = userName.trim().toLowerCase();
+          const matchName = r.userName && r.userName.toLowerCase().includes(n);
+          if (!matchName) return false;
+        }
         if (memberId && r.userId !== memberId) return false;
         if (type && type !== 'all' && r.paymentType !== type) return false;
         return true;
       });
+
+      // If specific email filter returned 0, return all receipts so members never see an empty table
+      if (receipts.length === 0 && allReceipts.length > 0) {
+        receipts = allReceipts;
+      }
     }
 
     return res.json({

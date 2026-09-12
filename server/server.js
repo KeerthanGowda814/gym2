@@ -75,6 +75,7 @@ app.use('/api/member/trainer', authMiddleware, trainerRoutes);
 app.use('/api/member/trainers', authMiddleware, trainerRoutes);
 app.use('/api/member/attendance', authMiddleware, attendanceRoutes);
 app.use('/api/member/supplements', authMiddleware, supplementRoutes);
+app.use('/api/admin/supplements', supplementRoutes);
 app.use('/api/member/equipment', authMiddleware, equipmentRoutes);
 app.use('/api/trainer', authMiddleware, trainerPanelRoutes);
 

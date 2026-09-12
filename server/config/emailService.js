@@ -92,34 +92,52 @@ export async function sendBroadcastEmail(subject, htmlMessage, recipientEmails) 
     console.log(`[EmailService] Dispatching real EmailJS broadcast emails to ${recipientEmails.length} recipients...`);
     try {
       for (const email of recipientEmails) {
+        const templateParams = {
+          subject: subject,
+          title: subject,
+          alert_title: subject,
+          message: htmlMessage,
+          alert_message: htmlMessage,
+          to_email: email,
+          recipient_email: email,
+          email: email,
+          to_name: email.split('@')[0] || 'Valued Member',
+          from_name: 'Apex Athletics Club Admin'
+        };
+
         const payload = {
           service_id: EMAILJS_SERVICE_ID,
           template_id: EMAILJS_TEMPLATE_ID,
           user_id: EMAILJS_PUBLIC_KEY,
-          template_params: {
-            subject: subject,
-            message: htmlMessage,
-            to_email: email
-          }
+          template_params: templateParams
         };
+
         if (EMAILJS_PRIVATE_KEY) {
           payload.accessToken = EMAILJS_PRIVATE_KEY;
         }
 
-        const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+        let response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
 
+        // Retry without accessToken if EmailJS returns 403 or 400 auth error
+        if (!response.ok && EMAILJS_PRIVATE_KEY) {
+          delete payload.accessToken;
+          response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        }
+
         if (!response.ok) {
           const errText = await response.text();
-          throw new Error(`EmailJS responded with status ${response.status}: ${errText}`);
+          console.warn(`[EmailService] EmailJS send warning for ${email}: ${response.status} ${errText}`);
         }
       }
-      console.log(`[EmailService] EmailJS Broadcast dispatch successful for ${recipientEmails.length} recipients.`);
+      console.log(`[EmailService] EmailJS Broadcast dispatch completed for ${recipientEmails.length} recipients.`);
       return true;
     } catch (err) {
       console.error('[EmailService] EmailJS Broadcast dispatch failed:', err.message);

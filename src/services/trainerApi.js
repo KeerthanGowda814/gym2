@@ -239,26 +239,44 @@ export const trainerApi = {
   },
 
   // --- 6. CLIENT CHAT ENDPOINTS ---
-  async getChatHistory(memberName) {
+  async getChatHistory(memberName, clientEmail, coachName) {
     try {
-      const url = memberName ? `${API_BASE_URL}/chat?memberName=${encodeURIComponent(memberName)}` : `${API_BASE_URL}/chat`;
+      const params = new URLSearchParams();
+      if (memberName) params.append('memberName', memberName);
+      if (clientEmail) params.append('clientEmail', clientEmail);
+      if (coachName) params.append('coachName', coachName);
+      const url = `${API_BASE_URL}/chat?${params.toString()}`;
       const res = await fetch(url, { headers: getHeaders() });
       if (!res.ok) throw new Error('Failed fetching chat history');
       const data = await res.json();
-      return data.data;
+      return data;
     } catch (err) {
       return null;
     }
   },
 
-  async sendChatMessage(text, sender = 'coach', memberName = '') {
+  async sendChatMessage(text, sender = 'coach', memberName = '', clientEmail = '', coachName = '') {
     try {
       const res = await fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ text, sender, memberName })
+        body: JSON.stringify({ text, sender, memberName, clientEmail, coachName })
       });
       if (!res.ok) throw new Error('Failed sending chat message');
+      return await res.json();
+    } catch (err) {
+      return null;
+    }
+  },
+
+  async markChatRead(memberName, clientEmail, coachName) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/chat/read`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ memberName, clientEmail, coachName })
+      });
+      if (!res.ok) throw new Error('Failed marking chat read');
       return await res.json();
     } catch (err) {
       return null;

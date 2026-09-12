@@ -41,9 +41,15 @@ const AgendaSchema = new mongoose.Schema({
 
 const ChatMessageSchema = new mongoose.Schema({
   id: String,
-  sender: String,
+  sender: { type: String, default: 'member' }, // 'member' | 'coach'
   text: String,
-  time: String
+  time: String,
+  memberName: String,
+  memberEmail: String,
+  clientEmail: String,
+  coachName: String,
+  read: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
 });
 
 const TrainerDataSchema = new mongoose.Schema({

@@ -129,7 +129,7 @@ const DEFAULT_PRODUCTS = [
   }
 ];
 
-export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, currentUser = null, onViewOrders = null }) {
+export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, currentUser = null, profileData = null, onViewOrders = null }) {
   const [storeProducts, setStoreProducts] = useState(DEFAULT_PRODUCTS);
   const [lastCheckoutDetail, setLastCheckoutDetail] = useState(null);
 
@@ -170,25 +170,58 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
   const [activeReceipt, setActiveReceipt] = useState(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
+  // Resolve member profile details dynamically
+  const getResolvedProfile = () => {
+    if (profileData && (profileData.name || profileData.email || profileData.phone || profileData.address)) {
+      return profileData;
+    }
+    try {
+      const activeEmail = currentUser?.email || currentUser?.sub || '';
+      const memberKey = activeEmail ? activeEmail.toLowerCase().replace(/[^a-z0-9]/g, '_') : (currentUser?.name ? currentUser.name.toLowerCase().replace(/[^a-z0-9]/g, '_') : 'member_user');
+      const saved = localStorage.getItem(`apex_member_profile_${memberKey}`) || (currentUser?.name ? localStorage.getItem(`apex_member_profile_${currentUser.name}`) : null);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+      const registeredUsers = JSON.parse(localStorage.getItem('apex_registered_users') || '[]');
+      const reg = registeredUsers.find(u => u.email && u.email.toLowerCase() === activeEmail.toLowerCase());
+      if (reg) return reg;
+    } catch (e) {}
 
-  // Shipping Form State
-  const [shippingInfo, setShippingInfo] = useState({
-    fullName: 'Ethan Hunt',
-    phone: '+91 98765 43210',
-    address: '123 Apex Fitness Boulevard, Suite 4B',
-    city: 'Bangalore',
-    state: 'Karnataka',
-    pincode: '560001',
+    return currentUser || {};
+  };
+
+  const initialProfile = getResolvedProfile();
+
+  // Shipping Form State (Auto-populated with actual user profile data)
+  const [shippingInfo, setShippingInfo] = useState(() => ({
+    fullName: initialProfile?.name || currentUser?.name || 'Jeery',
+    phone: initialProfile?.phone || currentUser?.phone || '+919880156947',
+    address: initialProfile?.address || '742 Evergreen Terrace, Sector 4',
+    city: initialProfile?.city || 'Bangalore',
+    state: initialProfile?.state || 'Karnataka',
+    pincode: initialProfile?.pincode || '560001',
     deliveryType: 'standard' // 'standard' (Free) | 'express' (₹49)
-  });
+  }));
 
-  // Payment Form State
+  // Synchronize shipping info whenever profileData or currentUser updates
+  useEffect(() => {
+    const prof = getResolvedProfile();
+    if (prof) {
+      setShippingInfo(prev => ({
+        ...prev,
+        fullName: prof.name || currentUser?.name || prev.fullName,
+        phone: prof.phone || currentUser?.phone || prev.phone,
+        address: prof.address || prev.address,
+        city: prof.city || prev.city,
+        state: prof.state || prev.state,
+        pincode: prof.pincode || prev.pincode
+      }));
+    }
+  }, [profileData, currentUser]);
+
+  // Payment Form State (Defaults to Online Razorpay)
   const [paymentInfo, setPaymentInfo] = useState({
-    method: 'card', // 'card' | 'upi' | 'account' | 'cod'
-    cardNumber: '4242 4242 4242 4242',
-    cardExpiry: '12/28',
-    cardCvv: '888',
-    upiId: 'ethanhunt@upi'
+    method: 'online' // 'online' | 'cod' | 'account'
   });
 
   // Fetch backend products if available
@@ -274,7 +307,7 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
   const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.qty, 0);
   const memberDiscount = subtotal * 0.10; // Automatic 10% Member discount
   const promoDiscount = promoApplied ? subtotal * 0.10 : 0; // Extra 10%
-  const shippingFee = shippingInfo.deliveryType === 'express' ? 4.99 : 0.00;
+  const shippingFee = shippingInfo.deliveryType === 'express' ? 49.00 : 0.00;
   const totalPrice = Math.max(0, subtotal - memberDiscount - promoDiscount + shippingFee);
   const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
 
@@ -294,25 +327,45 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
     }
   };
 
-  const processCheckoutInDB = async (customTxId) => {
+  const processCheckoutInDB = async (customReceiptNumber, customPaymentId, methodLabel, statusLabel) => {
     const cartItems = cart.map((item) => ({ productId: item.product.id, qty: item.qty }));
+    const prof = getResolvedProfile();
     
-    const uEmail = currentUser?.email || 'member@apex.com';
-    const uName = currentUser?.name || shippingInfo.fullName || 'Registered Member';
-    const uPhone = shippingInfo.phone || '+91 98765 43210';
+    const uEmail = prof?.email || currentUser?.email || 'thepcworkshop1@gmail.com';
+    const uName = shippingInfo.fullName || prof?.name || currentUser?.name || 'Jeery';
+    const uPhone = shippingInfo.phone || prof?.phone || currentUser?.phone || '+919880156947';
+
+    const isCod = paymentInfo.method === 'cod';
+    const isAccount = paymentInfo.method === 'account';
+
+    const pMethod = methodLabel || (isCod
+      ? 'Cash on Delivery (COD)'
+      : isAccount
+      ? 'Apex Member Account'
+      : 'Online Payment (Razorpay)');
+
+    const pStatus = statusLabel || (isCod
+      ? 'Pending (COD)'
+      : isAccount
+      ? 'Billed to Member Account'
+      : 'Paid');
 
     // Call Node.js Express backend API
     const backendRes = await memberApi.checkoutSupplements(
       cartItems,
       promoInput,
       shippingInfo,
-      paymentInfo.method,
+      pMethod,
       uEmail,
       uName,
-      uPhone
+      uPhone,
+      customReceiptNumber,
+      customPaymentId,
+      pStatus
     );
 
-    const txId = customTxId || backendRes?.txId || ('TX-' + Math.floor(1000 + Math.random() * 9000));
+    const txId = customPaymentId || backendRes?.txId || ('TX-' + Math.floor(1000 + Math.random() * 9000));
+    const receiptNumber = customReceiptNumber || backendRes?.receiptNumber || backendRes?.receipt?.receiptNumber || ('MH-RCP-' + Math.floor(100000 + Math.random() * 900000));
     const finalTotal = backendRes?.totalBilled !== undefined ? backendRes.totalBilled : totalPrice;
     const orderId = backendRes?.order?.orderId || `ORD-${Date.now()}`;
     const orderDate = new Date().toLocaleDateString('en-US', {
@@ -326,6 +379,7 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
     const fullOrderObj = backendRes?.order || {
       orderId,
       txId,
+      receiptNumber,
       userEmail: uEmail,
       userName: uName,
       userPhone: uPhone,
@@ -345,8 +399,8 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
       total: finalTotal,
       totalAmount: finalTotal,
       shippingInfo: { ...shippingInfo },
-      paymentMethod: paymentInfo.method,
-      paymentStatus: paymentInfo.method === 'cod' ? 'Pending (COD)' : 'Paid',
+      paymentMethod: pMethod,
+      paymentStatus: pStatus,
       courierName: 'Apex Express Logistics',
       trackingNumber: '',
       estimatedDelivery: shippingInfo.deliveryType === 'express' ? '24 Hours Priority' : '2-3 Business Days',
@@ -355,10 +409,39 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
         {
           status: 'Pending Confirmation',
           timestamp: orderDate,
-          note: 'Order submitted by user and pending admin confirmation.'
+          note: isCod
+            ? 'Order placed with Cash on Delivery. Pending admin verification & dispatch.'
+            : isAccount
+            ? 'Order charged to Member Account. Pending admin confirmation.'
+            : 'Payment received via Razorpay. Pending admin packing & dispatch.'
         }
       ],
       date: orderDate
+    };
+
+    // Construct receipt object for instant receipt viewing/printing
+    const generatedReceipt = backendRes?.receipt || {
+      receiptNumber,
+      orderId,
+      paymentId: txId,
+      title: 'MuScLe HuB Supplement Store Order',
+      amount: finalTotal,
+      userName: uName,
+      userEmail: uEmail,
+      userPhone: uPhone,
+      paymentMethod: pMethod,
+      paymentType: 'supplement_order',
+      status: isCod ? 'pending' : (isAccount ? 'billed_to_account' : 'paid'),
+      createdAt: new Date().toISOString(),
+      items: cart.map((i) => ({
+        name: i.product.name,
+        qty: i.qty,
+        unitPrice: i.product.price,
+        total: i.product.price * i.qty
+      })),
+      subtotal: Math.round((finalTotal / 1.18) * 100) / 100,
+      gstAmount: Math.round((finalTotal - (finalTotal / 1.18)) * 100) / 100,
+      netAmount: finalTotal
     };
 
     // Sync client-side localStorage fallback for instant cross-tab reactivity
@@ -374,15 +457,19 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
     const detail = {
       txId,
       orderId,
+      receiptNumber,
       itemsSummary: cart.map((item) => `${item.qty}x ${item.product.name}`).join(', '),
       total: finalTotal,
       cartSnapshot: [...cart],
       shippingInfo: { ...shippingInfo },
-      paymentMethod: paymentInfo.method,
-      orderObj: fullOrderObj
+      paymentMethod: pMethod,
+      paymentStatus: pStatus,
+      orderObj: fullOrderObj,
+      receiptObj: generatedReceipt
     };
 
     setLastCheckoutDetail(detail);
+    setActiveReceipt(generatedReceipt);
     setShowSuccessModal(true);
     setCheckoutStep('cart');
     setIsCartOpen(false);
@@ -397,6 +484,8 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
     setPromoApplied(false);
     setPromoInput('');
     setPromoMessage('');
+
+    return detail;
   };
 
   // Final Order Submission Handler
@@ -405,9 +494,17 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
     if (cart.length === 0) return;
 
     if (paymentInfo.method === 'cod') {
-      await processCheckoutInDB();
+      await processCheckoutInDB(null, null, 'Cash on Delivery (COD)', 'Pending (COD)');
       return;
     }
+
+    if (paymentInfo.method === 'account') {
+      await processCheckoutInDB(null, null, 'Apex Member Account', 'Billed to Member Account');
+      return;
+    }
+
+    // Online Razorpay Payment Flow
+    const prof = getResolvedProfile();
 
     setIsProcessingPayment(true);
     try {
@@ -424,9 +521,9 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
         })),
         memberInfo: {
           id: currentUser?.id || currentUser?.memberId || 'MEM-90210',
-          name: shippingInfo.fullName || currentUser?.name || 'Athlete Member',
-          email: currentUser?.email || 'athlete@apex.club',
-          phone: shippingInfo.phone || '+91 98765 43210'
+          name: shippingInfo.fullName || prof?.name || currentUser?.name || 'Jeery',
+          email: prof?.email || currentUser?.email || 'thepcworkshop1@gmail.com',
+          phone: shippingInfo.phone || prof?.phone || currentUser?.phone || '+919880156947'
         },
         metadata: {
           deliveryType: shippingInfo.deliveryType,
@@ -437,7 +534,7 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
         },
         onSuccess: async (receipt) => {
           setIsProcessingPayment(false);
-          await processCheckoutInDB(receipt?.receiptNumber || receipt?.paymentId);
+          await processCheckoutInDB(receipt?.receiptNumber, receipt?.paymentId, 'Online Payment (Razorpay)', 'Paid');
           setActiveReceipt(receipt);
         },
         onFailure: (err) => {
@@ -455,7 +552,7 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
 
   const handleGatewayPaymentSuccess = async (paymentDetail) => {
     setShowGateway(false);
-    await processCheckoutInDB(paymentDetail.txId);
+    await processCheckoutInDB(null, paymentDetail.txId, 'Online Payment (Razorpay)', 'Paid');
   };
 
 
@@ -1243,7 +1340,7 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
               </div>
 
               {/* Order Summary Pill */}
-              <div style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.8rem 1rem', marginBottom: '1.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
+              <div style={{ background: 'var(--bg-dark)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.8rem 1rem', marginBottom: '1.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Order Total ({totalQty} item{totalQty > 1 ? 's' : ''}):</span>
                 <span style={{ color: 'var(--accent-volt)', fontWeight: 800, fontSize: '1rem' }}>₹{totalPrice.toFixed(2)}</span>
               </div>
@@ -1315,159 +1412,191 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
                 Select Payment Option
               </h5>
 
-              {/* Payment Methods Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', marginBottom: '1.5rem' }}>
+              {/* Payment Methods Grid: 3 Options (Online via Razorpay, Cash on Delivery, Apex Member Account) */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.8rem', marginBottom: '1.2rem' }}>
+                {/* 1. Online Razorpay Gateway Option */}
                 <div
-                  onClick={() => setPaymentInfo({ ...paymentInfo, method: 'card' })}
+                  onClick={() => setPaymentInfo({ method: 'online' })}
                   style={{
-                    background: paymentInfo.method === 'card' ? 'rgba(0, 240, 255, 0.08)' : 'rgba(255, 255, 255, 0.01)',
-                    border: paymentInfo.method === 'card' ? '1px solid var(--accent-cyan)' : '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    padding: '0.8rem',
+                    background: paymentInfo.method === 'online' ? 'rgba(0, 240, 255, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                    border: paymentInfo.method === 'online' ? '1.5px solid var(--accent-cyan)' : '1px solid var(--border-color)',
+                    boxShadow: paymentInfo.method === 'online' ? '0 0 15px rgba(0, 240, 255, 0.15)' : 'none',
+                    borderRadius: '10px',
+                    padding: '1rem 1.2rem',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.6rem'
+                    justifyContent: 'space-between',
+                    gap: '1rem',
+                    transition: 'all 0.2s ease'
                   }}
                 >
-                  <span style={{ fontSize: '1.2rem' }}>💳</span>
-                  <div>
-                    <strong style={{ color: 'var(--text-white)', fontSize: '0.82rem', display: 'block' }}>Credit / Debit Card</strong>
-                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Visa, Mastercard, RuPay</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem' }}>
+                    <div style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '8px',
+                      background: 'rgba(0, 240, 255, 0.12)',
+                      border: '1px solid rgba(0, 240, 255, 0.3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '1.3rem'
+                    }}>
+                      💳
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>Online Payment via Razorpay</strong>
+                        <span style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', padding: '0.15rem 0.4rem', borderRadius: '4px', background: 'rgba(0, 240, 255, 0.15)', color: 'var(--accent-cyan)', border: '1px solid rgba(0, 240, 255, 0.3)' }}>
+                          Recommended
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.2rem' }}>
+                        Cards (Visa/Mastercard/RuPay), Instant UPI (GPay/PhonePe/Paytm), NetBanking & Wallets
+                      </span>
+                    </div>
                   </div>
+
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    border: paymentInfo.method === 'online' ? '5px solid var(--accent-cyan)' : '2px solid var(--border-color)',
+                    background: '#fff',
+                    flexShrink: 0
+                  }} />
                 </div>
 
+                {/* 2. Cash on Delivery (COD) Option */}
                 <div
-                  onClick={() => setPaymentInfo({ ...paymentInfo, method: 'upi' })}
+                  onClick={() => setPaymentInfo({ method: 'cod' })}
                   style={{
-                    background: paymentInfo.method === 'upi' ? 'rgba(198, 255, 0, 0.08)' : 'rgba(255, 255, 255, 0.01)',
-                    border: paymentInfo.method === 'upi' ? '1px solid var(--accent-volt)' : '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    padding: '0.8rem',
+                    background: paymentInfo.method === 'cod' ? 'rgba(198, 255, 0, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                    border: paymentInfo.method === 'cod' ? '1.5px solid var(--accent-volt)' : '1px solid var(--border-color)',
+                    boxShadow: paymentInfo.method === 'cod' ? '0 0 15px rgba(198, 255, 0, 0.15)' : 'none',
+                    borderRadius: '10px',
+                    padding: '1rem 1.2rem',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.6rem'
+                    justifyContent: 'space-between',
+                    gap: '1rem',
+                    transition: 'all 0.2s ease'
                   }}
                 >
-                  <span style={{ fontSize: '1.2rem' }}>📱</span>
-                  <div>
-                    <strong style={{ color: 'var(--text-white)', fontSize: '0.82rem', display: 'block' }}>Instant UPI / QR</strong>
-                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>GPay, PhonePe, Paytm, BHIM</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem' }}>
+                    <div style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '8px',
+                      background: 'rgba(198, 255, 0, 0.12)',
+                      border: '1px solid rgba(198, 255, 0, 0.3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '1.3rem'
+                    }}>
+                      💵
+                    </div>
+                    <div>
+                      <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem', display: 'block' }}>Cash on Delivery (COD)</strong>
+                      <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.2rem' }}>
+                        Pay cash upon doorstep courier arrival • Exact change recommended
+                      </span>
+                    </div>
                   </div>
+
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    border: paymentInfo.method === 'cod' ? '5px solid var(--accent-volt)' : '2px solid var(--border-color)',
+                    background: '#fff',
+                    flexShrink: 0
+                  }} />
                 </div>
 
+                {/* 3. Apex Member Account Billing Option */}
                 <div
-                  onClick={() => setPaymentInfo({ ...paymentInfo, method: 'account' })}
+                  onClick={() => setPaymentInfo({ method: 'account' })}
                   style={{
-                    background: paymentInfo.method === 'account' ? 'rgba(0, 240, 255, 0.08)' : 'rgba(255, 255, 255, 0.01)',
-                    border: paymentInfo.method === 'account' ? '1px solid var(--accent-cyan)' : '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    padding: '0.8rem',
+                    background: paymentInfo.method === 'account' ? 'rgba(245, 158, 11, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                    border: paymentInfo.method === 'account' ? '1.5px solid #f59e0b' : '1px solid var(--border-color)',
+                    boxShadow: paymentInfo.method === 'account' ? '0 0 15px rgba(245, 158, 11, 0.15)' : 'none',
+                    borderRadius: '10px',
+                    padding: '1rem 1.2rem',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.6rem'
+                    justifyContent: 'space-between',
+                    gap: '1rem',
+                    transition: 'all 0.2s ease'
                   }}
                 >
-                  <span style={{ fontSize: '1.2rem' }}>⚡</span>
-                  <div>
-                    <strong style={{ color: 'var(--text-white)', fontSize: '0.82rem', display: 'block' }}>Apex Member Account</strong>
-                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Add to monthly billing invoice</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem' }}>
+                    <div style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '8px',
+                      background: 'rgba(245, 158, 11, 0.12)',
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '1.3rem'
+                    }}>
+                      ⚡
+                    </div>
+                    <div>
+                      <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem', display: 'block' }}>Apex Member Direct Account</strong>
+                      <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.2rem' }}>
+                        Charge directly to your active monthly gym membership invoice
+                      </span>
+                    </div>
                   </div>
-                </div>
 
-                <div
-                  onClick={() => setPaymentInfo({ ...paymentInfo, method: 'cod' })}
-                  style={{
-                    background: paymentInfo.method === 'cod' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.01)',
-                    border: paymentInfo.method === 'cod' ? '1px solid var(--text-white)' : '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    padding: '0.8rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.6rem'
-                  }}
-                >
-                  <span style={{ fontSize: '1.2rem' }}>💵</span>
-                  <div>
-                    <strong style={{ color: 'var(--text-white)', fontSize: '0.82rem', display: 'block' }}>Cash on Delivery</strong>
-                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Pay cash upon delivery</span>
-                  </div>
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    border: paymentInfo.method === 'account' ? '5px solid #f59e0b' : '2px solid var(--border-color)',
+                    background: '#fff',
+                    flexShrink: 0
+                  }} />
                 </div>
               </div>
 
-              {/* Dynamic Payment Input Fields */}
-              {paymentInfo.method === 'card' && (
-                <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem', marginBottom: '1.5rem' }}>
-                  <div className="form-group" style={{ marginBottom: '0.8rem' }}>
-                    <label className="form-label" style={{ fontSize: '0.72rem' }}>Card Number</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={paymentInfo.cardNumber}
-                      onChange={(e) => setPaymentInfo({ ...paymentInfo, cardNumber: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label" style={{ fontSize: '0.72rem' }}>Expiry Date</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="MM/YY"
-                        value={paymentInfo.cardExpiry}
-                        onChange={(e) => setPaymentInfo({ ...paymentInfo, cardExpiry: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label" style={{ fontSize: '0.72rem' }}>CVV Code</label>
-                      <input
-                        type="password"
-                        className="form-input"
-                        maxLength="4"
-                        value={paymentInfo.cardCvv}
-                        onChange={(e) => setPaymentInfo({ ...paymentInfo, cardCvv: e.target.value })}
-                        required
-                      />
-                    </div>
+              {/* Dynamic Information Banner Based on Selected Option */}
+              {paymentInfo.method === 'online' && (
+                <div style={{ background: 'rgba(0, 240, 255, 0.04)', border: '1px solid rgba(0, 240, 255, 0.2)', borderRadius: '8px', padding: '0.9rem 1.1rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                  <span style={{ fontSize: '1.4rem' }}>🔒</span>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                    <strong style={{ color: 'var(--accent-cyan)' }}>Razorpay 256-Bit SSL Gateway:</strong> You will be seamlessly redirected to the verified Razorpay payment modal to complete transaction via UPI, Cards, NetBanking, or Wallets.
                   </div>
                 </div>
               )}
 
-              {paymentInfo.method === 'upi' && (
-                <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem', marginBottom: '1.5rem' }}>
-                  <div className="form-group" style={{ margin: 0 }}>
-                    <label className="form-label" style={{ fontSize: '0.72rem' }}>VPA / UPI ID (e.g. name@upi)</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="username@okaxis or username@paytm"
-                      value={paymentInfo.upiId}
-                      onChange={(e) => setPaymentInfo({ ...paymentInfo, upiId: e.target.value })}
-                      required
-                    />
+              {paymentInfo.method === 'cod' && (
+                <div style={{ background: 'rgba(198, 255, 0, 0.04)', border: '1px solid rgba(198, 255, 0, 0.2)', borderRadius: '8px', padding: '0.9rem 1.1rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                  <span style={{ fontSize: '1.4rem' }}>📦</span>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                    <strong style={{ color: 'var(--accent-volt)' }}>Cash on Delivery:</strong> Please keep exact cash of <strong style={{ color: 'var(--text-white)' }}>₹{totalPrice.toFixed(2)}</strong> ready for payment to the Apex Express courier at your doorstep.
                   </div>
                 </div>
               )}
 
               {paymentInfo.method === 'account' && (
-                <div style={{ background: 'rgba(0, 240, 255, 0.05)', border: '1px solid rgba(0, 240, 255, 0.2)', borderRadius: '8px', padding: '1rem', marginBottom: '1.5rem', color: 'var(--accent-cyan)', fontSize: '0.8rem', lineHeight: 1.4 }}>
-                  ⚡ <strong>Member Direct Billing Active:</strong> Purchase total of <strong>₹{totalPrice.toFixed(2)}</strong> will be charged to your active account invoice (Receipt ID will be generated upon confirmation).
-                </div>
-              )}
-
-              {paymentInfo.method === 'cod' && (
-                <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem', marginBottom: '1.5rem', color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: 1.4 }}>
-                  💵 <strong>Cash on Delivery:</strong> Please keep exact change of <strong>₹{totalPrice.toFixed(2)}</strong> ready upon delivery by courier.
+                <div style={{ background: 'rgba(245, 158, 11, 0.04)', border: '1px solid rgba(245, 158, 11, 0.2)', borderRadius: '8px', padding: '0.9rem 1.1rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                  <span style={{ fontSize: '1.4rem' }}>📋</span>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                    <strong style={{ color: '#f59e0b' }}>Member Direct Billing Active:</strong> Purchase total of <strong style={{ color: 'var(--text-white)' }}>₹{totalPrice.toFixed(2)}</strong> will be charged to your monthly invoice statement.
+                  </div>
                 </div>
               )}
 
               {/* Final Breakdown Table */}
-              <div className="price-breakdown" style={{ marginBottom: '1.8rem', background: 'rgba(0,0,0,0.2)', padding: '0.8rem 1rem', borderRadius: '6px' }}>
+              <div className="price-breakdown" style={{ marginBottom: '1.8rem', background: 'var(--bg-dark)', border: '1px solid var(--border-color)', padding: '0.8rem 1rem', borderRadius: '6px' }}>
                 <div className="price-row">
                   <span>Items Subtotal</span>
                   <span>₹{subtotal.toFixed(2)}</span>
@@ -1506,9 +1635,18 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
                 <button
                   type="submit"
                   className="glow-btn"
-                  style={{ padding: '0.75rem 1.8rem', fontSize: '0.88rem' }}
+                  disabled={isProcessingPayment}
+                  style={{ padding: '0.75rem 1.8rem', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
                 >
-                  Pay & Complete Order ✓
+                  {isProcessingPayment ? (
+                    'Opening Razorpay...'
+                  ) : paymentInfo.method === 'online' ? (
+                    `Pay ₹${totalPrice.toFixed(2)} via Razorpay ➔`
+                  ) : paymentInfo.method === 'cod' ? (
+                    `Confirm Cash on Delivery Order (₹${totalPrice.toFixed(2)}) ✓`
+                  ) : (
+                    `Charge ₹${totalPrice.toFixed(2)} to Member Account ✓`
+                  )}
                 </button>
               </div>
             </form>
@@ -1541,14 +1679,14 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
             )}
 
             {/* Summary lines */}
-            <div className="success-order-summary" id="success-order-summary" style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.9rem', textAlign: 'left', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            <div className="success-order-summary" id="success-order-summary" style={{ background: 'var(--bg-dark)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.9rem', textAlign: 'left', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
               {lastCheckoutDetail.cartSnapshot.map((item) => (
                 <div key={item.product.id} className="success-summary-line" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                   <span>{item.qty}x {item.product.name}</span>
                   <span>₹{(item.product.price * item.qty).toFixed(2)}</span>
                 </div>
               ))}
-              <div className="success-summary-line" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginTop: '0.4rem', paddingTop: '0.4rem', color: 'var(--accent-volt)', display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '0.85rem' }}>
+              <div className="success-summary-line" style={{ borderTop: '1px solid var(--border-color)', marginTop: '0.4rem', paddingTop: '0.4rem', color: 'var(--accent-volt)', display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '0.85rem' }}>
                 <span>Billed Total</span>
                 <span>₹{lastCheckoutDetail.total.toFixed(2)}</span>
               </div>
@@ -1559,17 +1697,18 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
                 type="button"
                 className="glow-btn"
                 onClick={() => {
-                  const receiptObj = activeReceipt || {
-                    receiptNumber: lastCheckoutDetail.txId || 'MH-RCP-SUPP',
+                  const receiptObj = activeReceipt || lastCheckoutDetail.receiptObj || {
+                    receiptNumber: lastCheckoutDetail.receiptNumber || lastCheckoutDetail.txId || 'MH-RCP-SUPP',
                     orderId: lastCheckoutDetail.orderId || 'ORD-SUPP',
                     paymentId: lastCheckoutDetail.txId || 'PAY-VERIFIED',
                     title: 'MuScLe HuB Supplement Store Order',
                     amount: lastCheckoutDetail.total,
                     userName: lastCheckoutDetail.shippingInfo?.fullName || currentUser?.name || 'Athlete Member',
-                    userEmail: currentUser?.email || 'athlete@apex.club',
+                    userEmail: currentUser?.email || 'thepcworkshop1@gmail.com',
                     userPhone: lastCheckoutDetail.shippingInfo?.phone || '+91 98765 43210',
-                    paymentMethod: lastCheckoutDetail.paymentMethod === 'cod' ? 'Cash On Delivery (COD)' : 'Razorpay Verified',
+                    paymentMethod: lastCheckoutDetail.paymentMethod || 'Online Payment (Razorpay)',
                     paymentType: 'supplement_order',
+                    status: lastCheckoutDetail.paymentStatus === 'Pending (COD)' ? 'pending' : (lastCheckoutDetail.paymentStatus === 'Billed to Member Account' ? 'billed_to_account' : 'paid'),
                     createdAt: new Date().toISOString(),
                     items: lastCheckoutDetail.cartSnapshot.map((i) => ({
                       name: i.product.name,

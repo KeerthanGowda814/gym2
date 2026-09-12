@@ -1,11 +1,22 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * ReceiptModal Component
  * Renders an official, beautifully styled gym tax invoice / payment receipt with print and PDF export capabilities.
+ * Uses React Portal to attach directly to document.body preventing any clipping or offset issues from parent containers.
  */
 export default function ReceiptModal({ receipt, onClose }) {
   if (!receipt) return null;
+
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    const originalStyle = window.getComputedStyle(document.body).overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalStyle;
+    };
+  }, []);
 
   const handlePrint = () => {
     window.print();
@@ -21,26 +32,30 @@ export default function ReceiptModal({ receipt, onClose }) {
         timeStyle: 'short'
       });
 
-  const subtotal = receipt.subtotal || Math.round((receipt.amount / 1.18) * 100) / 100;
-  const gstAmount = receipt.gstAmount || Math.round((receipt.amount - subtotal) * 100) / 100;
-  const totalAmount = receipt.amount || receipt.netAmount || 0;
+  const rawAmount = Number(receipt.amount || receipt.netAmount || 0);
+  const subtotal = receipt.subtotal !== undefined ? Number(receipt.subtotal) : Math.round((rawAmount / 1.18) * 100) / 100;
+  const gstAmount = receipt.gstAmount !== undefined ? Number(receipt.gstAmount) : Math.round((rawAmount - subtotal) * 100) / 100;
+  const totalAmount = rawAmount;
 
-  return (
+  const modalContent = (
     <div
       className="receipt-modal-overlay print-overlay"
       style={{
         position: 'fixed',
         top: 0,
         left: 0,
-        width: '100vw',
-        height: '100vh',
+        right: 0,
+        bottom: 0,
+        width: '100%',
+        height: '100%',
         background: 'rgba(5, 5, 8, 0.85)',
         backdropFilter: 'blur(10px)',
-        zIndex: 9999999,
+        zIndex: 99999999,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '1.5rem'
+        padding: '1rem',
+        boxSizing: 'border-box'
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -54,12 +69,14 @@ export default function ReceiptModal({ receipt, onClose }) {
           border: '1px solid var(--border-color, #e2e8f0)',
           borderRadius: '16px',
           width: '100%',
-          maxWidth: '650px',
-          maxHeight: '92vh',
+          maxWidth: '620px',
+          maxHeight: '90vh',
           overflowY: 'auto',
-          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.35)',
+          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.45)',
           position: 'relative',
-          padding: '2.5rem'
+          padding: '2rem',
+          boxSizing: 'border-box',
+          margin: 'auto'
         }}
       >
         {/* Close Button (Hidden when printing) */}
@@ -138,96 +155,98 @@ export default function ReceiptModal({ receipt, onClose }) {
         </div>
 
         {/* BILLED TO & PAYMENT DETAILS */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', background: 'var(--bg-card-hover, rgba(128,128,128,0.05))', padding: '1.2rem', borderRadius: '10px', marginBottom: '1.8rem', border: '1px solid var(--border-color)' }}>
-          <div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.2rem', background: 'var(--bg-card-hover, rgba(128,128,128,0.05))', padding: '1.2rem', borderRadius: '10px', marginBottom: '1.8rem', border: '1px solid var(--border-color)', boxSizing: 'border-box' }}>
+          <div style={{ minWidth: 0 }}>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', display: 'block', marginBottom: '0.3rem' }}>
               BILLED TO (MEMBER)
             </span>
-            <strong style={{ fontSize: '0.95rem', color: 'var(--text-white)', display: 'block' }}>
+            <strong style={{ fontSize: '0.95rem', color: 'var(--text-white)', display: 'block', wordBreak: 'break-word' }}>
               {receipt.userName || 'Athlete Member'}
             </strong>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block' }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', wordBreak: 'break-all' }}>
               {receipt.userEmail || 'athlete@apex.club'}
             </span>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', wordBreak: 'break-word', marginTop: '0.2rem' }}>
               Member ID: {receipt.userId || 'MEM-90210'} | {receipt.userPhone || '+91 98765 43210'}
             </span>
           </div>
 
-          <div>
+          <div style={{ minWidth: 0 }}>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', display: 'block', marginBottom: '0.3rem' }}>
               GATEWAY TRANSACTION
             </span>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block' }}>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', wordBreak: 'break-all' }}>
               <strong>Payment ID:</strong> <code style={{ fontSize: '0.75rem', color: 'var(--accent-cyan, #0070f3)' }}>{receipt.paymentId || 'pay_test_default'}</code>
             </span>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block' }}>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', wordBreak: 'break-all' }}>
               <strong>Order ID:</strong> <code style={{ fontSize: '0.75rem' }}>{receipt.orderId || 'order_test_default'}</code>
             </span>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block' }}>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', wordBreak: 'break-word' }}>
               <strong>Method:</strong> {receipt.paymentMethod || 'Razorpay Online (UPI/Cards)'}
             </span>
           </div>
         </div>
 
         {/* LINE ITEMS TABLE */}
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1.5rem', fontSize: '0.85rem' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid var(--border-color)', textAlign: 'left' }}>
-              <th style={{ padding: '0.6rem 0.4rem', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase' }}>Description</th>
-              <th style={{ padding: '0.6rem 0.4rem', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'center' }}>Qty</th>
-              <th style={{ padding: '0.6rem 0.4rem', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'right' }}>Rate (₹)</th>
-              <th style={{ padding: '0.6rem 0.4rem', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'right' }}>Amount (₹)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(receipt.items && receipt.items.length > 0
-              ? receipt.items
-              : [{ name: receipt.title || 'Gym Service Fee', qty: 1, unitPrice: receipt.amount, total: receipt.amount }]
-            ).map((item, idx) => (
-              <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <td style={{ padding: '0.8rem 0.4rem', fontWeight: 600, color: 'var(--text-white)' }}>
-                  {item.name}
-                  {receipt.paymentType === 'membership' && (
-                    <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 400 }}>
-                      All-access gym floor pass, locker & trainer consultation included
-                    </span>
-                  )}
-                </td>
-                <td style={{ padding: '0.8rem 0.4rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  {item.qty || 1}
-                </td>
-                <td style={{ padding: '0.8rem 0.4rem', textAlign: 'right', color: 'var(--text-muted)' }}>
-                  ₹{(item.unitPrice || item.price || item.total || 0).toLocaleString('en-IN')}
-                </td>
-                <td style={{ padding: '0.8rem 0.4rem', textAlign: 'right', fontWeight: 700, color: 'var(--text-white)' }}>
-                  ₹{(item.total || (item.unitPrice || item.price || 0) * (item.qty || 1)).toLocaleString('en-IN')}
-                </td>
+        <div style={{ width: '100%', overflowX: 'auto', marginBottom: '1.5rem' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--border-color)', textAlign: 'left' }}>
+                <th style={{ padding: '0.6rem 0.4rem', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase' }}>Description</th>
+                <th style={{ padding: '0.6rem 0.4rem', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'center', width: '50px' }}>Qty</th>
+                <th style={{ padding: '0.6rem 0.4rem', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'right', width: '90px' }}>Rate (₹)</th>
+                <th style={{ padding: '0.6rem 0.4rem', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'right', width: '100px' }}>Amount (₹)</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {(receipt.items && receipt.items.length > 0
+                ? receipt.items
+                : [{ name: receipt.title || 'Gym Service Fee', qty: 1, unitPrice: receipt.amount, total: receipt.amount }]
+              ).map((item, idx) => (
+                <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                  <td style={{ padding: '0.8rem 0.4rem', fontWeight: 600, color: 'var(--text-white)', wordBreak: 'break-word' }}>
+                    {item.name}
+                    {receipt.paymentType === 'membership' && (
+                      <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+                        All-access gym floor pass, locker & trainer consultation included
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ padding: '0.8rem 0.4rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    {item.qty || 1}
+                  </td>
+                  <td style={{ padding: '0.8rem 0.4rem', textAlign: 'right', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                    ₹{Number(item.unitPrice || item.price || item.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td style={{ padding: '0.8rem 0.4rem', textAlign: 'right', fontWeight: 700, color: 'var(--text-white)', whiteSpace: 'nowrap' }}>
+                    ₹{Number(item.total || (item.unitPrice || item.price || 0) * (item.qty || 1)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         {/* SUMMARY TOTALS */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.8rem' }}>
-          <div style={{ width: '260px', display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.85rem' }}>
+          <div style={{ width: '100%', maxWidth: '280px', display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.85rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
               <span>Subtotal:</span>
-              <span>₹{subtotal.toLocaleString('en-IN')}</span>
+              <span>₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}>
               <span>GST (18% Included):</span>
-              <span>₹{gstAmount.toLocaleString('en-IN')}</span>
+              <span>₹{gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
             {receipt.discountAmount > 0 && (
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#10b981' }}>
                 <span>Discount:</span>
-                <span>-₹{receipt.discountAmount.toLocaleString('en-IN')}</span>
+                <span>-₹{Number(receipt.discountAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
             )}
             <div style={{ borderTop: '2px solid var(--border-color)', paddingTop: '0.6rem', marginTop: '0.2rem', display: 'flex', justifyContent: 'space-between', fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-white)' }}>
               <span>Total Paid:</span>
-              <span style={{ color: 'var(--accent-volt, #ff5e00)' }}>₹{totalAmount.toLocaleString('en-IN')}</span>
+              <span style={{ color: 'var(--accent-volt, #ff5e00)' }}>₹{totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
           </div>
         </div>
@@ -315,4 +334,10 @@ export default function ReceiptModal({ receipt, onClose }) {
       `}</style>
     </div>
   );
+
+  if (typeof document !== 'undefined' && document.body) {
+    return createPortal(modalContent, document.body);
+  }
+
+  return modalContent;
 }
