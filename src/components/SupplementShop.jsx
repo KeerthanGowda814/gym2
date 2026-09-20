@@ -194,8 +194,8 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
 
   // Shipping Form State (Auto-populated with actual user profile data)
   const [shippingInfo, setShippingInfo] = useState(() => ({
-    fullName: initialProfile?.name || currentUser?.name || 'Jeery',
-    phone: initialProfile?.phone || currentUser?.phone || '+919880156947',
+    fullName: initialProfile?.name || currentUser?.name || 'Member Athlete',
+    phone: initialProfile?.phone || currentUser?.phone || '',
     address: initialProfile?.address || '742 Evergreen Terrace, Sector 4',
     city: initialProfile?.city || 'Bangalore',
     state: initialProfile?.state || 'Karnataka',
@@ -375,9 +375,9 @@ const mergeProducts = (...productArrays) => {
     const cartItems = cart.map((item) => ({ productId: item.product.id, qty: item.qty }));
     const prof = getResolvedProfile();
     
-    const uEmail = prof?.email || currentUser?.email || 'thepcworkshop1@gmail.com';
-    const uName = shippingInfo.fullName || prof?.name || currentUser?.name || 'Jeery';
-    const uPhone = shippingInfo.phone || prof?.phone || currentUser?.phone || '+919880156947';
+    const uEmail = prof?.email || currentUser?.email || 'member@apex.com';
+    const uName = shippingInfo.fullName || prof?.name || currentUser?.name || 'Member Athlete';
+    const uPhone = shippingInfo.phone || prof?.phone || currentUser?.phone || '';
 
     const isCod = paymentInfo.method === 'cod';
     const isAccount = paymentInfo.method === 'account';
@@ -564,10 +564,10 @@ const mergeProducts = (...productArrays) => {
           total: i.product.price * i.qty
         })),
         memberInfo: {
-          id: currentUser?.id || currentUser?.memberId || 'MEM-90210',
-          name: shippingInfo.fullName || prof?.name || currentUser?.name || 'Jeery',
-          email: prof?.email || currentUser?.email || 'thepcworkshop1@gmail.com',
-          phone: shippingInfo.phone || prof?.phone || currentUser?.phone || '+919880156947'
+          id: currentUser?.id || currentUser?.memberId || 'MEM-LOGGED-IN',
+          name: shippingInfo.fullName || prof?.name || currentUser?.name || 'Member Athlete',
+          email: prof?.email || currentUser?.email || 'member@apex.com',
+          phone: shippingInfo.phone || prof?.phone || currentUser?.phone || ''
         },
         metadata: {
           deliveryType: shippingInfo.deliveryType,

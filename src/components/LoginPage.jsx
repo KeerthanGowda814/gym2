@@ -138,6 +138,13 @@ export default function LoginPage({ navigate }) {
         (u) => u.email && u.email.trim().toLowerCase() === cleanEmail
       );
 
+      // Check if trainer is pending approval
+      if (matchedRegisteredUser && (matchedRegisteredUser.role === 'trainer' || activeRole === 'trainer') && (matchedRegisteredUser.status === 'pending_approval' || matchedRegisteredUser.isApproved === false || matchedRegisteredUser.status === 'pending' || matchedRegisteredUser.status === 'Pending')) {
+        setIsLoggingIn(false);
+        setPasswordError("admin can not approve you're request please wait");
+        return;
+      }
+
       let authenticatedUser = null;
 
       // 1. Check exact mock database match
@@ -194,6 +201,9 @@ export default function LoginPage({ navigate }) {
           ApexAuth.authenticateUser(data.user.email, data.user.role, data.user.name, rememberMe);
           setIsLoggingIn(false);
           navigate('dashboard');
+        } else if (data.isPendingApproval || (data.message && data.message.includes('approve'))) {
+          setIsLoggingIn(false);
+          setPasswordError(data.message || "admin can not approve you're request please wait");
         } else {
           performLocalAuthCheck(data.message || 'Invalid email or password.');
         }

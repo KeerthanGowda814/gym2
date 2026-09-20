@@ -28,6 +28,10 @@ export default function RegisterPage({ navigate }) {
   const [trnPassword, setTrnPassword] = useState('');
   const [trnSpecialty, setTrnSpecialty] = useState('strength');
   const [trnCerts, setTrnCerts] = useState('');
+  const [trnCertFile, setTrnCertFile] = useState(null);
+  const [trnCertName, setTrnCertName] = useState('');
+  const [trnCertType, setTrnCertType] = useState('');
+  const [trnCertPreview, setTrnCertPreview] = useState(null);
   const [trnTerms, setTrnTerms] = useState(false);
 
   // Password Visibility toggles
@@ -164,6 +168,62 @@ export default function RegisterPage({ navigate }) {
     }, 1200);
   };
 
+  const handleCertFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 15 * 1024 * 1024) {
+      setErrors((prev) => ({ ...prev, trnCertFile: 'File size must be under 15MB.' }));
+      return;
+    }
+
+    setTrnCertName(file.name);
+    setTrnCertType(file.type);
+    setErrors((prev) => {
+      const copy = { ...prev };
+      delete copy.trnCertFile;
+      return copy;
+    });
+
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxDim = 1200;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          const base64 = canvas.toDataURL('image/jpeg', 0.88);
+          setTrnCertFile(base64);
+          setTrnCertPreview(base64);
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setTrnCertFile(ev.target.result);
+        setTrnCertPreview(null);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleTrainerSubmit = (e) => {
     e.preventDefault();
     const newErrors = {};
@@ -188,6 +248,10 @@ export default function RegisterPage({ navigate }) {
       newErrors.trnCerts = 'Certifications details are required.';
       isFormValid = false;
     }
+    if (!trnCertFile) {
+      newErrors.trnCertFile = 'Please upload your official fitness / trainer certification document.';
+      isFormValid = false;
+    }
     if (!trnTerms) {
       newErrors.trnTerms = 'Accepting terms is required.';
       isFormValid = false;
@@ -197,7 +261,29 @@ export default function RegisterPage({ navigate }) {
     if (!isFormValid) return;
 
     setIsSubmitting(true);
-    saveMockUser(trnEmail.trim(), trnPassword, trnName.trim(), 'trainer', trnSpecialty, trnCerts);
+    
+    // Save to local registered users store with pending_approval status
+    const users = JSON.parse(localStorage.getItem('apex_registered_users')) || [];
+    const existingIndex = users.findIndex((u) => u.email.toLowerCase() === trnEmail.trim().toLowerCase());
+    const newUser = {
+      email: trnEmail.trim(),
+      password: trnPassword,
+      name: trnName.trim(),
+      role: 'trainer',
+      specialty: trnSpecialty,
+      certifications: trnCerts,
+      certificateFile: trnCertFile,
+      certificateName: trnCertName,
+      certificateType: trnCertType,
+      status: 'pending_approval',
+      isApproved: false
+    };
+    if (existingIndex !== -1) {
+      users[existingIndex] = newUser;
+    } else {
+      users.push(newUser);
+    }
+    localStorage.setItem('apex_registered_users', JSON.stringify(users));
 
     // Register trainer directly into MongoDB Atlas Database
     fetch('http://localhost:5000/api/auth/register', {
@@ -209,11 +295,14 @@ export default function RegisterPage({ navigate }) {
         password: trnPassword,
         role: 'trainer',
         specialty: trnSpecialty,
-        certifications: trnCerts
+        certifications: trnCerts,
+        certificateFile: trnCertFile,
+        certificateName: trnCertName,
+        certificateType: trnCertType
       })
     }).then(res => res.json())
       .then(data => {
-        console.log('✅ Registered trainer stored in MongoDB Atlas:', data);
+        console.log('✅ Registered trainer stored in MongoDB Atlas (Pending Admin Approval):', data);
       })
       .catch(err => {
         console.warn('MongoDB Atlas Sync Notice:', err.message);
@@ -222,19 +311,20 @@ export default function RegisterPage({ navigate }) {
     setTimeout(() => {
       setIsSubmitting(false);
       setSuccessDetails({
-        title: 'Application Transmitted!',
-        message: `Thank you, Coach ${trnName.trim()}! Your trainer profile has been saved in MongoDB Atlas. Redirecting to Sign In portal...`
+        title: 'Application Transmitted! ⏳',
+        message: `Thank you, Coach ${trnName.trim()}! Your trainer profile and certificate have been submitted to the Admin Panel. Please wait for Admin approval before logging in.`
       });
       setShowSuccessOverlay(true);
 
-      console.log('--- APEX ATHLETICS TRAINER REGISTERED ---');
+      console.log('--- APEX ATHLETICS TRAINER REGISTERED (PENDING APPROVAL) ---');
       console.log(`Applicant Trainer: ${trnName.trim()}`);
       console.log(`Email: ${trnEmail.trim()}`);
-      console.log('------------------------------------------');
+      console.log(`Certificate: ${trnCertName}`);
+      console.log('----------------------------------------------------------');
 
       setTimeout(() => {
         navigate('login');
-      }, 2000);
+      }, 3000);
     }, 1200);
   };
 
@@ -562,18 +652,107 @@ export default function RegisterPage({ navigate }) {
                 </div>
 
                 {/* Certifications */}
+                {/* Certifications Text */}
                 <div className="form-group">
-                  <label htmlFor="trn-certs" className="form-label">Certifications / Years of Experience</label>
+                  <label htmlFor="trn-certs" className="form-label">Certifications & Coaching Credentials</label>
                   <textarea
                     id="trn-certs"
                     className={`form-input ${errors.trnCerts ? 'invalid' : ''}`}
                     rows="2"
-                    placeholder="e.g. CSCS Certified, 5+ Years Active Coaching"
+                    placeholder="e.g. CSCS Certified, Master in Sports Physiology, 5+ Years Active Coaching"
                     style={{ paddingLeft: '1rem' }}
                     value={trnCerts}
                     onChange={(e) => setTrnCerts(e.target.value)}
                   ></textarea>
                   {errors.trnCerts && <div className="error-feedback" id="trn-certs-error" style={{ display: 'block' }}>{errors.trnCerts}</div>}
+                </div>
+
+                {/* Mandatory Official Certificate Upload */}
+                <div className="form-group">
+                  <label htmlFor="trn-cert-upload" className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Official Fitness Degree / Certificate <span style={{ color: '#ff3e6c' }}>*</span></span>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)' }}>PNG, JPG, WEBP, PDF (Max 15MB)</span>
+                  </label>
+                  
+                  <div
+                    style={{
+                      border: errors.trnCertFile ? '1px dashed #ff3e6c' : '1px dashed rgba(255,255,255,0.25)',
+                      borderRadius: '8px',
+                      padding: '1rem',
+                      background: 'rgba(255,255,255,0.02)',
+                      textAlign: 'center',
+                      position: 'relative',
+                      transition: 'border-color 0.2s'
+                    }}
+                  >
+                    <input
+                      type="file"
+                      id="trn-cert-upload"
+                      accept=".pdf,image/png,image/jpeg,image/jpg,image/webp"
+                      onChange={handleCertFileChange}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        opacity: 0,
+                        cursor: 'pointer'
+                      }}
+                    />
+                    
+                    {!trnCertFile ? (
+                      <div style={{ pointerEvents: 'none' }}>
+                        <div style={{ fontSize: '1.6rem', marginBottom: '0.3rem' }}>📜</div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-white)' }}>
+                          Click or Drag to Upload Certificate
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                          Upload your degree or sports certification to verify your coach application
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.8rem', background: 'rgba(0, 255, 102, 0.05)', border: '1px solid rgba(0, 255, 102, 0.3)', padding: '0.6rem 0.8rem', borderRadius: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', overflow: 'hidden' }}>
+                          <span style={{ fontSize: '1.2rem' }}>📄</span>
+                          <div style={{ textAlign: 'left', overflow: 'hidden' }}>
+                            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#00ff66', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '180px' }}>
+                              {trnCertName}
+                            </div>
+                            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                              Ready for Admin Verification
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setTrnCertFile(null);
+                            setTrnCertName('');
+                            setTrnCertPreview(null);
+                          }}
+                          style={{ background: 'rgba(255, 62, 108, 0.15)', border: '1px solid #ff3e6c', color: '#ff3e6c', borderRadius: '4px', padding: '0.2rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer' }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {trnCertPreview && (
+                    <div style={{ marginTop: '0.6rem', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Certificate Preview:</div>
+                      <img
+                        src={trnCertPreview}
+                        alt="Uploaded Certificate Preview"
+                        style={{ maxHeight: '110px', maxWidth: '100%', objectFit: 'contain', borderRadius: '6px', border: '1px solid var(--border-color)' }}
+                      />
+                    </div>
+                  )}
+
+                  {errors.trnCertFile && <div className="error-feedback" id="trn-cert-error" style={{ display: 'block' }}>{errors.trnCertFile}</div>}
                 </div>
 
                 {/* Options */}

@@ -14,6 +14,49 @@ const getHeaders = () => {
 };
 
 export const trainerApi = {
+  // --- 0. COACHING REQUESTS & APPROVAL ENDPOINTS ---
+  async getTrainerRequests(coachName) {
+    try {
+      const q = coachName ? `?coachName=${encodeURIComponent(coachName)}` : '';
+      const res = await fetch(`${API_BASE_URL}/requests${q}`, { headers: getHeaders() });
+      if (!res.ok) throw new Error('Failed fetching coaching requests');
+      const data = await res.json();
+      return data.data;
+    } catch (err) {
+      console.warn('Trainer API Notice: Failed fetching requests.', err);
+      return null;
+    }
+  },
+
+  async acceptTrainerRequest(requestId) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/requests/${requestId}/accept`, {
+        method: 'POST',
+        headers: getHeaders()
+      });
+      if (!res.ok) throw new Error('Failed accepting coaching request');
+      return await res.json();
+    } catch (err) {
+      console.warn('Trainer API Notice: Failed accepting request.', err);
+      return null;
+    }
+  },
+
+  async rejectTrainerRequest(requestId, reason) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/requests/${requestId}/reject`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ reason })
+      });
+      if (!res.ok) throw new Error('Failed rejecting coaching request');
+      return await res.json();
+    } catch (err) {
+      console.warn('Trainer API Notice: Failed rejecting request.', err);
+      return null;
+    }
+  },
+
   // --- 1. CLIENT ROSTER ENDPOINTS ---
   async getMembers() {
     try {
@@ -79,12 +122,12 @@ export const trainerApi = {
     }
   },
 
-  async assignWorkout(planId, memberId) {
+  async assignWorkout(planId, memberId, memberName = '', memberEmail = '') {
     try {
       const res = await fetch(`${API_BASE_URL}/workouts/assign`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ planId, memberId })
+        body: JSON.stringify({ planId, memberId, memberName, memberEmail })
       });
       if (!res.ok) throw new Error('Failed assigning workout plan');
       return await res.json();
@@ -132,12 +175,12 @@ export const trainerApi = {
     }
   },
 
-  async assignDiet(dietId, memberId) {
+  async assignDiet(dietId, memberId, memberName = '', memberEmail = '') {
     try {
       const res = await fetch(`${API_BASE_URL}/diets/assign`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ dietId, memberId })
+        body: JSON.stringify({ dietId, memberId, memberName, memberEmail })
       });
       if (!res.ok) throw new Error('Failed assigning diet plan');
       return await res.json();

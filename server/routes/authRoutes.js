@@ -13,7 +13,7 @@ const router = express.Router();
  */
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, role, age, phone, specialty, certifications } = req.body;
+    const { name, email, password, role, age, phone, specialty, certifications, certificateFile, certificateName, certificateType } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
@@ -25,6 +25,14 @@ router.post('/register', async (req, res) => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = name.trim();
     const userRole = role === 'trainer' ? 'trainer' : 'member';
+
+    // If trainer registration, require certificate upload
+    if (userRole === 'trainer' && (!certificateFile || !certificateFile.trim())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Trainer registration requires uploading your official fitness certificate/degree.'
+      });
+    }
 
     const db = getDB();
     if (!db.users) db.users = [];
@@ -51,22 +59,36 @@ router.post('/register', async (req, res) => {
       specialty: specialty || (userRole === 'trainer' ? 'Certified Strength & Performance Coach' : null),
       certifications: certifications || (userRole === 'trainer' ? 'CSCS, Fitness Specialist' : null),
       credentials: certifications || (userRole === 'trainer' ? 'CSCS, Fitness Specialist' : null),
+      certificateFile: userRole === 'trainer' ? certificateFile : null,
+      certificateName: userRole === 'trainer' ? (certificateName || 'Trainer_Certificate.pdf') : null,
+      certificateType: userRole === 'trainer' ? (certificateType || 'application/pdf') : null,
+      isApproved: userRole === 'trainer' ? false : true,
       bio: req.body.bio || (userRole === 'trainer' ? 'Dedicated certified trainer focused on progressive overload, form biomechanics, and personalized fitness goals.' : null),
       membershipTier: userRole === 'trainer' ? 'Staff Trainer' : 'Muscle Pro',
-      status: 'Active',
+      status: userRole === 'trainer' ? 'pending_approval' : 'Active',
       joinedDate: regDate
     };
 
     // 1. Add to local JSON cache
     db.users.push(newUser);
 
-    // 2. If new trainer registered, update active trainer bio & add to roster
+    // 2. If new trainer registered, save application in db.trainerApplications
     if (userRole === 'trainer') {
-      if (!db.trainer) db.trainer = {};
-      db.trainer.coachName = cleanName;
-      db.trainer.credentials = newUser.credentials;
-      db.trainer.specialty = newUser.specialty;
-      db.trainer.bio = newUser.bio;
+      if (!Array.isArray(db.trainerApplications)) db.trainerApplications = [];
+      db.trainerApplications.unshift({
+        id: newUser.userId,
+        userId: newUser.userId,
+        name: cleanName,
+        email: cleanEmail,
+        phone: newUser.phone,
+        specialty: newUser.specialty,
+        certifications: newUser.certifications,
+        certificateFile: newUser.certificateFile,
+        certificateName: newUser.certificateName,
+        certificateType: newUser.certificateType,
+        status: 'pending_approval',
+        createdAt: new Date().toISOString()
+      });
     } else if (userRole === 'member') {
       if (!db.trainer) db.trainer = {};
       if (!Array.isArray(db.trainer.members)) db.trainer.members = [];
@@ -96,7 +118,23 @@ router.post('/register', async (req, res) => {
       );
     }
 
-    console.log(`👤 NEW USER REGISTERED IN MONGODB ATLAS: ${cleanName} (${cleanEmail}) [${userRole.toUpperCase()}]`);
+    console.log(`👤 NEW USER REGISTERED IN MONGODB ATLAS: ${cleanName} (${cleanEmail}) [${userRole.toUpperCase()}] status=${newUser.status}`);
+
+    if (userRole === 'trainer') {
+      return res.status(201).json({
+        success: true,
+        pendingApproval: true,
+        message: 'Trainer application submitted! Your account is pending admin approval.',
+        user: {
+          userId: newUser.userId,
+          name: newUser.name,
+          email: newUser.email,
+          role: newUser.role,
+          status: newUser.status,
+          isApproved: false
+        }
+      });
+    }
 
     const token = jwt.sign(
       { userId: newUser.userId, email: newUser.email, name: newUser.name, role: newUser.role },
@@ -182,6 +220,24 @@ router.post('/login', async (req, res) => {
       });
     }
 
+    // Block unapproved trainer login
+    if (user.role === 'trainer') {
+      const isPending = user.status === 'pending_approval' || user.status === 'Pending' || user.status === 'pending' || user.isApproved === false;
+      if (isPending) {
+        return res.status(403).json({
+          success: false,
+          isPendingApproval: true,
+          message: "admin can not approve you're request please wait"
+        });
+      }
+      if (user.status === 'Rejected') {
+        return res.status(403).json({
+          success: false,
+          message: "Your trainer application was not approved by the administrator."
+        });
+      }
+    }
+
     // Ensure user is in local db.users cache list
     if (!db.users.some(u => u.email.toLowerCase() === cleanEmail)) {
       db.users.push({
@@ -195,6 +251,9 @@ router.post('/login', async (req, res) => {
         specialty: user.specialty || (user.role === 'trainer' ? 'Certified Strength & Performance Coach' : null),
         certifications: user.certifications || null,
         credentials: user.credentials || null,
+        certificateFile: user.certificateFile || null,
+        certificateName: user.certificateName || null,
+        isApproved: user.isApproved !== undefined ? user.isApproved : true,
         bio: user.bio || null,
         membershipTier: user.membershipTier || (user.role === 'trainer' ? 'Staff Trainer' : 'Muscle Pro'),
         status: user.status || 'Active',
@@ -387,30 +446,159 @@ router.post('/google', async (req, res) => {
 
 
 /**
- * GET /api/auth/users
- * Retrieve all registered users stored in MongoDB Atlas
+ * GET /api/auth/trainer-applications
+ * Retrieve all pending & processed trainer registration applications
  */
-router.get('/users', async (req, res) => {
+router.get('/trainer-applications', async (req, res) => {
   try {
     const db = getDB();
-    let usersList = db.users || [];
+    if (!Array.isArray(db.trainerApplications)) db.trainerApplications = [];
 
+    let apps = [...db.trainerApplications];
+
+    // Check MongoDB Atlas for any trainer applicants
     if (isMongoConnected()) {
-      const atlasUsers = await User.find({}).select('-password');
-      if (atlasUsers && atlasUsers.length > 0) {
-        usersList = atlasUsers;
+      try {
+        const atlasTrainers = await User.find({ role: 'trainer' }).select('-password');
+        atlasTrainers.forEach(t => {
+          const exists = apps.some(a => a.email && a.email.toLowerCase() === t.email.toLowerCase());
+          if (!exists) {
+            apps.push({
+              id: t.userId || `TRN-${Date.now()}`,
+              userId: t.userId,
+              name: t.name,
+              email: t.email,
+              phone: t.phone,
+              specialty: t.specialty,
+              certifications: t.certifications,
+              certificateFile: t.certificateFile,
+              certificateName: t.certificateName,
+              certificateType: t.certificateType,
+              status: t.status || (t.isApproved ? 'Active' : 'pending_approval'),
+              createdAt: t.createdAt || new Date().toISOString()
+            });
+          }
+        });
+      } catch (e) {
+        console.warn("MongoDB trainer applications fetch note:", e.message);
       }
     }
 
     res.json({
       success: true,
-      count: usersList.length,
-      data: usersList
+      count: apps.length,
+      data: apps
     });
   } catch (err) {
     res.status(500).json({
       success: false,
-      message: 'Error fetching registered users from MongoDB Atlas',
+      message: 'Error fetching trainer applications',
+      error: err.message
+    });
+  }
+});
+
+/**
+ * POST /api/auth/trainer-applications/:id/approve
+ * Admin approves a trainer registration
+ */
+router.post('/trainer-applications/:id/approve', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = getDB();
+    if (!Array.isArray(db.users)) db.users = [];
+    if (!Array.isArray(db.trainerApplications)) db.trainerApplications = [];
+
+    const appIdx = db.trainerApplications.findIndex(a => a.id === id || a.userId === id || (a.email && a.email.toLowerCase() === id.toLowerCase()));
+    let targetEmail = id;
+    let targetName = 'Coach';
+
+    if (appIdx !== -1) {
+      db.trainerApplications[appIdx].status = 'Active';
+      db.trainerApplications[appIdx].isApproved = true;
+      targetEmail = db.trainerApplications[appIdx].email;
+      targetName = db.trainerApplications[appIdx].name;
+    }
+
+    const userIdx = db.users.findIndex(u => u.userId === id || (u.email && u.email.toLowerCase() === targetEmail.toLowerCase()));
+    if (userIdx !== -1) {
+      db.users[userIdx].status = 'Active';
+      db.users[userIdx].isApproved = true;
+      targetName = db.users[userIdx].name;
+      targetEmail = db.users[userIdx].email;
+    }
+
+    saveDB(db);
+
+    if (isMongoConnected()) {
+      await User.findOneAndUpdate(
+        { email: new RegExp(`^${targetEmail}$`, 'i') },
+        { $set: { status: 'Active', isApproved: true } }
+      );
+    }
+
+    console.log(`✅ TRAINER APPROVED BY ADMIN: ${targetName} (${targetEmail})`);
+
+    res.json({
+      success: true,
+      message: `Trainer application for ${targetName} approved successfully! They can now log in to the Trainer Portal.`,
+      data: { name: targetName, email: targetEmail, status: 'Active' }
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: 'Error approving trainer application',
+      error: err.message
+    });
+  }
+});
+
+/**
+ * POST /api/auth/trainer-applications/:id/reject
+ * Admin rejects a trainer registration
+ */
+router.post('/trainer-applications/:id/reject', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const db = getDB();
+    if (!Array.isArray(db.users)) db.users = [];
+    if (!Array.isArray(db.trainerApplications)) db.trainerApplications = [];
+
+    const appIdx = db.trainerApplications.findIndex(a => a.id === id || a.userId === id || (a.email && a.email.toLowerCase() === id.toLowerCase()));
+    let targetEmail = id;
+
+    if (appIdx !== -1) {
+      db.trainerApplications[appIdx].status = 'Rejected';
+      db.trainerApplications[appIdx].isApproved = false;
+      db.trainerApplications[appIdx].rejectionReason = reason || 'Credentials did not meet verification criteria.';
+      targetEmail = db.trainerApplications[appIdx].email;
+    }
+
+    const userIdx = db.users.findIndex(u => u.userId === id || (u.email && u.email.toLowerCase() === targetEmail.toLowerCase()));
+    if (userIdx !== -1) {
+      db.users[userIdx].status = 'Rejected';
+      db.users[userIdx].isApproved = false;
+      db.users[userIdx].rejectionReason = reason || 'Credentials did not meet verification criteria.';
+    }
+
+    saveDB(db);
+
+    if (isMongoConnected()) {
+      await User.findOneAndUpdate(
+        { email: new RegExp(`^${targetEmail}$`, 'i') },
+        { $set: { status: 'Rejected', isApproved: false } }
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `Trainer application rejected.`
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: 'Error rejecting trainer application',
       error: err.message
     });
   }

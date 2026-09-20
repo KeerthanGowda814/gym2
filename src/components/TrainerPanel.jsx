@@ -98,7 +98,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
   const defaultMembers = [
     {
       id: 'MEM-98801',
-      name: 'Jeery',
+      name: 'The PC Workshop',
       email: 'thepcworkshop1@gmail.com',
       tier: 'Muscle Core Member',
       status: 'Active',
@@ -511,6 +511,171 @@ export default function TrainerPanel({ activeView, currentUser }) {
   const trainerChatScrollRef = useRef(null);
 
   const currentCoachName = currentUser?.name || 'Coach Marcus Vance';
+
+  // Coaching Requests & Approvals State
+  const [coachingRequests, setCoachingRequests] = useState([]);
+
+  const fetchCoachingRequests = async () => {
+    try {
+      const data = await trainerApi.getTrainerRequests(currentCoachName);
+      if (Array.isArray(data)) {
+        setCoachingRequests(data);
+      }
+    } catch (e) {
+      console.warn("Could not fetch requests in TrainerPanel:", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchCoachingRequests();
+    const interval = setInterval(fetchCoachingRequests, 3000);
+    return () => clearInterval(interval);
+  }, [currentCoachName]);
+
+  const handleAcceptRequest = async (req) => {
+    if (!req) return;
+    try {
+      const res = await trainerApi.acceptTrainerRequest(req.id);
+      if (res && res.success) {
+        setCoachingRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'accepted' } : r));
+
+        // Add member to local members list if not present
+        setMembers(prev => {
+          if (!prev.some(m => (m.email && req.memberEmail && m.email.toLowerCase() === req.memberEmail.toLowerCase()) || (m.name && req.memberName && m.name.toLowerCase() === req.memberName.toLowerCase()))) {
+            return [{
+              id: req.memberId || `MEM-${Date.now()}`,
+              name: req.memberName,
+              email: req.memberEmail,
+              phone: req.memberPhone,
+              tier: req.packageName || 'Personal Coaching VIP',
+              status: 'Active',
+              joined: 'Today',
+              goal: req.goal || 'General Fitness',
+              diet: 'Prescribed Protocol',
+              workout: 'Hypertrophy Split Alpha (Upper/Lower)',
+              attendance: 100,
+              medicalCertificate: req.medicalCertificate,
+              medicalCertName: req.medicalCertName,
+              description: req.description
+            }, ...prev];
+          }
+          return prev;
+        });
+
+        CustomSwal.fire({
+          icon: 'success',
+          title: 'Request Accepted! 🎉',
+          html: `<p style="color:#fff;">Coaching request from <strong>${req.memberName}</strong> has been accepted. Athlete now has full access to the coaching dashboard.</p>`,
+          confirmButtonColor: '#00ff66'
+        });
+      }
+    } catch (e) {
+      console.warn("Accept error:", e);
+    }
+  };
+
+  const handleRejectRequest = async (req) => {
+    if (!req) return;
+    CustomSwal.fire({
+      title: `Decline Request from ${req.memberName}?`,
+      text: 'Provide an optional reason to decline this coaching application:',
+      input: 'text',
+      inputPlaceholder: 'Reason for declining (e.g. Schedule capacity full)...',
+      showCancelButton: true,
+      confirmButtonText: 'Decline Request',
+      confirmButtonColor: '#ff3e6c',
+      cancelButtonText: 'Cancel'
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          const res = await trainerApi.rejectTrainerRequest(req.id, result.value);
+          if (res && res.success) {
+            setCoachingRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'rejected' } : r));
+            CustomSwal.fire({
+              icon: 'info',
+              title: 'Request Declined',
+              text: `Coaching request from ${req.memberName} has been declined.`
+            });
+          }
+        } catch (e) {
+          console.warn("Reject error:", e);
+        }
+      }
+    });
+  };
+
+  const defaultSignatureImage = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="500" height="250" viewBox="0 0 500 250" style="background:#ffffff;">
+      <rect width="500" height="250" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+      <text x="30" y="40" fill="#64748b" font-size="12" font-family="sans-serif" font-weight="bold">DOCUMENT: Medical Fitness Clearance Signature</text>
+      <line x1="30" y1="50" x2="470" y2="50" stroke="#e2e8f0" stroke-width="1"/>
+      <path d="M 60 160 C 80 110, 110 90, 130 140 C 145 170, 160 120, 180 135 C 200 150, 210 110, 230 145 C 250 170, 270 120, 310 130 C 340 140, 370 110, 420 125 M 100 165 C 180 180, 290 175, 440 150" fill="none" stroke="#0f172a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="30" y="220" fill="#94a3b8" font-size="11" font-family="sans-serif">Athlete Signed - Verified Digital Upload</text>
+      <text x="470" y="220" text-anchor="end" fill="#10b981" font-size="11" font-family="sans-serif" font-weight="bold">[ATTACHED]</text>
+    </svg>
+  `);
+
+  const getResolvedCertSrc = (req) => {
+    const cert = req?.medicalCertificate;
+    if (cert && typeof cert === 'string') {
+      if (cert.startsWith('data:image') || cert.startsWith('blob:') || cert.startsWith('http://') || cert.startsWith('https://')) {
+        return cert;
+      }
+      if (cert.length > 100 && !cert.includes(' ') && !cert.includes('\n')) {
+        return `data:image/jpeg;base64,${cert}`;
+      }
+    }
+    return defaultSignatureImage;
+  };
+
+  const handleViewMedicalCert = (req) => {
+    const certName = req.medicalCertName || 'Medical_Clearance.jpg';
+    const imageSrc = getResolvedCertSrc(req);
+
+    CustomSwal.fire({
+      title: `Uploaded Medical Document - ${req.memberName}`,
+      html: `
+        <div style="text-align: left; padding: 0.5rem 0.2rem; font-size: 0.88rem; line-height: 1.6; color: #fff;">
+          <div style="background: rgba(0, 255, 102, 0.08); border: 1px solid #00ff66; border-radius: 8px; padding: 0.9rem; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+              <span style="color: #aaa;">Attached File:</span>
+              <strong style="color: #00ff66;">📄 ${certName}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+              <span style="color: #aaa;">Athlete Contact:</span>
+              <span style="color: #00f0ff;">${req.memberEmail} ${req.memberPhone ? `(${req.memberPhone})` : ''}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: #aaa;">Target Goal:</span>
+              <strong style="color: #c6ff00;">${req.goal || 'General Fitness'}</strong>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 1rem; text-align: center; background: #000; border: 1px solid rgba(0, 255, 102, 0.3); border-radius: 8px; padding: 0.8rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+              <span style="font-size: 0.75rem; color: #aaa; text-transform: uppercase;">Uploaded Image / Document Preview:</span>
+              <a href="${imageSrc}" download="${certName}" style="color: #00f0ff; font-size: 0.75rem; text-decoration: underline; font-weight: 700;">💾 Download Full File</a>
+            </div>
+            <img
+              src="${imageSrc}"
+              alt="${certName}"
+              style="max-width: 100%; max-height: 420px; width: auto; object-fit: contain; border-radius: 6px; box-shadow: 0 4px 20px rgba(0,0,0,0.8); background: #ffffff;"
+            />
+          </div>
+
+          <div style="margin-bottom: 0.5rem;">
+            <strong style="color: #ff9f00;">Health Notes & Description:</strong>
+            <p style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); padding: 0.8rem; border-radius: 6px; margin: 0.4rem 0 0 0; color: #ddd; font-size: 0.84rem;">
+              ${req.description || 'No specific injuries noted.'}
+            </p>
+          </div>
+        </div>
+      `,
+      confirmButtonText: 'Close Preview',
+      confirmButtonColor: '#ff5e00',
+      width: '640px'
+    });
+  };
 
   // Mark chat as read when selecting member or on mount
   useEffect(() => {
@@ -1144,17 +1309,18 @@ export default function TrainerPanel({ activeView, currentUser }) {
     } catch (e) {}
 
     // 4. Call Node.js Express backend API
-    trainerApi.assignDiet(dietObj.id || dietObj.name, targetName);
+    trainerApi.assignDiet(dietObj.id || dietObj.name, targetMemberObj?.id || targetName, targetName, clientEmail);
 
     if (CustomSwal) {
       CustomSwal.fire({
         icon: 'success',
         title: 'Diet Plan Assigned & Shared! 🚀',
         html: `<div style="text-align:center;color:#fff;">
-          <p style="margin-bottom:0.8rem;">Plan <strong>${dietObj.name}</strong> (${dietObj.calories}) has been assigned to athlete <strong>${targetName}</strong>!</p>
+          <p style="margin-bottom:0.8rem;">Plan <strong>${dietObj.name}</strong> (${dietObj.calories}) has been assigned to athlete <strong>${targetName}</strong> (${clientEmail})!</p>
           <div style="background:rgba(198,255,0,0.08);border:1px solid #c6ff00;padding:0.8rem;border-radius:6px;font-size:0.85rem;color:#c6ff00;margin-bottom:0.6rem;">
+            ✓ Synced to Member Terminal by email & name<br/>
             ✓ 5-Slot Meal Schedule (Morning, Lunch, Pre/Post Workout, Night) Synced<br/>
-            ✓ Member ${targetName} can now view this plan on their Member Panel -> Prescribed Diet Plan Page!
+            ✓ Real-time Diet Plan notification sent to ${targetName}'s chat!
           </div>
         </div>`
       });
@@ -1531,6 +1697,9 @@ export default function TrainerPanel({ activeView, currentUser }) {
     setMembers(updatedMembers);
     localStorage.setItem('apex_trainer_members', JSON.stringify(updatedMembers));
 
+    const targetMemberEmail = assignedMember?.email || '';
+    const targetMemberName = assignedMember?.name || '';
+
     if (selectedAssignedWorkout) {
       if (assignedMember) {
         const assignedWorkoutObj = workoutRoutines.find((w) => w.name === selectedAssignedWorkout);
@@ -1538,7 +1707,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
           localStorage.setItem(`apex_member_assigned_workout_${assignedMember.name.toLowerCase()}`, JSON.stringify(assignedWorkoutObj));
         }
       }
-      await trainerApi.assignWorkout(selectedAssignedWorkout, assignmentMemberId);
+      await trainerApi.assignWorkout(selectedAssignedWorkout, assignmentMemberId, targetMemberName, targetMemberEmail);
       window.dispatchEvent(new CustomEvent('apex_workout_updated'));
     }
     if (selectedAssignedDiet) {
@@ -1548,7 +1717,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
           localStorage.setItem(`apex_member_assigned_diet_${assignedMember.name.toLowerCase()}`, JSON.stringify(assignedDietObj));
         }
       }
-      await trainerApi.assignDiet(selectedAssignedDiet, assignmentMemberId);
+      await trainerApi.assignDiet(selectedAssignedDiet, assignmentMemberId, targetMemberName, targetMemberEmail);
       window.dispatchEvent(new CustomEvent('apex_diet_updated'));
     }
 
@@ -1807,6 +1976,135 @@ export default function TrainerPanel({ activeView, currentUser }) {
                 </div>
               );
             })}
+
+          {/* INCOMING ATHLETE COACHING APPLICATIONS & APPROVALS */}
+          {coachingRequests.filter(r => r.status === 'pending').length > 0 && (
+            <div className="db-card" style={{ marginBottom: '1.5rem', border: '1px solid rgba(255, 159, 0, 0.4)', background: 'rgba(255, 159, 0, 0.04)', borderRadius: '12px', padding: '1.4rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', borderBottom: '1px solid rgba(255, 159, 0, 0.2)', paddingBottom: '0.8rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                  <div style={{ width: '38px', height: '38px', borderRadius: '8px', background: 'rgba(255, 159, 0, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                    📬
+                  </div>
+                  <div>
+                    <h4 style={{ margin: 0, color: 'var(--text-white)', textTransform: 'uppercase', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.1rem' }}>
+                      Incoming Athlete Coaching Requests
+                    </h4>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: '0.15rem 0 0 0' }}>
+                      Review athlete goals, medical clearance certificate, and health description to accept coaching assignments.
+                    </p>
+                  </div>
+                </div>
+                <span style={{ background: '#ff9f00', color: '#000', fontWeight: 800, fontSize: '0.72rem', padding: '0.2rem 0.6rem', borderRadius: '12px' }}>
+                  {coachingRequests.filter(r => r.status === 'pending').length} PENDING
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {coachingRequests
+                  .filter(r => r.status === 'pending')
+                  .map((req) => (
+                    <div
+                      key={req.id}
+                      style={{
+                        background: 'rgba(0, 0, 0, 0.35)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '10px',
+                        padding: '1.2rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.8rem'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.8rem' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                            <h5 style={{ margin: 0, color: 'var(--text-white)', fontSize: '1.05rem', fontWeight: 800 }}>
+                              {req.memberName}
+                            </h5>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--accent-cyan)', background: 'rgba(0, 240, 255, 0.1)', border: '1px solid rgba(0, 240, 255, 0.3)', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                              {req.packageName || 'Personal Coaching'}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                            📧 {req.memberEmail} {req.memberPhone ? `• 📞 ${req.memberPhone}` : ''}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '0.6rem' }}>
+                          <button
+                            type="button"
+                            className="glow-btn"
+                            onClick={() => handleAcceptRequest(req)}
+                            style={{ padding: '0.5rem 1.1rem', fontSize: '0.8rem', fontWeight: 800, background: 'linear-gradient(135deg, #00ff66 0%, #00cc52 100%)', color: '#000', cursor: 'pointer' }}
+                          >
+                            Accept Request ✅
+                          </button>
+                          <button
+                            type="button"
+                            className="outline-btn"
+                            onClick={() => handleRejectRequest(req)}
+                            style={{ padding: '0.5rem 0.9rem', fontSize: '0.8rem', color: '#ff3e6c', borderColor: 'rgba(255, 62, 108, 0.4)', cursor: 'pointer' }}
+                          >
+                            Decline ❌
+                          </button>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.4fr', gap: '0.8rem', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.8rem', fontSize: '0.8rem' }}>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase' }}>Target Fitness Goal</span>
+                          <strong style={{ color: 'var(--accent-volt)' }}>{req.goal || 'Hypertrophy & Max Strength'}</strong>
+                        </div>
+
+                        <div>
+                          <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', marginBottom: '0.3rem' }}>Medical Clearance</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                            <div
+                              onClick={() => handleViewMedicalCert(req)}
+                              style={{
+                                width: '38px',
+                                height: '38px',
+                                borderRadius: '6px',
+                                border: '1px solid #00ff66',
+                                overflow: 'hidden',
+                                cursor: 'pointer',
+                                background: '#0a0f18',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                boxShadow: '0 0 8px rgba(0, 255, 102, 0.2)'
+                              }}
+                              title="Click to view full medical certificate preview"
+                            >
+                              <img
+                                src={getResolvedCertSrc(req)}
+                                alt="Clearance Document Preview"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleViewMedicalCert(req)}
+                              style={{ background: 'none', border: 'none', color: '#00ff66', fontWeight: 700, cursor: 'pointer', padding: 0, textDecoration: 'underline', fontSize: '0.8rem', textAlign: 'left' }}
+                            >
+                              📄 {req.medicalCertName || 'Medical_Clearance.pdf'} (View)
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase' }}>Health History & Notes</span>
+                          <span style={{ color: '#ddd', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {req.description || 'No physical injuries noted.'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
 
           {/* Metrics Grid */}
           <div className="metrics-grid col-3">
@@ -2762,7 +3060,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
                                     setAllMemberChats((prev) => [...prev, dispatchMsg]);
 
                                     // 4. API sync
-                                    await trainerApi.assignWorkout(w.id || w.name, targetMember.id);
+                                    await trainerApi.assignWorkout(w.id || w.name, targetMember.id, targetMember.name, targetMember.email);
                                     await trainerApi.sendChatMessage(dispatchMsg.text, 'coach', targetMember.name, targetMember.email, currentCoachName);
 
                                     CustomSwal.fire({

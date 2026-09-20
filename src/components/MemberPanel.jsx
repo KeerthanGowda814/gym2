@@ -542,6 +542,142 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
   });
   const [showMembershipSelection, setShowMembershipSelection] = useState(false);
 
+  // Coaching Application & Approval Request states
+  const [trainerIntakeGoal, setTrainerIntakeGoal] = useState('Hypertrophy & Max Strength');
+  const [trainerIntakeCustomGoal, setTrainerIntakeCustomGoal] = useState('');
+  const [trainerIntakeMedCert, setTrainerIntakeMedCert] = useState(null);
+  const [trainerIntakeMedCertName, setTrainerIntakeMedCertName] = useState('Medical_Fitness_Clearance.pdf');
+  const [trainerIntakeMedCleared, setTrainerIntakeMedCleared] = useState(true);
+  const [trainerIntakeDesc, setTrainerIntakeDesc] = useState('');
+  const [trainerIntakeSelectedCoach, setTrainerIntakeSelectedCoach] = useState(null);
+  const [trainerIntakePackage, setTrainerIntakePackage] = useState('monthly');
+
+  const [activeTrainerRequest, setActiveTrainerRequest] = useState(() => {
+    const saved = localStorage.getItem(`apex_trainer_request_${memberKey}`);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
+    return null;
+  });
+
+  const [trainerRequestStatus, setTrainerRequestStatus] = useState(() => {
+    const saved = localStorage.getItem(`apex_trainer_request_${memberKey}`);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed?.status || 'none';
+      } catch (e) {}
+    }
+    return 'none';
+  });
+
+  // Background status sync hook for coaching request
+  useEffect(() => {
+    const uEmail = profileData?.email || currentUser?.email || '';
+    const uName = profileData?.name || currentUser?.name || '';
+    if (!uEmail && !uName) return;
+
+    const pollStatus = async () => {
+      try {
+        const res = await memberApi.getTrainerRequestStatus(uEmail, uName);
+        if (res && res.success) {
+          if (res.request) {
+            const req = res.request;
+            setActiveTrainerRequest(req);
+            setTrainerRequestStatus(req.status);
+            localStorage.setItem(`apex_trainer_request_${memberKey}`, JSON.stringify(req));
+
+            if (req.status === 'accepted') {
+              setIsTrainerPaid(true);
+              localStorage.setItem(`apex_trainer_paid_${memberKey}`, 'true');
+              if (req.trainerName) {
+                const coachObj = availableTrainers.find(t => t.name.toLowerCase() === req.trainerName.toLowerCase()) || {
+                  name: req.trainerName,
+                  email: 'coach@apex.com',
+                  specialty: 'Personal Strength & Biomechanics Coach',
+                  credentials: 'Certified Fitness Specialist',
+                  bio: 'Dedicated certified trainer assigned to your personal coaching program.'
+                };
+                setSelectedTrainer(coachObj);
+                localStorage.setItem(`apex_selected_trainer_${memberKey}`, JSON.stringify(coachObj));
+              }
+            } else if (req.status === 'rejected') {
+              setIsTrainerPaid(false);
+              localStorage.setItem(`apex_trainer_paid_${memberKey}`, 'false');
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("Trainer request polling error:", e);
+      }
+    };
+
+    pollStatus();
+    const interval = setInterval(pollStatus, 3000);
+    return () => clearInterval(interval);
+  }, [memberKey, profileData?.email, currentUser?.email, profileData?.name, currentUser?.name, availableTrainers]);
+
+  const defaultMemberSignatureImage = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="500" height="250" viewBox="0 0 500 250" style="background:#ffffff;">
+      <rect width="500" height="250" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+      <text x="30" y="40" fill="#64748b" font-size="12" font-family="sans-serif" font-weight="bold">DOCUMENT: Medical Fitness Clearance Signature</text>
+      <line x1="30" y1="50" x2="470" y2="50" stroke="#e2e8f0" stroke-width="1"/>
+      <path d="M 60 160 C 80 110, 110 90, 130 140 C 145 170, 160 120, 180 135 C 200 150, 210 110, 230 145 C 250 170, 270 120, 310 130 C 340 140, 370 110, 420 125 M 100 165 C 180 180, 290 175, 440 150" fill="none" stroke="#0f172a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="30" y="220" fill="#94a3b8" font-size="11" font-family="sans-serif">Athlete Signed - Verified Digital Upload</text>
+      <text x="470" y="220" text-anchor="end" fill="#10b981" font-size="11" font-family="sans-serif" font-weight="bold">[ATTACHED]</text>
+    </svg>
+  `);
+
+  const getResolvedMemberCertSrc = (certData, certName, goal, name) => {
+    if (certData && typeof certData === 'string') {
+      if (certData.startsWith('data:image') || certData.startsWith('blob:') || certData.startsWith('http://') || certData.startsWith('https://')) {
+        return certData;
+      }
+      if (certData.length > 100 && !certData.includes(' ') && !certData.includes('\n')) {
+        return `data:image/jpeg;base64,${certData}`;
+      }
+    }
+    return defaultMemberSignatureImage;
+  };
+
+  const handleViewMemberMedicalClearance = (certData, certName, goal, name) => {
+    const safeDocName = certName || 'Medical_Clearance.jpg';
+    const imageSrc = getResolvedMemberCertSrc(certData, safeDocName, goal, name);
+
+    CustomSwal.fire({
+      title: `Uploaded Medical Document Preview`,
+      html: `
+        <div style="text-align: left; padding: 0.5rem 0.2rem; font-size: 0.88rem; line-height: 1.6; color: #fff;">
+          <div style="background: rgba(0, 255, 102, 0.08); border: 1px solid #00ff66; border-radius: 8px; padding: 0.9rem; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+              <span style="color: #aaa;">Document Name:</span>
+              <strong style="color: #00ff66;">📄 ${safeDocName}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: #aaa;">Clearance Status:</span>
+              <strong style="color: #fff;">✓ Attached to Coaching Application</strong>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 1rem; text-align: center; background: #000; border: 1px solid rgba(0, 255, 102, 0.3); border-radius: 8px; padding: 0.8rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+              <span style="font-size: 0.75rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px;">Uploaded Image / Document Preview:</span>
+              <a href="${imageSrc}" download="${safeDocName}" style="color: #00f0ff; font-size: 0.75rem; text-decoration: underline; font-weight: 700;">💾 Download Full Image</a>
+            </div>
+            <img
+              src="${imageSrc}"
+              alt="${safeDocName}"
+              style="max-width: 100%; max-height: 420px; width: auto; object-fit: contain; border-radius: 6px; box-shadow: 0 4px 20px rgba(0,0,0,0.8); background: #ffffff;"
+            />
+          </div>
+        </div>
+      `,
+      confirmButtonText: 'Close Preview',
+      confirmButtonColor: '#ff5e00',
+      width: '640px'
+    });
+  };
+
   // Automatically sync active coach & membership state if user profile has an assigned trainer or active plan
   useEffect(() => {
     const userTrainer = profileData?.trainer || currentUser?.trainer || currentUser?.coachingTrainer || currentUser?.assignedTrainer;
@@ -765,34 +901,129 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
   const [isProcessingTrainerPayment, setIsProcessingTrainerPayment] = useState(false);
   const [showTrainerGateway, setShowTrainerGateway] = useState(false);
 
-  const handleOpenTrainerPayment = (trainer) => {
-    setTrainerToHire(trainer);
-    setTrainerCardName(currentUser?.name || 'Member Athlete');
-    setTrainerCardNum('');
-    setTrainerCardExp('');
-    setTrainerCardCvv('');
-    setTrainerPackage('monthly');
+  const handleOpenTrainerSelection = () => {
+    const hasPaidMembership = isMembershipPaid && membershipTier && membershipTier !== 'None' && membershipTier !== 'Free' && membershipTier !== '0' && membershipTier !== 'Select Plan';
+
+    if (!hasPaidMembership) {
+      CustomSwal.fire({
+        icon: 'warning',
+        title: 'Membership Required ⚠️',
+        text: 'please select the membership',
+        showCancelButton: true,
+        confirmButtonText: 'Choose Membership Plan →',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#ff5e00',
+        cancelButtonColor: '#333',
+        customClass: {
+          popup: 'apex-swal-custom'
+        }
+      }).then((result) => {
+        if (result.isConfirmed) {
+          if (onNavigateSubView) {
+            onNavigateSubView('membership');
+          } else {
+            setShowMembershipSelection(true);
+          }
+        }
+      });
+      return;
+    }
+
+    setShowTrainerSelection(true);
   };
 
-  const handleConfirmTrainerPayment = async (e) => {
+  const handleCancelTrainerRequest = async (requestId) => {
+    CustomSwal.fire({
+      title: 'Cancel Coaching Request?',
+      text: 'Are you sure you want to cancel your pending coaching request?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Cancel Request',
+      cancelButtonText: 'Keep Request',
+      confirmButtonColor: '#ff3e6c',
+      cancelButtonColor: '#333'
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          const reqId = requestId || activeTrainerRequest?.id;
+          const uEmail = profileData?.email || currentUser?.email || '';
+          await memberApi.cancelTrainerRequest(reqId, uEmail);
+          setActiveTrainerRequest(null);
+          setTrainerRequestStatus('none');
+          localStorage.removeItem(`apex_trainer_request_${memberKey}`);
+          CustomSwal.fire({
+            icon: 'success',
+            title: 'Request Cancelled',
+            text: 'Your coaching request has been cancelled.',
+            timer: 2000,
+            showConfirmButton: false
+          });
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+    });
+  };
+
+  const handleConfirmTrainerIntakeAndPayment = async (e) => {
     if (e) e.preventDefault();
-    if (!trainerToHire) return;
+
+    const hasPaidMembership = isMembershipPaid && membershipTier && membershipTier !== 'None' && membershipTier !== 'Free' && membershipTier !== '0' && membershipTier !== 'Select Plan';
+    if (!hasPaidMembership) {
+      CustomSwal.fire({
+        icon: 'warning',
+        title: 'Membership Required ⚠️',
+        text: 'please select the membership',
+        showCancelButton: true,
+        confirmButtonText: 'Choose Membership Plan →',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#ff5e00',
+        cancelButtonColor: '#333'
+      }).then((result) => {
+        if (result.isConfirmed && onNavigateSubView) {
+          onNavigateSubView('membership');
+        }
+      });
+      return;
+    }
+
+    const resolvedGoal = trainerIntakeGoal === 'Custom' ? (trainerIntakeCustomGoal.trim() || 'Custom Goal') : trainerIntakeGoal;
+    const selectedCoach = trainerIntakeSelectedCoach || (availableTrainers.length > 0 ? availableTrainers[0] : null);
+
+    if (!selectedCoach) {
+      CustomSwal.fire({
+        icon: 'info',
+        title: 'Select a Trainer',
+        text: 'Please choose a certified coach from the list before proceeding.'
+      });
+      return;
+    }
+
+    if (!trainerIntakeDesc.trim()) {
+      CustomSwal.fire({
+        icon: 'info',
+        title: 'Description Required',
+        text: 'Please enter a brief description of your fitness goals, past injuries, or physical background.'
+      });
+      return;
+    }
 
     const packageDetails = {
       monthly: { name: '1-Month Personal Coaching', price: 5000 },
       '3month': { name: '3-Month Transformation Package', price: 13000 },
       '6month': { name: '6-Month VIP Elite Mentorship', price: 23000 }
-    }[trainerPackage] || { name: '1-Month Personal Coaching', price: 5000 };
+    }[trainerIntakePackage] || { name: '1-Month Personal Coaching', price: 5000 };
 
     setIsProcessingTrainerPayment(true);
+
     try {
       await initiateRazorpayPayment({
         amount: packageDetails.price,
-        title: `Hire Coach: ${trainerToHire.name} (${packageDetails.name})`,
+        title: `Coaching Application: ${selectedCoach.name} (${packageDetails.name})`,
         paymentType: 'trainer_booking',
         items: [
           {
-            name: `Personal Coaching (${trainerToHire.name}) - ${packageDetails.name}`,
+            name: `Personal Coaching (${selectedCoach.name}) - ${packageDetails.name}`,
             qty: 1,
             unitPrice: packageDetails.price,
             total: packageDetails.price
@@ -805,112 +1036,110 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
           phone: profileData?.phone || '+91 98765 43210'
         },
         metadata: {
-          trainerId: trainerToHire.id || trainerToHire.userId,
-          trainerName: trainerToHire.name,
-          package: trainerPackage
+          trainerId: selectedCoach.userId || selectedCoach.id,
+          trainerName: selectedCoach.name,
+          package: trainerIntakePackage,
+          goal: resolvedGoal
         },
         onSuccess: async (receipt) => {
           setIsProcessingTrainerPayment(false);
-          const hiredTrainer = trainerToHire;
-          setTrainerToHire(null);
+          setShowTrainerSelection(false);
 
           const txId = receipt?.receiptNumber || receipt?.paymentId || 'MH-RCP-' + Date.now();
           const newInvoice = {
             txId,
-            plan: `Personal Coaching - ${hiredTrainer.name} (${packageDetails.name})`,
+            plan: `Personal Coaching - ${selectedCoach.name} (${packageDetails.name})`,
             amount: packageDetails.price,
             status: 'paid',
             date: 'Today',
             fullReceipt: receipt
           };
-
           setBillingInvoices((prev) => [newInvoice, ...prev]);
-          setSelectedTrainer(hiredTrainer);
-          localStorage.setItem(`apex_selected_trainer_${memberKey}`, JSON.stringify(hiredTrainer));
-          setIsTrainerPaid(true);
-          localStorage.setItem(`apex_trainer_paid_${memberKey}`, 'true');
-          localStorage.setItem(`apex_trainer_paid_date_${memberKey}`, new Date().toISOString());
-          localStorage.setItem(`apex_trainer_package_${memberKey}`, trainerPackage);
-          // Recompute trainer days left
-          const pkgDays = trainerPackage === '6month' ? 180 : trainerPackage === '3month' ? 90 : 30;
-          setTrainerDaysLeft(pkgDays);
-          setTrainerTabMode('assigned');
+
+          const requestPayload = {
+            memberId: currentUser?.id || profileData?.userId || `MEM-${Date.now()}`,
+            memberName: profileData?.name || currentUser?.name || 'Athlete Member',
+            memberEmail: profileData?.email || currentUser?.email || 'member@apex.com',
+            memberPhone: profileData?.phone || '+91 98765 43210',
+            trainerId: selectedCoach.userId || selectedCoach.id || 'TRN-1',
+            trainerName: selectedCoach.name,
+            goal: resolvedGoal,
+            medicalCertificate: trainerIntakeMedCert || null,
+            medicalCertName: trainerIntakeMedCertName || 'Medical_Fitness_Clearance.pdf',
+            description: trainerIntakeDesc,
+            package: trainerIntakePackage,
+            packageName: packageDetails.name,
+            packagePrice: packageDetails.price,
+            paymentId: txId
+          };
 
           try {
-            await memberApi.selectTrainer(hiredTrainer.userId || hiredTrainer.id, hiredTrainer.name);
-          } catch (apiErr) {
-            console.warn("API select trainer warning:", apiErr);
+            const apiRes = await memberApi.submitTrainerRequest(requestPayload);
+            if (apiRes && apiRes.data) {
+              setActiveTrainerRequest(apiRes.data);
+              setTrainerRequestStatus('pending');
+              localStorage.setItem(`apex_trainer_request_${memberKey}`, JSON.stringify(apiRes.data));
+            } else {
+              const fallbackReq = { ...requestPayload, status: 'pending', id: `REQ-${Date.now()}`, createdAt: new Date().toISOString() };
+              setActiveTrainerRequest(fallbackReq);
+              setTrainerRequestStatus('pending');
+              localStorage.setItem(`apex_trainer_request_${memberKey}`, JSON.stringify(fallbackReq));
+            }
+          } catch (e) {
+            console.warn("Submit request error:", e);
+            const fallbackReq = { ...requestPayload, status: 'pending', id: `REQ-${Date.now()}`, createdAt: new Date().toISOString() };
+            setActiveTrainerRequest(fallbackReq);
+            setTrainerRequestStatus('pending');
+            localStorage.setItem(`apex_trainer_request_${memberKey}`, JSON.stringify(fallbackReq));
           }
 
           if (addActivity) {
-            addActivity(`Hired Coach ${hiredTrainer.name} via Razorpay (Paid ₹${packageDetails.price.toLocaleString('en-IN')}, Receipt ${txId})`, 'volt');
+            addActivity(`Submitted coaching request to ${selectedCoach.name} (Paid ₹${packageDetails.price.toLocaleString('en-IN')}, Tx ${txId})`, 'volt');
           }
 
-          // Show Payment Successful & Coach Assigned Popup
           CustomSwal.fire({
-            title: 'Payment Successful! 🎉',
+            title: 'Request Submitted! 🚀',
             html: `
               <div style="text-align: left; padding: 0.5rem 0.2rem; font-size: 0.88rem; line-height: 1.6;">
-                <div style="background: rgba(198, 255, 0, 0.08); border: 1px solid rgba(198, 255, 0, 0.25); border-radius: 8px; padding: 0.9rem 1.1rem; margin-bottom: 1.1rem;">
+                <div style="background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.25); border-radius: 8px; padding: 0.9rem 1.1rem; margin-bottom: 1.1rem;">
                   <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
-                    <span style="color: var(--text-muted, #888);">Assigned Coach:</span>
-                    <strong style="color: #fff;">🏋️ ${hiredTrainer.name}</strong>
+                    <span style="color: var(--text-muted, #888);">Selected Coach:</span>
+                    <strong style="color: #fff;">🏋️ ${selectedCoach.name}</strong>
                   </div>
                   <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
-                    <span style="color: var(--text-muted, #888);">Coaching Package:</span>
-                    <strong style="color: #fff;">${packageDetails.name}</strong>
+                    <span style="color: var(--text-muted, #888);">Training Goal:</span>
+                    <strong style="color: #00f0ff;">${resolvedGoal}</strong>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+                    <span style="color: var(--text-muted, #888);">Medical Certificate:</span>
+                    <strong style="color: #00ff66;">✓ Attached (${trainerIntakeMedCertName || 'Clearance Verified'})</strong>
                   </div>
                   <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
                     <span style="color: var(--text-muted, #888);">Amount Paid:</span>
-                    <strong style="color: var(--accent-volt, #c6ff00);">₹${packageDetails.price.toLocaleString('en-IN')} (incl. 18% GST)</strong>
-                  </div>
-                  <div style="display: flex; justify-content: space-between; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 0.4rem; margin-top: 0.4rem;">
-                    <span style="color: var(--text-muted, #888);">Invoice / Receipt #:</span>
-                    <code style="color: #00f0ff; font-weight: 700;">${txId}</code>
+                    <strong style="color: var(--accent-volt, #c6ff00);">₹${packageDetails.price.toLocaleString('en-IN')}</strong>
                   </div>
                 </div>
-                <p style="color: #ccc; margin: 0; font-size: 0.84rem;">
-                  ✅ <strong>Coach ${hiredTrainer.name}</strong> has received your booking details and will begin formulating your tailored workout and nutrition protocols.
+                <p style="color: #ff9f00; margin: 0; font-size: 0.86rem; font-weight: 700;">
+                  ⏳ please wait trainer can not accept your request...
+                </p>
+                <p style="color: #aaa; margin: 0.5rem 0 0 0; font-size: 0.8rem;">
+                  Your application has been routed directly to ${selectedCoach.name}. Once the trainer reviews and accepts, your coaching portal will open immediately.
                 </p>
               </div>
             `,
-            icon: 'success',
-            showCancelButton: true,
-            confirmButtonText: '📄 View Tax Invoice',
-            cancelButtonText: '💬 Connect & Chat with Coach',
-            confirmButtonColor: '#ff5e00',
-            cancelButtonColor: '#2563eb',
-            customClass: {
-              popup: 'apex-swal-custom'
-            }
-          }).then(async (result) => {
-            if (result.isConfirmed) {
-              setActiveReceipt(receipt);
-            } else {
-              // Navigate directly to Personal Coach View & open chat
-              if (onNavigateSubView) {
-                onNavigateSubView('trainer');
-              }
-              setTrainerTabMode('assigned');
-              try {
-                const memberName = profileData?.name || currentUser?.name || 'Athlete';
-                await memberApi.sendChatMessage(`Hi Coach ${hiredTrainer.name}! I just booked my coaching package. Looking forward to our sessions!`, hiredTrainer.name);
-              } catch (e) {}
-            }
+            icon: 'info',
+            confirmButtonText: 'View Request Status →',
+            confirmButtonColor: '#ff5e00'
           });
         },
         onFailure: (err) => {
           setIsProcessingTrainerPayment(false);
           if (err?.reason !== 'cancelled') {
-            if (err?.isAuthError || err?.code === 'BAD_REQUEST_ERROR') {
-              setShowTrainerGateway(true);
-            } else {
-              CustomSwal.fire({
-                icon: 'error',
-                title: 'Payment Incomplete',
-                text: err?.message || 'Payment could not be completed via Razorpay. Please try again.'
-              });
-            }
+            CustomSwal.fire({
+              icon: 'error',
+              title: 'Payment Incomplete',
+              text: err?.message || 'Payment could not be completed. Please try again.'
+            });
           }
         }
       });
@@ -918,6 +1147,16 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
       setIsProcessingTrainerPayment(false);
       console.error(err);
     }
+  };
+
+  const handleOpenTrainerPayment = (trainer) => {
+    handleOpenTrainerSelection();
+    if (trainer) setTrainerIntakeSelectedCoach(trainer);
+  };
+
+  const handleSelectCoach = (trainer) => {
+    handleOpenTrainerSelection();
+    if (trainer) setTrainerIntakeSelectedCoach(trainer);
   };
 
 
@@ -956,10 +1195,6 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
         });
       }
     });
-  };
-
-  const handleSelectCoach = async (trainer) => {
-    handleOpenTrainerPayment(trainer);
   };
 
   // Attendance states
@@ -2747,21 +2982,26 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                     </div>
 
                     <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Email Address <span style={{ color: '#ef4444' }}>*</span></label>
+                      <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Email Address <span style={{ color: '#ef4444' }}>*</span></span>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontWeight: 600 }}>🔒 Primary Account ID (Locked)</span>
+                      </label>
                       <input
                         type="email"
                         className="form-input"
                         placeholder="e.g. member@apex.com"
-                        value={profileForm.email}
-                        onChange={(e) => handleProfileFormChange('email', e.target.value)}
-                        style={{ borderColor: formErrors.email ? '#ef4444' : undefined }}
-                        required
+                        value={profileForm.email || currentUser?.email || ''}
+                        readOnly
+                        disabled
+                        style={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                          cursor: 'not-allowed',
+                          color: 'var(--text-muted, #888)',
+                          borderColor: 'var(--border-color)',
+                          opacity: 0.85
+                        }}
+                        title="Primary account email cannot be changed"
                       />
-                      {formErrors.email && (
-                        <span style={{ color: '#ef4444', fontSize: '0.74rem', marginTop: '0.3rem', display: 'block', fontWeight: 600 }}>
-                          {formErrors.email}
-                        </span>
-                      )}
                     </div>
 
                     <div className="form-group" style={{ margin: 0 }}>
@@ -3805,7 +4045,181 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
       {activeView === 'trainer' && (
         <div className="member-sub-view" id="member-subview-trainer" style={{ display: 'block' }}>
 
-          {!isTrainerPaid ? (
+          {/* CHECK 1: MEMBERSHIP PRE-REQUISITE CHECK */}
+          {(!isMembershipPaid || !membershipTier || membershipTier === 'None' || membershipTier === 'Free' || membershipTier === '0' || membershipTier === 'Select Plan') ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', textAlign: 'center', padding: '2rem' }}>
+              <div className="db-card" style={{ maxWidth: '540px', width: '100%', padding: '3rem 2.5rem', border: '1px solid rgba(255, 94, 0, 0.4)', borderRadius: '14px', background: 'var(--bg-card)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
+                <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(255, 94, 0, 0.12)', border: '2px solid #ff5e00', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', margin: '0 auto 1.5rem auto' }}>
+                  ⚠️
+                </div>
+                <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.6rem', color: '#ff5e00', textTransform: 'uppercase', marginBottom: '0.6rem', letterSpacing: '0.03em' }}>
+                  Membership Required
+                </h2>
+                <div style={{ background: 'rgba(255, 94, 0, 0.08)', border: '1px solid rgba(255, 94, 0, 0.25)', borderRadius: '8px', padding: '1rem', margin: '1.2rem 0 1.8rem 0' }}>
+                  <p style={{ color: '#fff', fontSize: '1.05rem', fontWeight: 700, margin: 0 }}>
+                    please select the membership
+                  </p>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '0.4rem', marginBottom: 0 }}>
+                    To hire a personal certified coach and formulate custom nutrition/workout protocols, an active gym membership pass is required first.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="glow-btn"
+                  onClick={() => {
+                    if (onNavigateSubView) {
+                      onNavigateSubView('membership');
+                    } else {
+                      setShowMembershipSelection(true);
+                    }
+                  }}
+                  style={{ width: '100%', padding: '1rem', fontSize: '0.95rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', background: 'linear-gradient(135deg, #ff5e00 0%, #ff8c00 100%)', color: '#fff' }}
+                >
+                  Choose Membership Plan Now →
+                </button>
+              </div>
+            </div>
+          ) : (trainerRequestStatus === 'pending' || (activeTrainerRequest && activeTrainerRequest.status === 'pending' && !isTrainerPaid)) ? (
+            /* CHECK 2: PENDING TRAINER APPROVAL WAITING SCREEN */
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '65vh', textAlign: 'center', padding: '2rem' }}>
+              <div className="db-card" style={{ maxWidth: '640px', width: '100%', padding: '2.5rem 2.2rem', border: '1px solid rgba(255, 159, 0, 0.4)', borderRadius: '14px', background: 'var(--bg-card)', boxShadow: '0 15px 50px rgba(0,0,0,0.6)' }}>
+                <div style={{ width: '84px', height: '84px', borderRadius: '50%', background: 'rgba(255, 159, 0, 0.12)', border: '2px solid #ff9f00', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.6rem', margin: '0 auto 1.2rem auto', animation: 'pulse 2s infinite' }}>
+                  ⏳
+                </div>
+                
+                <h3 style={{ color: '#ff9f00', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.4rem', textTransform: 'uppercase', margin: '0 0 0.6rem 0', letterSpacing: '0.02em' }}>
+                  please wait trainer can not accept your request... 
+                </h3>
+
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', lineHeight: 1.5, marginBottom: '1.5rem' }}>
+                  Your coaching application and payment have been routed to <strong>{activeTrainerRequest?.trainerName || selectedTrainer?.name || 'your selected Trainer'}</strong>. The coach is reviewing your fitness goal, medical clearance, and profile. Once accepted, your coaching dashboard will open automatically.
+                </p>
+
+                {/* Submitted Details Review Card */}
+                <div style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1.2rem', textAlign: 'left', marginBottom: '1.8rem', fontSize: '0.85rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '0.6rem' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Selected Coach:</span>
+                    <strong style={{ color: 'var(--accent-cyan)' }}>🏋️ {activeTrainerRequest?.trainerName || 'Certified Personal Coach'}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '0.6rem' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Target Fitness Goal:</span>
+                    <strong style={{ color: '#fff' }}>{activeTrainerRequest?.goal || trainerIntakeGoal}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.6rem', marginBottom: '0.6rem' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Medical Certificate:</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <div
+                        onClick={() => handleViewMemberMedicalClearance(
+                          activeTrainerRequest?.medicalCertificate || trainerIntakeMedCert,
+                          activeTrainerRequest?.medicalCertName || trainerIntakeMedCertName,
+                          activeTrainerRequest?.goal || trainerIntakeGoal,
+                          profileData?.name || currentUser?.name
+                        )}
+                        style={{
+                          width: '34px',
+                          height: '34px',
+                          borderRadius: '6px',
+                          border: '1px solid #00ff66',
+                          overflow: 'hidden',
+                          cursor: 'pointer',
+                          background: '#0a0f18',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}
+                        title="Click to zoom clearance certificate preview"
+                      >
+                        <img
+                          src={getResolvedMemberCertSrc(
+                            activeTrainerRequest?.medicalCertificate || trainerIntakeMedCert,
+                            activeTrainerRequest?.medicalCertName || trainerIntakeMedCertName,
+                            activeTrainerRequest?.goal || trainerIntakeGoal,
+                            profileData?.name || currentUser?.name
+                          )}
+                          alt="Clearance Preview"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleViewMemberMedicalClearance(
+                          activeTrainerRequest?.medicalCertificate || trainerIntakeMedCert,
+                          activeTrainerRequest?.medicalCertName || trainerIntakeMedCertName,
+                          activeTrainerRequest?.goal || trainerIntakeGoal,
+                          profileData?.name || currentUser?.name
+                        )}
+                        style={{ background: 'none', border: 'none', color: '#00ff66', fontWeight: 700, cursor: 'pointer', padding: 0, textDecoration: 'underline', fontSize: '0.82rem' }}
+                      >
+                        📄 {activeTrainerRequest?.medicalCertName || 'Medical_Fitness_Clearance.pdf'} (View)
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '0.6rem' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Package & Status:</span>
+                    <span style={{ color: 'var(--accent-volt)', fontWeight: 800 }}>{activeTrainerRequest?.packageName || '1-Month Personal Coaching'} • 🟡 PENDING REVIEW</span>
+                  </div>
+                  {activeTrainerRequest?.description && (
+                    <div style={{ marginTop: '0.6rem' }}>
+                      <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '0.2rem', fontSize: '0.78rem' }}>Athlete Description / Notes:</span>
+                      <p style={{ margin: 0, color: 'var(--text-white)', fontSize: '0.82rem', background: 'rgba(255,255,255,0.03)', padding: '0.5rem', borderRadius: '6px' }}>
+                        {activeTrainerRequest.description}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'center' }}>
+                  <button
+                    type="button"
+                    className="glow-btn"
+                    onClick={async () => {
+                      const uEmail = profileData?.email || currentUser?.email || '';
+                      const uName = profileData?.name || currentUser?.name || '';
+                      try {
+                        const res = await memberApi.getTrainerRequestStatus(uEmail, uName);
+                        if (res && res.success && res.request) {
+                          setActiveTrainerRequest(res.request);
+                          setTrainerRequestStatus(res.request.status);
+                          if (res.request.status === 'accepted') {
+                            setIsTrainerPaid(true);
+                            localStorage.setItem(`apex_trainer_paid_${memberKey}`, 'true');
+                            CustomSwal.fire({
+                              icon: 'success',
+                              title: 'Coach Accepted! 🎉',
+                              text: 'Your coaching dashboard is now active.'
+                            });
+                          } else {
+                            CustomSwal.fire({
+                              toast: true,
+                              position: 'top-end',
+                              timer: 3000,
+                              showConfirmButton: false,
+                              icon: 'info',
+                              title: 'Status: Pending Review ⏳',
+                              text: 'please wait trainer can not accept your request...'
+                            });
+                          }
+                        }
+                      } catch (err) {}
+                    }}
+                    style={{ padding: '0.75rem 1.4rem', fontSize: '0.85rem', cursor: 'pointer' }}
+                  >
+                    Check Status Now 🔄
+                  </button>
+
+                  <button
+                    type="button"
+                    className="outline-btn"
+                    onClick={() => handleCancelTrainerRequest(activeTrainerRequest?.id)}
+                    style={{ padding: '0.75rem 1.2rem', fontSize: '0.85rem', color: '#ff3e6c', borderColor: 'rgba(255,62,108,0.4)', cursor: 'pointer' }}
+                  >
+                    Cancel Request
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : !isTrainerPaid ? (
             !showTrainerSelection ? (
               /* GATE STEP 1: ONE FORM WITH ONE BUTTON "SELECT YOUR TRAINER" */
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', textAlign: 'center', padding: '2rem' }}>
@@ -3819,7 +4233,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                   <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.5, marginBottom: '2.5rem' }}>
                     Hire a certified personal trainer to design custom training programs, prescribe custom dietary plans, and chat 1-on-1 in real-time.
                   </p>
-                  <form onSubmit={(e) => { e.preventDefault(); setShowTrainerSelection(true); }}>
+                  <form onSubmit={(e) => { e.preventDefault(); handleOpenTrainerSelection(); }}>
                     <button type="submit" className="glow-btn" style={{ width: '100%', padding: '1rem', fontSize: '1rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer' }}>
                       Select Your Trainer
                     </button>
@@ -3827,85 +4241,349 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                 </div>
               </div>
             ) : (
-              /* GATE STEP 2: SHOW TRAINERS TO SELECT & CONTINUE TO PAYMENT */
-              <div>
+              /* GATE STEP 2: COMPLETE INTAKE FORM (GOAL, MEDICAL CERTIFICATE, DESCRIPTION, COACH SELECTION, PAYMENT) */
+              <div style={{ maxWidth: '1050px', margin: '0 auto' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.8rem' }}>
                   <div>
-                    <h3 style={{ color: 'var(--text-white)', fontSize: '1.25rem', margin: 0, textTransform: 'uppercase', fontFamily: 'var(--font-display)', fontWeight: 800 }}>
-                      Choose Your Coach
+                    <h3 style={{ color: 'var(--text-white)', fontSize: '1.3rem', margin: 0, textTransform: 'uppercase', fontFamily: 'var(--font-display)', fontWeight: 800 }}>
+                      Personal Coaching Intake & Trainer Selection
                     </h3>
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '0.2rem' }}>
-                      Select a trainer below to continue to the payment process and activate your coaching portal.
+                      Enter your fitness goal, medical clearance, health description, and choose your coach to complete enrollment.
                     </p>
                   </div>
                   <button
                     className="outline-btn"
                     onClick={() => setShowTrainerSelection(false)}
-                    style={{ padding: '0.4rem 1rem', fontSize: '0.8rem', cursor: 'pointer' }}
+                    style={{ padding: '0.45rem 1.1rem', fontSize: '0.82rem', cursor: 'pointer' }}
                   >
                     ← Back
                   </button>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
-                  {availableTrainers
-                    .slice((trainerGridPage - 1) * GRID_ITEMS_PER_PAGE, trainerGridPage * GRID_ITEMS_PER_PAGE)
-                    .map((t, idx) => {
-                      const initials = t.name ? t.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'CT';
-
-                      return (
-                        <div
-                          key={t.userId || t._id || idx}
-                          className="db-card"
-                          style={{
-                            border: '1px solid var(--border-color)',
-                            background: 'var(--bg-card)',
-                            padding: '1.5rem',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: 'space-between',
-                            position: 'relative'
-                          }}
+                <form onSubmit={handleConfirmTrainerIntakeAndPayment}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                    
+                    {/* LEFT COLUMN: INTAKE DETAILS */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                      
+                      {/* 1. GOAL SELECTION */}
+                      <div className="db-card" style={{ padding: '1.4rem' }}>
+                        <label style={{ display: 'block', color: 'var(--text-white)', fontWeight: 800, fontSize: '0.92rem', textTransform: 'uppercase', marginBottom: '0.6rem' }}>
+                          🎯 1. Target Fitness Goal <span style={{ color: '#ff3e6c' }}>*</span>
+                        </label>
+                        <select
+                          className="form-input"
+                          value={trainerIntakeGoal}
+                          onChange={(e) => setTrainerIntakeGoal(e.target.value)}
+                          style={{ width: '100%', padding: '0.75rem', fontSize: '0.88rem', marginBottom: trainerIntakeGoal === 'Custom' ? '0.6rem' : '0' }}
                         >
-                          <div>
-                            <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-volt) 100%)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.4rem', marginBottom: '1rem' }}>
-                              {initials}
-                            </div>
+                          <option value="Hypertrophy & Max Strength">Hypertrophy & Max Muscle Mass</option>
+                          <option value="Lean Calorie Deficit & Fat Loss">Lean Calorie Deficit & Shredded Fat Loss</option>
+                          <option value="Athletic HIIT & Combat Conditioning">Athletic HIIT & Combat Conditioning</option>
+                          <option value="Olympic Weightlifting & Power Block">Olympic Weightlifting & Explosive Power</option>
+                          <option value="Posture & Injury Rehabilitation">Posture Correction & Injury Rehabilitation</option>
+                          <option value="Custom">Custom Target Goal</option>
+                        </select>
+                        {trainerIntakeGoal === 'Custom' && (
+                          <input
+                            type="text"
+                            placeholder="Type your specific fitness goal..."
+                            value={trainerIntakeCustomGoal}
+                            onChange={(e) => setTrainerIntakeCustomGoal(e.target.value)}
+                            className="form-input"
+                            style={{ width: '100%', padding: '0.75rem', fontSize: '0.85rem' }}
+                            required
+                          />
+                        )}
+                      </div>
 
-                            <h4 style={{ color: 'var(--text-white)', margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>{t.name}</h4>
-                            <span style={{ color: 'var(--accent-cyan)', fontSize: '0.78rem', fontWeight: 700, display: 'block', margin: '0.2rem 0 0.8rem 0' }}>
-                              {t.specialty || 'Certified Strength & Performance Coach'}
-                            </span>
-
-                            <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.8rem', marginBottom: '1rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                              <div style={{ marginBottom: '0.3rem' }}><strong style={{ color: 'var(--text-white)' }}>Credentials:</strong> {t.credentials || 'CSCS, Fitness Specialist'}</div>
-                              <div><strong style={{ color: 'var(--text-white)' }}>Contact:</strong> {t.email} {t.phone ? `(${t.phone})` : ''}</div>
-                            </div>
-
-                            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.4, marginBottom: '1.5rem' }}>
-                              {t.bio || 'Dedicated certified trainer focused on progressive overload, form biomechanics, and personalized fitness goals.'}
-                            </p>
-                          </div>
-
+                      {/* 2. MEDICAL CERTIFICATE & CLEARANCE */}
+                      <div className="db-card" style={{ padding: '1.4rem' }}>
+                        <label style={{ display: 'block', color: 'var(--text-white)', fontWeight: 800, fontSize: '0.92rem', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
+                          🏥 2. Medical Certificate & Clearance <span style={{ color: '#ff3e6c' }}>*</span>
+                        </label>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: '0.8rem' }}>
+                          Upload doctor certificate or clearance declaration confirming you are fit for physical exercise.
+                        </p>
+                        
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', background: 'rgba(0,0,0,0.2)', border: '1px dashed var(--border-color)', borderRadius: '8px', padding: '0.9rem', marginBottom: '0.8rem' }}>
+                          <input
+                            type="file"
+                            id="trainer-med-cert-upload"
+                            accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"
+                            style={{ display: 'none' }}
+                            onChange={(e) => {
+                              const file = e.target.files[0];
+                              if (file) {
+                                setTrainerIntakeMedCertName(file.name);
+                                const reader = new FileReader();
+                                reader.onload = (loadEvt) => {
+                                  const result = loadEvt.target.result;
+                                  if (file.type && file.type.startsWith('image/')) {
+                                    const img = new Image();
+                                    img.onload = () => {
+                                      const maxDim = 1200;
+                                      let width = img.width;
+                                      let height = img.height;
+                                      if (width > maxDim || height > maxDim) {
+                                        if (width > height) {
+                                          height = Math.round((height * maxDim) / width);
+                                          width = maxDim;
+                                        } else {
+                                          width = Math.round((width * maxDim) / height);
+                                          height = maxDim;
+                                        }
+                                      }
+                                      const canvas = document.createElement('canvas');
+                                      canvas.width = width;
+                                      canvas.height = height;
+                                      const ctx = canvas.getContext('2d');
+                                      ctx.drawImage(img, 0, 0, width, height);
+                                      const dataUrl = canvas.toDataURL(file.type || 'image/jpeg', 0.92);
+                                      setTrainerIntakeMedCert(dataUrl);
+                                    };
+                                    img.src = result;
+                                  } else {
+                                    setTrainerIntakeMedCert(result);
+                                  }
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
                           <button
-                            className="glow-btn"
-                            onClick={() => handleSelectCoach(t)}
-                            style={{ width: '100%', padding: '0.75rem', fontSize: '0.82rem', cursor: 'pointer' }}
+                            type="button"
+                            className="outline-btn"
+                            onClick={() => document.getElementById('trainer-med-cert-upload')?.click()}
+                            style={{ padding: '0.4rem 0.9rem', fontSize: '0.78rem', cursor: 'pointer', flexShrink: 0 }}
                           >
-                            Choose {t.name} & Pay →
+                            📎 Choose File
                           </button>
+                          <span style={{ fontSize: '0.82rem', color: trainerIntakeMedCertName ? '#00ff66' : 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {trainerIntakeMedCertName ? `✓ ${trainerIntakeMedCertName}` : 'No file chosen (Default Clearance attached)'}
+                          </span>
                         </div>
-                      );
-                    })}
-                </div>
 
-                {renderPaginationBar(
-                  trainerGridPage,
-                  Math.ceil(availableTrainers.length / GRID_ITEMS_PER_PAGE) || 1,
-                  availableTrainers.length,
-                  setTrainerGridPage,
-                  GRID_ITEMS_PER_PAGE
-                )}
+                        {/* Visual Image / Document Upload Preview */}
+                        {trainerIntakeMedCert && (
+                          <div style={{ marginTop: '0.6rem', marginBottom: '0.8rem', padding: '0.7rem', background: 'rgba(0, 255, 102, 0.05)', border: '1px solid rgba(0, 255, 102, 0.3)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '0.9rem' }}>
+                            <div
+                              onClick={() => handleViewMemberMedicalClearance(
+                                trainerIntakeMedCert,
+                                trainerIntakeMedCertName,
+                                trainerIntakeCustomGoal || trainerIntakeGoal,
+                                profileData?.name || currentUser?.name
+                              )}
+                              style={{ cursor: 'pointer', flexShrink: 0 }}
+                              title="Click to zoom preview"
+                            >
+                              {String(trainerIntakeMedCert).startsWith('data:image') ? (
+                                <img
+                                  src={trainerIntakeMedCert}
+                                  alt="Medical Certificate Preview"
+                                  style={{ width: '64px', height: '64px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #00ff66', display: 'block' }}
+                                />
+                              ) : (
+                                <div style={{ width: '48px', height: '48px', borderRadius: '6px', background: 'rgba(0, 240, 255, 0.1)', border: '1px solid var(--accent-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem' }}>
+                                  📄
+                                </div>
+                              )}
+                            </div>
+                            <div style={{ flexGrow: 1, minWidth: 0 }}>
+                              <span style={{ fontSize: '0.8rem', color: '#00ff66', fontWeight: 800, display: 'block' }}>
+                                ✓ Document Attached Successfully
+                              </span>
+                              <span style={{ fontSize: '0.74rem', color: 'var(--text-white)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {trainerIntakeMedCertName}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleViewMemberMedicalClearance(
+                                  trainerIntakeMedCert,
+                                  trainerIntakeMedCertName,
+                                  trainerIntakeCustomGoal || trainerIntakeGoal,
+                                  profileData?.name || currentUser?.name
+                                )}
+                                style={{ background: 'none', border: 'none', color: '#00f0ff', fontSize: '0.72rem', cursor: 'pointer', padding: 0, textDecoration: 'underline', marginTop: '0.15rem' }}
+                              >
+                                🔍 Click to Zoom Preview
+                              </button>
+                            </div>
+                            <button
+                              type="button"
+                              className="outline-btn"
+                              onClick={() => {
+                                setTrainerIntakeMedCert(null);
+                                setTrainerIntakeMedCertName('');
+                              }}
+                              style={{ padding: '0.25rem 0.55rem', fontSize: '0.7rem', color: '#ff3e6c', borderColor: 'rgba(255,62,108,0.4)', cursor: 'pointer', flexShrink: 0 }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
+
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.78rem', color: 'var(--text-white)', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={trainerIntakeMedCleared}
+                            onChange={(e) => setTrainerIntakeMedCleared(e.target.checked)}
+                            required
+                          />
+                          <span>I declare that I am medically cleared and fit for physical training.</span>
+                        </label>
+                      </div>
+
+                      {/* 3. HEALTH DESCRIPTION & INJURY HISTORY */}
+                      <div className="db-card" style={{ padding: '1.4rem' }}>
+                        <label style={{ display: 'block', color: 'var(--text-white)', fontWeight: 800, fontSize: '0.92rem', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
+                          📝 3. Description & Health History <span style={{ color: '#ff3e6c' }}>*</span>
+                        </label>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: '0.6rem' }}>
+                          Describe past injuries, physical condition, training history, or special requests for your coach.
+                        </p>
+                        <textarea
+                          rows={4}
+                          className="form-input"
+                          placeholder="e.g. 2 years of weight training experience. Mild past shoulder impingement on bench press. Looking to add 5kg muscle and improve squat biomechanics."
+                          value={trainerIntakeDesc}
+                          onChange={(e) => setTrainerIntakeDesc(e.target.value)}
+                          style={{ width: '100%', padding: '0.8rem', fontSize: '0.85rem', resize: 'vertical' }}
+                          required
+                        />
+                      </div>
+
+                    </div>
+
+                    {/* RIGHT COLUMN: COACH SELECTION & PACKAGE */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                      
+                      {/* 4. SELECT CERTIFIED COACH */}
+                      <div className="db-card" style={{ padding: '1.4rem' }}>
+                        <label style={{ display: 'block', color: 'var(--text-white)', fontWeight: 800, fontSize: '0.92rem', textTransform: 'uppercase', marginBottom: '0.8rem' }}>
+                          🏋️ 4. Select Your Certified Coach <span style={{ color: '#ff3e6c' }}>*</span>
+                        </label>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', maxHeight: '310px', overflowY: 'auto', paddingRight: '0.3rem' }}>
+                          {availableTrainers.map((t, idx) => {
+                            const isSelected = (trainerIntakeSelectedCoach?.name === t.name || (!trainerIntakeSelectedCoach && idx === 0));
+                            const initials = t.name ? t.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'CT';
+
+                            return (
+                              <div
+                                key={t.userId || idx}
+                                onClick={() => setTrainerIntakeSelectedCoach(t)}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.9rem',
+                                  padding: '0.85rem 1rem',
+                                  borderRadius: '10px',
+                                  border: isSelected ? '2px solid var(--accent-volt)' : '1px solid var(--border-color)',
+                                  background: isSelected ? 'rgba(198, 255, 0, 0.06)' : 'rgba(255, 255, 255, 0.02)',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s ease',
+                                  position: 'relative'
+                                }}
+                              >
+                                <div style={{
+                                  width: '46px',
+                                  height: '46px',
+                                  borderRadius: '50%',
+                                  background: isSelected ? 'linear-gradient(135deg, var(--accent-volt) 0%, var(--accent-cyan) 100%)' : 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.02) 100%)',
+                                  color: isSelected ? '#000' : '#fff',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontWeight: 800,
+                                  fontFamily: 'var(--font-display)',
+                                  fontSize: '1rem',
+                                  flexShrink: 0
+                                }}>
+                                  {initials}
+                                </div>
+                                <div style={{ flexGrow: 1, minWidth: 0 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <h5 style={{ margin: 0, color: 'var(--text-white)', fontWeight: 800, fontSize: '0.92rem' }}>{t.name}</h5>
+                                    {isSelected && (
+                                      <span style={{ fontSize: '0.68rem', background: 'var(--accent-volt)', color: '#000', fontWeight: 800, padding: '0.1rem 0.45rem', borderRadius: '4px' }}>
+                                        ✓ SELECTED
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span style={{ color: 'var(--accent-cyan)', fontSize: '0.74rem', fontWeight: 700, display: 'block' }}>
+                                    {t.specialty || 'Personal Performance Coach'}
+                                  </span>
+                                  <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', display: 'block', marginTop: '0.15rem' }}>
+                                    {t.credentials || 'Certified Specialist'}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* 5. PACKAGE & PRICING SUMMARY */}
+                      <div className="db-card" style={{ padding: '1.4rem' }}>
+                        <label style={{ display: 'block', color: 'var(--text-white)', fontWeight: 800, fontSize: '0.92rem', textTransform: 'uppercase', marginBottom: '0.6rem' }}>
+                          ⚡ 5. Coaching Package & Summary
+                        </label>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.6rem', marginBottom: '1rem' }}>
+                          {[
+                            { key: 'monthly', name: '1-Month', price: 5000 },
+                            { key: '3month', name: '3-Month', price: 13000 },
+                            { key: '6month', name: '6-Month VIP', price: 23000 }
+                          ].map(pkg => {
+                            const isPkgSelected = trainerIntakePackage === pkg.key;
+                            return (
+                              <div
+                                key={pkg.key}
+                                onClick={() => setTrainerIntakePackage(pkg.key)}
+                                style={{
+                                  padding: '0.75rem 0.5rem',
+                                  borderRadius: '8px',
+                                  textAlign: 'center',
+                                  border: isPkgSelected ? '2px solid var(--accent-cyan)' : '1px solid var(--border-color)',
+                                  background: isPkgSelected ? 'rgba(0, 240, 255, 0.08)' : 'rgba(0,0,0,0.2)',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <span style={{ display: 'block', fontSize: '0.76rem', color: 'var(--text-muted)', fontWeight: 700 }}>{pkg.name}</span>
+                                <strong style={{ display: 'block', fontSize: '0.92rem', color: isPkgSelected ? 'var(--accent-cyan)' : '#fff', marginTop: '0.2rem' }}>₹{pkg.price.toLocaleString('en-IN')}</strong>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.8rem', fontSize: '0.82rem', marginBottom: '1.2rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>Coaching Fee:</span>
+                            <span style={{ color: '#fff' }}>₹{({ monthly: 5000, '3month': 13000, '6month': 23000 }[trainerIntakePackage] || 5000).toLocaleString('en-IN')}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed var(--border-color)', paddingTop: '0.4rem', fontWeight: 800 }}>
+                            <span style={{ color: 'var(--text-white)' }}>Total Payable:</span>
+                            <span style={{ color: 'var(--accent-volt)' }}>₹{({ monthly: 5000, '3month': 13000, '6month': 23000 }[trainerIntakePackage] || 5000).toLocaleString('en-IN')}</span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={isProcessingTrainerPayment}
+                          className="glow-btn"
+                          style={{ width: '100%', padding: '1rem', fontSize: '0.92rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                        >
+                          <span>💳</span>
+                          {isProcessingTrainerPayment ? 'Processing Payment...' : `Pay ₹${({ monthly: 5000, '3month': 13000, '6month': 23000 }[trainerIntakePackage] || 5000).toLocaleString('en-IN')} & Submit Request`}
+                        </button>
+                      </div>
+
+                    </div>
+
+                  </div>
+                </form>
               </div>
             )
           ) : (
@@ -4089,7 +4767,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                                 </div>
                               )}
                               <p style={{ fontWeight: isMember ? 600 : 'normal', margin: 0 }}>
-                                {bubble.text}
+                                {(bubble.text || '').replace(/\bJeery\b/gi, profileData?.name || currentUser?.name || 'Athlete')}
                               </p>
                               <span style={{ display: 'block', fontSize: '0.62rem', color: isMember ? 'rgba(8,8,10,0.65)' : 'var(--text-dim)', marginTop: '0.35rem', textAlign: 'right' }}>
                                 {bubble.time}

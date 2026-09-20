@@ -94,6 +94,105 @@ router.post('/select', (req, res) => {
 });
 
 /**
+ * POST /api/member/trainer/request
+ * Submit member coaching application (goal, medical certificate, description, coach, package, paymentId)
+ */
+router.post('/request', (req, res) => {
+  const {
+    memberId,
+    memberName,
+    memberEmail,
+    memberPhone,
+    trainerId,
+    trainerName,
+    goal,
+    medicalCertificate,
+    medicalCertName,
+    description,
+    package: coachPackage,
+    packageName,
+    packagePrice,
+    paymentId
+  } = req.body;
+
+  const db = getDB();
+  if (!Array.isArray(db.trainerRequests)) {
+    db.trainerRequests = [];
+  }
+
+  const newRequest = {
+    id: `REQ-${Date.now()}`,
+    memberId: memberId || req.user?.userId || 'MEM-' + Date.now(),
+    memberName: memberName || req.user?.name || 'Athlete Member',
+    memberEmail: memberEmail || req.user?.email || 'member@apex.com',
+    memberPhone: memberPhone || '+91 98765 43210',
+    trainerId: trainerId || 'TRN-1',
+    trainerName: trainerName || 'Coach',
+    goal: goal || 'Hypertrophy & Max Strength',
+    medicalCertificate: medicalCertificate || null,
+    medicalCertName: medicalCertName || 'Medical_Clearance_Cert.pdf',
+    description: description || 'Member enrolled in personal coaching program.',
+    package: coachPackage || 'monthly',
+    packageName: packageName || '1-Month Personal Coaching',
+    packagePrice: packagePrice || 5000,
+    paymentId: paymentId || `pay_${Date.now()}`,
+    status: 'pending', // 'pending' | 'accepted' | 'rejected'
+    createdAt: new Date().toISOString()
+  };
+
+  // Remove previous pending request for this member if any
+  db.trainerRequests = db.trainerRequests.filter(r => 
+    !(r.memberEmail && newRequest.memberEmail && r.memberEmail.toLowerCase() === newRequest.memberEmail.toLowerCase() && r.status === 'pending')
+  );
+
+  db.trainerRequests.unshift(newRequest);
+  saveDB(db);
+
+  res.status(201).json({
+    success: true,
+    message: `Coaching request submitted to ${newRequest.trainerName}. Awaiting trainer acceptance.`,
+    data: newRequest
+  });
+});
+
+/**
+ * GET /api/member/trainer/request-status
+ * Check current coaching request status for logged-in member
+ */
+router.get('/request-status', (req, res) => {
+  const db = getDB();
+  const email = (req.query.email || req.query.memberEmail || req.user?.email || '').toLowerCase().trim();
+  const name = (req.query.name || req.query.memberName || req.user?.name || '').toLowerCase().trim();
+
+  const requests = Array.isArray(db.trainerRequests) ? db.trainerRequests : [];
+  const memberRequest = requests.find(r => 
+    (email && r.memberEmail && r.memberEmail.toLowerCase().trim() === email) ||
+    (name && r.memberName && r.memberName.toLowerCase().trim() === name)
+  );
+
+  res.json({
+    success: true,
+    request: memberRequest || null
+  });
+});
+
+/**
+ * POST /api/member/trainer/request/cancel
+ * Cancel a pending coaching request
+ */
+router.post('/request/cancel', (req, res) => {
+  const { requestId, memberEmail } = req.body;
+  const db = getDB();
+  if (Array.isArray(db.trainerRequests)) {
+    db.trainerRequests = db.trainerRequests.filter(r => 
+      !(requestId && r.id === requestId) && !(memberEmail && r.memberEmail?.toLowerCase() === memberEmail.toLowerCase() && r.status === 'pending')
+    );
+    saveDB(db);
+  }
+  res.json({ success: true, message: 'Request cancelled successfully.' });
+});
+
+/**
  * GET /api/member/trainer/info
  * Fetch assigned trainer bio and credentials
  */

@@ -9,7 +9,7 @@ const router = express.Router();
 const defaultTrainerMembers = [
   {
     id: 'MEM-98801',
-    name: 'Jeery',
+    name: 'The PC Workshop',
     email: 'thepcworkshop1@gmail.com',
     tier: 'Muscle Core Member',
     status: 'Active',
@@ -196,6 +196,134 @@ function ensureTrainerDB(db) {
 }
 
 /**
+ * --- 0. COACHING REQUESTS & APPROVAL ENDPOINTS ---
+ */
+
+// GET /api/trainer/requests - Get incoming coaching requests
+router.get('/requests', (req, res) => {
+  let db = getDB();
+  db = ensureTrainerDB(db);
+
+  const coachName = (req.query.coachName || req.user?.name || '').toLowerCase().trim();
+  let requests = Array.isArray(db.trainerRequests) ? db.trainerRequests : [];
+
+  if (coachName && coachName !== 'admin') {
+    const cleanCoach = coachName.replace(/^coach\s+/i, '');
+    requests = requests.filter(r => 
+      !r.trainerName || 
+      r.trainerName.toLowerCase().includes(cleanCoach) ||
+      coachName.includes(r.trainerName.toLowerCase().replace(/^coach\s+/i, ''))
+    );
+  }
+
+  res.json({
+    success: true,
+    count: requests.length,
+    data: requests
+  });
+});
+
+// POST /api/trainer/requests/:id/accept - Accept member coaching request
+router.post('/requests/:id/accept', (req, res) => {
+  const { id } = req.params;
+  let db = getDB();
+  db = ensureTrainerDB(db);
+
+  if (!Array.isArray(db.trainerRequests)) db.trainerRequests = [];
+  const reqIdx = db.trainerRequests.findIndex(r => r.id === id);
+
+  if (reqIdx === -1) {
+    return res.status(404).json({ success: false, message: 'Coaching request not found.' });
+  }
+
+  const acceptedReq = db.trainerRequests[reqIdx];
+  acceptedReq.status = 'accepted';
+  acceptedReq.acceptedAt = new Date().toISOString();
+
+  // Auto-add client to trainer members roster if not already present
+  if (!db.trainer.members.some(m => (m.email && acceptedReq.memberEmail && m.email.toLowerCase() === acceptedReq.memberEmail.toLowerCase()) || (m.name && acceptedReq.memberName && m.name.toLowerCase() === acceptedReq.memberName.toLowerCase()))) {
+    db.trainer.members.unshift({
+      id: acceptedReq.memberId || `MEM-${Math.floor(10000 + Math.random() * 90000)}`,
+      name: acceptedReq.memberName,
+      email: acceptedReq.memberEmail,
+      phone: acceptedReq.memberPhone,
+      tier: acceptedReq.packageName || 'Personal Coaching VIP',
+      status: 'Active',
+      joined: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+      goal: acceptedReq.goal || 'Hypertrophy & Max Strength',
+      diet: 'Prescribed Protocol',
+      workout: 'Hypertrophy Split Alpha (Upper/Lower)',
+      attendance: 100,
+      medicalCertificate: acceptedReq.medicalCertificate || null,
+      medicalCertName: acceptedReq.medicalCertName || null,
+      description: acceptedReq.description || ''
+    });
+  }
+
+  // Update user trainer if present in db.users
+  if (Array.isArray(db.users)) {
+    const uIdx = db.users.findIndex(u => (u.email && acceptedReq.memberEmail && u.email.toLowerCase() === acceptedReq.memberEmail.toLowerCase()) || (u.name && acceptedReq.memberName && u.name.toLowerCase() === acceptedReq.memberName.toLowerCase()));
+    if (uIdx !== -1) {
+      db.users[uIdx].trainer = acceptedReq.trainerName;
+      db.users[uIdx].trainerStatus = 'accepted';
+    }
+  }
+
+  // Auto-send welcome chat message from coach to member
+  if (!Array.isArray(db.trainer.chatHistory)) db.trainer.chatHistory = [];
+  const now = new Date();
+  const timeStr = now.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) + ', ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  db.trainer.chatHistory.push({
+    id: `c-${Date.now()}`,
+    memberName: acceptedReq.memberName,
+    clientEmail: acceptedReq.memberEmail,
+    memberEmail: acceptedReq.memberEmail,
+    coachName: acceptedReq.trainerName || 'Coach',
+    sender: 'coach',
+    text: `Welcome aboard ${acceptedReq.memberName}! I have accepted your personal coaching request for ${acceptedReq.goal}. Let's begin crafting your elite training program!`,
+    time: timeStr,
+    read: false,
+    createdAt: new Date().toISOString()
+  });
+
+  saveDB(db);
+
+  res.json({
+    success: true,
+    message: `Accepted coaching request from ${acceptedReq.memberName}!`,
+    data: acceptedReq
+  });
+});
+
+// POST /api/trainer/requests/:id/reject - Reject member coaching request
+router.post('/requests/:id/reject', (req, res) => {
+  const { id } = req.params;
+  const { reason } = req.body;
+  let db = getDB();
+  db = ensureTrainerDB(db);
+
+  if (!Array.isArray(db.trainerRequests)) db.trainerRequests = [];
+  const reqIdx = db.trainerRequests.findIndex(r => r.id === id);
+
+  if (reqIdx === -1) {
+    return res.status(404).json({ success: false, message: 'Coaching request not found.' });
+  }
+
+  const rejectedReq = db.trainerRequests[reqIdx];
+  rejectedReq.status = 'rejected';
+  rejectedReq.rejectionReason = reason || 'Trainer roster currently full.';
+  rejectedReq.rejectedAt = new Date().toISOString();
+
+  saveDB(db);
+
+  res.json({
+    success: true,
+    message: `Coaching request from ${rejectedReq.memberName} rejected.`,
+    data: rejectedReq
+  });
+});
+
+/**
  * --- 1. CLIENT ROSTER ENDPOINTS ---
  */
 
@@ -204,13 +332,13 @@ router.get('/members', (req, res) => {
   let db = getDB();
   db = ensureTrainerDB(db);
 
-  // Auto-ensure primary member Jeery exists in trainer roster
-  const jeeryName = (db.member && db.member.name) || 'Jeery';
-  if (!db.trainer.members.some(m => m.name && m.name.toLowerCase() === jeeryName.toLowerCase())) {
+  // Auto-ensure primary member exists in trainer roster
+  const activeMemberName = (db.member && db.member.name) || 'The PC Workshop';
+  if (!db.trainer.members.some(m => m.name && m.name.toLowerCase() === activeMemberName.toLowerCase())) {
     db.trainer.members.unshift({
       id: db.member?.id || 'MEM-98801',
-      name: jeeryName,
-      email: db.member?.email || 'jeery@apex.com',
+      name: activeMemberName,
+      email: db.member?.email || 'member@apex.com',
       tier: db.member?.membershipTier || 'Muscle Core Member',
       status: 'Active',
       joined: '01 Sep 2026',
@@ -367,19 +495,68 @@ router.post('/workouts', (req, res) => {
 
 // POST /api/trainer/workouts/assign - Assign workout plan to client
 router.post('/workouts/assign', (req, res) => {
-  const { planId, memberId } = req.body;
+  const { planId, memberId, memberName, memberEmail } = req.body;
   let db = getDB();
   db = ensureTrainerDB(db);
 
-  const plan = db.trainer.workoutPlans.find(p => p.id === planId);
+  const plan = db.trainer.workoutPlans.find(p => p.id === planId || p.name === planId);
+  const planName = plan ? plan.name : planId;
   if (plan) {
     plan.clientsAssigned = (plan.clientsAssigned || 0) + 1;
-    saveDB(db);
   }
+
+  // Resolve target member
+  let targetMember = null;
+  if (memberId || memberEmail || memberName) {
+    targetMember = db.trainer.members.find(m => 
+      (memberId && m.id === memberId) ||
+      (memberEmail && m.email && m.email.toLowerCase() === memberEmail.toLowerCase()) ||
+      (memberName && m.name && m.name.toLowerCase() === memberName.toLowerCase())
+    );
+  }
+
+  if (targetMember) {
+    targetMember.workout = planName;
+  }
+
+  // Update member in db.users
+  if (Array.isArray(db.users)) {
+    const uIdx = db.users.findIndex(u => 
+      (memberEmail && u.email && u.email.toLowerCase() === memberEmail.toLowerCase()) ||
+      (memberName && u.name && u.name.toLowerCase() === memberName.toLowerCase())
+    );
+    if (uIdx !== -1) {
+      db.users[uIdx].workout = planName;
+    }
+  }
+
+  // Dispatch email-tagged chat message
+  if (targetMember || memberEmail || memberName) {
+    const email = targetMember?.email || memberEmail || '';
+    const name = targetMember?.name || memberName || 'Athlete';
+    if (!Array.isArray(db.trainer.chatHistory)) db.trainer.chatHistory = [];
+    const now = new Date();
+    const timeStr = now.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) + ', ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    db.trainer.chatHistory.push({
+      id: `c-${Date.now()}`,
+      sender: 'coach',
+      memberName: name,
+      clientEmail: email,
+      memberEmail: email,
+      coachName: db.trainer?.coachName || 'Coach',
+      text: `🏋️‍♂️ [WORKOUT ASSIGNED] Coach ${db.trainer?.coachName || 'Coach'} has assigned you the training program: "${planName}". Check your Prescribed Workout Program terminal!`,
+      time: timeStr,
+      read: false,
+      createdAt: new Date().toISOString()
+    });
+  }
+
+  saveDB(db);
 
   res.json({
     success: true,
-    message: 'Workout plan assigned to athlete',
+    message: `Workout plan '${planName}' assigned to athlete`,
     workoutPlans: db.trainer.workoutPlans
   });
 });
@@ -454,19 +631,68 @@ router.post('/diets', (req, res) => {
 
 // POST /api/trainer/diets/assign - Assign diet plan to client
 router.post('/diets/assign', (req, res) => {
-  const { dietId, memberId } = req.body;
+  const { dietId, memberId, memberName, memberEmail } = req.body;
   let db = getDB();
   db = ensureTrainerDB(db);
 
-  const diet = db.trainer.dietPlans.find(d => d.id === dietId);
+  const diet = db.trainer.dietPlans.find(d => d.id === dietId || d.name === dietId);
+  const dietName = diet ? diet.name : dietId;
   if (diet) {
     diet.clientsAssigned = (diet.clientsAssigned || 0) + 1;
-    saveDB(db);
   }
+
+  // Resolve target member
+  let targetMember = null;
+  if (memberId || memberEmail || memberName) {
+    targetMember = db.trainer.members.find(m => 
+      (memberId && m.id === memberId) ||
+      (memberEmail && m.email && m.email.toLowerCase() === memberEmail.toLowerCase()) ||
+      (memberName && m.name && m.name.toLowerCase() === memberName.toLowerCase())
+    );
+  }
+
+  if (targetMember) {
+    targetMember.diet = dietName;
+  }
+
+  // Update member in db.users
+  if (Array.isArray(db.users)) {
+    const uIdx = db.users.findIndex(u => 
+      (memberEmail && u.email && u.email.toLowerCase() === memberEmail.toLowerCase()) ||
+      (memberName && u.name && u.name.toLowerCase() === memberName.toLowerCase())
+    );
+    if (uIdx !== -1) {
+      db.users[uIdx].diet = dietName;
+    }
+  }
+
+  // Dispatch email-tagged chat message
+  if (targetMember || memberEmail || memberName) {
+    const email = targetMember?.email || memberEmail || '';
+    const name = targetMember?.name || memberName || 'Athlete';
+    if (!Array.isArray(db.trainer.chatHistory)) db.trainer.chatHistory = [];
+    const now = new Date();
+    const timeStr = now.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) + ', ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    db.trainer.chatHistory.push({
+      id: `c-${Date.now()}`,
+      sender: 'coach',
+      memberName: name,
+      clientEmail: email,
+      memberEmail: email,
+      coachName: db.trainer?.coachName || 'Coach',
+      text: `🥗 [DIET PLAN ASSIGNED] Coach ${db.trainer?.coachName || 'Coach'} has assigned you the nutrition protocol: "${dietName}". Check your Prescribed Diet Plan terminal!`,
+      time: timeStr,
+      read: false,
+      createdAt: new Date().toISOString()
+    });
+  }
+
+  saveDB(db);
 
   res.json({
     success: true,
-    message: 'Diet plan assigned to athlete',
+    message: `Diet plan '${dietName}' assigned to athlete`,
     dietPlans: db.trainer.dietPlans
   });
 });
@@ -488,7 +714,7 @@ router.delete('/diets/:id', (req, res) => {
 });
 
 /**
- * --- 4. SCHEDULE & SESSIONS AGENDA ENDPOINTS ---
+ * --- 4. CALENDAR & AGENDA SCHEDULING ENDPOINTS ---
  */
 
 // GET /api/trainer/schedule - Get sessions agenda
@@ -501,7 +727,7 @@ router.get('/schedule', (req, res) => {
 
 // POST /api/trainer/schedule - Create training session block
 router.post('/schedule', async (req, res) => {
-  const { client, routine, timeBlock, status, shiftCategory } = req.body;
+  const { client, routine, timeBlock, status, shiftCategory, clientEmail, memberEmail } = req.body;
   if (!client || !routine || !timeBlock) {
     return res.status(400).json({ success: false, message: 'Client name, routine, and time block are required' });
   }
@@ -509,9 +735,22 @@ router.post('/schedule', async (req, res) => {
   let db = getDB();
   db = ensureTrainerDB(db);
 
+  // Lookup email if not provided
+  let resolvedEmail = clientEmail || memberEmail || '';
+  if (!resolvedEmail && Array.isArray(db.trainer.members)) {
+    const m = db.trainer.members.find(x => x.name && x.name.toLowerCase() === client.toLowerCase().trim());
+    if (m && m.email) resolvedEmail = m.email;
+  }
+  if (!resolvedEmail && Array.isArray(db.users)) {
+    const u = db.users.find(x => x.name && x.name.toLowerCase() === client.toLowerCase().trim());
+    if (u && u.email) resolvedEmail = u.email;
+  }
+
   const newSession = {
     id: `ag-${Date.now()}`,
     client: client.trim(),
+    clientEmail: resolvedEmail,
+    memberEmail: resolvedEmail,
     routine: routine.trim(),
     timeBlock: timeBlock.trim(),
     shiftCategory: shiftCategory || 'Morning Shift',
@@ -530,6 +769,8 @@ router.post('/schedule', async (req, res) => {
     id: `c-${Date.now()}`,
     sender: 'coach',
     memberName: newSession.client,
+    clientEmail: resolvedEmail,
+    memberEmail: resolvedEmail,
     coachName: db.trainer?.coachName || 'Coach',
     text: `📅 [SCHEDULE DISPATCH] Coaching Session Scheduled for ${newSession.client}: "${newSession.routine}" on ${newSession.timeBlock} (${newSession.shiftCategory}).`,
     time: timeStr,

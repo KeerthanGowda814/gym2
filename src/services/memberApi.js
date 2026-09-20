@@ -174,6 +174,49 @@ export const memberApi = {
     }
   },
 
+  async submitTrainerRequest(requestData) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/member/trainer/request`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(requestData)
+      });
+      if (!res.ok) throw new Error('Failed to submit trainer coaching request');
+      return await res.json();
+    } catch (err) {
+      console.warn('Member API Notice: Failed to submit trainer request.', err.message);
+      return null;
+    }
+  },
+
+  async getTrainerRequestStatus(email, name) {
+    try {
+      const params = [];
+      if (email) params.push(`email=${encodeURIComponent(email)}`);
+      if (name) params.push(`name=${encodeURIComponent(name)}`);
+      const q = params.length > 0 ? `?${params.join('&')}` : '';
+      const res = await fetch(`${API_BASE_URL}/member/trainer/request-status${q}`, { headers: getHeaders() });
+      if (!res.ok) throw new Error('Failed to fetch request status');
+      return await res.json();
+    } catch (err) {
+      return null;
+    }
+  },
+
+  async cancelTrainerRequest(requestId, memberEmail) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/member/trainer/request/cancel`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ requestId, memberEmail })
+      });
+      if (!res.ok) throw new Error('Failed to cancel request');
+      return await res.json();
+    } catch (err) {
+      return null;
+    }
+  },
+
   async getTrainerInfo() {
     try {
       const res = await fetch(`${API_BASE_URL}/member/trainer/info`, { headers: getHeaders() });

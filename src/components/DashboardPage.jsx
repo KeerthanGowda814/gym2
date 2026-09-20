@@ -86,6 +86,15 @@ export default function DashboardPage({ navigate }) {
             if (parsed.profileImage) authUser.profileImage = parsed.profileImage;
           } catch (e) {}
         }
+        
+        // Fetch real profile from backend API to ensure live real name sync
+        if (authUser.role === 'member') {
+          memberApi.getProfile().then(res => {
+            if (res && res.name) {
+              setCurrentUser(prev => prev ? { ...prev, name: res.name, profileImage: res.profileImage || prev.profileImage } : prev);
+            }
+          }).catch(() => {});
+        }
       }
       setCurrentUser(authUser);
     }
@@ -94,23 +103,6 @@ export default function DashboardPage({ navigate }) {
   // Subview states
   const [activeSubView, setActiveSubView] = useState('home');
   const [showUserMenu, setShowUserMenu] = useState(false);
-
-  const handleSwitchRole = (targetRole) => {
-    setShowUserMenu(false);
-    if (targetRole === 'admin') {
-      ApexAuth.authenticateUser('adminmuscle@gmail.com', 'admin', 'System Admin', true);
-      window.location.hash = '#/admin';
-      window.location.reload();
-    } else if (targetRole === 'trainer') {
-      ApexAuth.authenticateUser('trainer@apex.com', 'trainer', 'Coach Marcus Vance', true);
-      window.location.hash = '#/trainer';
-      window.location.reload();
-    } else if (targetRole === 'member') {
-      ApexAuth.authenticateUser('thepcworkshop1@gmail.com', 'member', 'Jeery', true);
-      window.location.hash = '#/dashboard';
-      window.location.reload();
-    }
-  };
 
   // Shared recent activities state (so check-ins in MemberPanel update AdminPanel logs immediately)
   const [activities, setActivities] = useState([]);
@@ -862,7 +854,7 @@ export default function DashboardPage({ navigate }) {
                   <span className="admin-profile-arrow">▼</span>
                 </div>
 
-                {/* Role Switcher Dropdown */}
+                {/* Clean User Profile Dropdown Menu (No Role Switcher) */}
                 {showUserMenu && (
                   <div
                     style={{
@@ -874,86 +866,70 @@ export default function DashboardPage({ navigate }) {
                       border: '1px solid var(--border-color)',
                       borderRadius: '10px',
                       boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-                      padding: '0.6rem 0',
+                      padding: '0.8rem',
                       zIndex: 999
                     }}
                   >
-                    <div style={{ padding: '0.4rem 1rem 0.6rem 1rem', borderBottom: '1px solid var(--border-color)', fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: 800, textTransform: 'uppercase' }}>
-                      Switch Portal View
+                    <div style={{ paddingBottom: '0.6rem', borderBottom: '1px solid var(--border-color)', marginBottom: '0.6rem' }}>
+                      <strong style={{ color: 'var(--text-white)', display: 'block', fontSize: '0.88rem' }}>
+                        {currentUser.name || 'User'}
+                      </strong>
+                      <span style={{ fontSize: '0.74rem', color: 'var(--text-dim)', display: 'block', wordBreak: 'break-all', marginTop: '0.15rem' }}>
+                        {currentUser.email || ''}
+                      </span>
+                      <span style={{ display: 'inline-block', marginTop: '0.4rem', fontSize: '0.68rem', padding: '0.15rem 0.5rem', borderRadius: '4px', background: 'rgba(0, 240, 255, 0.1)', color: 'var(--accent-cyan)', fontWeight: 700, border: '1px solid rgba(0, 240, 255, 0.3)' }}>
+                        {currentUser.role === 'admin' ? 'Club Owner (Admin)' : (currentUser.role === 'trainer' ? 'Personal Coach' : 'Gym Athlete')}
+                      </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleSwitchRole('admin')}
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '0.65rem 1rem',
-                        fontSize: '0.82rem',
-                        fontWeight: 700,
-                        background: currentUser.role === 'admin' ? 'rgba(255, 94, 0, 0.15)' : 'transparent',
-                        color: currentUser.role === 'admin' ? '#ff5e00' : 'var(--text-white)',
-                        border: 'none',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      👑 Admin Portal (Club Owner)
-                    </button>
 
-                    <button
-                      type="button"
-                      onClick={() => handleSwitchRole('trainer')}
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '0.65rem 1rem',
-                        fontSize: '0.82rem',
-                        fontWeight: 700,
-                        background: currentUser.role === 'trainer' ? 'rgba(198, 255, 0, 0.15)' : 'transparent',
-                        color: currentUser.role === 'trainer' ? 'var(--accent-volt)' : 'var(--text-white)',
-                        border: 'none',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      🏋️‍♂️ Trainer Portal (Coach)
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleSwitchRole('member')}
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '0.65rem 1rem',
-                        fontSize: '0.82rem',
-                        fontWeight: 700,
-                        background: currentUser.role === 'member' ? 'rgba(0, 240, 255, 0.15)' : 'transparent',
-                        color: currentUser.role === 'member' ? 'var(--accent-cyan)' : 'var(--text-white)',
-                        border: 'none',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      🏃‍♂️ Athlete Portal (Member)
-                    </button>
-
-                    <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '0.4rem', paddingTop: '0.4rem' }}>
+                    {currentUser.role === 'member' && (
                       <button
                         type="button"
-                        onClick={handleLogout}
+                        onClick={() => {
+                          setActiveSubView('profile');
+                          setShowUserMenu(false);
+                        }}
                         style={{
                           width: '100%',
                           textAlign: 'left',
-                          padding: '0.5rem 1rem',
-                          fontSize: '0.8rem',
-                          color: '#ff3e6c',
+                          padding: '0.55rem 0.6rem',
+                          fontSize: '0.82rem',
+                          color: 'var(--text-white)',
                           background: 'transparent',
                           border: 'none',
+                          borderRadius: '6px',
                           cursor: 'pointer',
-                          fontWeight: 700
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          marginBottom: '0.3rem'
                         }}
                       >
-                        🚪 Logout
+                        👤 View &amp; Edit Profile
                       </button>
-                    </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '0.55rem 0.6rem',
+                        fontSize: '0.82rem',
+                        color: '#ff3e6c',
+                        background: 'rgba(255, 62, 108, 0.08)',
+                        border: '1px solid rgba(255, 62, 108, 0.2)',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        fontWeight: 700
+                      }}
+                    >
+                      🚪 Sign Out
+                    </button>
                   </div>
                 )}
               </div>

@@ -375,10 +375,7 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
           // Assigned real trainer if taken by member
           let memberTrainer = u.trainer || u.coachingTrainer || u.assignedTrainer || 'No Trainer Assigned';
 
-          let memName = u.name || u.email.split('@')[0];
-          if (u.email && u.email.toLowerCase() === 'thepcworkshop1@gmail.com' && (memName === 'The PC Workshop' || memName === 'thepcworkshop1')) {
-            memName = 'Jeery';
-          }
+          let memName = u.name || (u.email ? u.email.split('@')[0] : 'Member');
 
           combinedMap.set(u.email.toLowerCase(), {
             id: 'reg-' + index + '-' + u.email,
@@ -543,10 +540,7 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
         const result = await res.json();
         if (result.success && result.data) {
           const dbMembers = result.data.map((u, index) => {
-            let rawName = u.name || u.email.split('@')[0];
-            if (u.email && u.email.toLowerCase() === 'thepcworkshop1@gmail.com' && (rawName === 'The PC Workshop' || rawName === 'thepcworkshop1')) {
-              rawName = 'Jeery';
-            }
+            let rawName = u.name || (u.email ? u.email.split('@')[0] : 'Member');
             return {
               id: u.userId || `db-${index}-${u.email}`,
               name: rawName,
@@ -589,11 +583,135 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
     setMembersList(getRegisteredOnlyMembers());
   };
 
+  // Trainer Registration Applications & Certificate Preview States
+  const [trainerApplications, setTrainerApplications] = useState([]);
+  const [selectedTrainerCertModal, setSelectedTrainerCertModal] = useState(null);
+
+  const fetchTrainerApplications = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/auth/trainer-applications', {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('apex_auth_token') ? { Authorization: `Bearer ${localStorage.getItem('apex_auth_token')}` } : {})
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data)) {
+          setTrainerApplications(data.data);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("Failed fetching trainer applications:", err.message);
+    }
+
+    // Local fallback check
+    const localUsers = JSON.parse(localStorage.getItem('apex_registered_users')) || [];
+    const pendingTrainers = localUsers.filter(u => u.role === 'trainer' && (u.status === 'pending_approval' || u.isApproved === false || u.status === 'pending'));
+    setTrainerApplications(pendingTrainers);
+  };
+
+  const handleApproveTrainerApp = async (app) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/auth/trainer-applications/${encodeURIComponent(app.id || app.userId || app.email)}/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('apex_auth_token') ? { Authorization: `Bearer ${localStorage.getItem('apex_auth_token')}` } : {})
+        }
+      });
+
+      // Update local storage registered users as well
+      const localUsers = JSON.parse(localStorage.getItem('apex_registered_users')) || [];
+      const updated = localUsers.map(u => {
+        if (u.email && app.email && u.email.toLowerCase() === app.email.toLowerCase()) {
+          return { ...u, status: 'Active', isApproved: true };
+        }
+        return u;
+      });
+      localStorage.setItem('apex_registered_users', JSON.stringify(updated));
+
+      // Refresh applications & trainers
+      await fetchTrainerApplications();
+      await fetchDbTrainers();
+      window.dispatchEvent(new Event('storage'));
+
+      if (Swal) {
+        Swal.fire({
+          icon: 'success',
+          title: 'Trainer Application Approved! ✅',
+          html: `<div style="text-align:center;color:#fff;">
+            <p><strong>Coach ${app.name}</strong> (${app.email}) has been certified & approved!</p>
+            <p style="font-size:0.85rem;color:var(--accent-volt);margin-top:0.5rem;">
+              The coach can now immediately sign in to their Trainer Portal.
+            </p>
+          </div>`
+        });
+      }
+      if (addActivity) {
+        addActivity(`Trainer Certified: Admin approved Coach ${app.name} (${app.specialty || 'General'})`, 'volt');
+      }
+    } catch (err) {
+      alert("Failed to approve trainer application: " + err.message);
+    }
+  };
+
+  const handleRejectTrainerApp = async (app) => {
+    const { value: reason } = await (Swal ? Swal.fire({
+      title: `Reject Application for ${app.name}?`,
+      input: 'text',
+      inputLabel: 'Reason for rejection (optional)',
+      inputPlaceholder: 'e.g. Incomplete certification details or unverified credentials',
+      showCancelButton: true,
+      confirmButtonColor: '#ff3e6c',
+      cancelButtonColor: '#444',
+      confirmButtonText: 'Confirm Rejection'
+    }) : { value: prompt('Reason for rejection:') });
+
+    if (reason === undefined && Swal) return; // user cancelled
+
+    try {
+      await fetch(`http://localhost:5000/api/auth/trainer-applications/${encodeURIComponent(app.id || app.userId || app.email)}/reject`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('apex_auth_token') ? { Authorization: `Bearer ${localStorage.getItem('apex_auth_token')}` } : {})
+        },
+        body: JSON.stringify({ reason })
+      });
+
+      const localUsers = JSON.parse(localStorage.getItem('apex_registered_users')) || [];
+      const updated = localUsers.map(u => {
+        if (u.email && app.email && u.email.toLowerCase() === app.email.toLowerCase()) {
+          return { ...u, status: 'Rejected', isApproved: false };
+        }
+        return u;
+      });
+      localStorage.setItem('apex_registered_users', JSON.stringify(updated));
+
+      await fetchTrainerApplications();
+      await fetchDbTrainers();
+      window.dispatchEvent(new Event('storage'));
+
+      if (Swal) {
+        Swal.fire({
+          icon: 'info',
+          title: 'Application Rejected',
+          text: `Application for ${app.name} has been rejected.`
+        });
+      }
+    } catch (err) {
+      alert("Failed to reject trainer application: " + err.message);
+    }
+  };
+
   // Keep registered member and trainer names in sync live
   useEffect(() => {
     const syncRegisteredUsers = () => {
       fetchDbMembers();
       fetchDbTrainers();
+      fetchTrainerApplications();
     };
 
     syncRegisteredUsers();
@@ -4588,6 +4706,135 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
       {/* 7. ADMIN TRAINER DIRECTORY VIEW */}
       {activeView === 'trainers' && (
         <div className="admin-sub-view" id="admin-subview-trainers" style={{ display: 'block' }}>
+          
+          {/* PENDING TRAINER REGISTRATION APPLICATIONS & CERTIFICATES */}
+          {(() => {
+            const pendingApps = trainerApplications.filter(a => a.status === 'pending_approval' || a.isApproved === false || a.status === 'pending' || a.status === 'Pending');
+            return (
+              <div className="db-card" style={{ marginBottom: '1.8rem', border: pendingApps.length > 0 ? '1px solid var(--accent-volt)' : '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.8rem', marginBottom: '1rem' }}>
+                  <div>
+                    <h4 style={{ textTransform: 'uppercase', fontSize: '1.1rem', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <span>📜 Trainer Registration Applications</span>
+                      {pendingApps.length > 0 && (
+                        <span style={{ fontSize: '0.72rem', background: 'var(--accent-volt)', color: '#000', padding: '0.2rem 0.6rem', borderRadius: '4px', fontWeight: 800 }}>
+                          {pendingApps.length} PENDING REVIEW
+                        </span>
+                      )}
+                    </h4>
+                    <p className="card-subtitle" style={{ margin: '0.3rem 0 0 0', fontSize: '0.8rem' }}>
+                      Review candidate credentials, inspect uploaded physical fitness certificates, and grant staff login clearance
+                    </p>
+                  </div>
+                  <button
+                    onClick={fetchTrainerApplications}
+                    className="outline-btn"
+                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', borderColor: 'var(--border-color)', color: 'var(--text-white)' }}
+                  >
+                    🔄 Refresh Applications
+                  </button>
+                </div>
+
+                {pendingApps.length === 0 ? (
+                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '1.4rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                    ✅ <strong>All Trainer Applications Processed!</strong> No pending applicants waiting for admin verification.
+                  </div>
+                ) : (
+                  <div className="table-wrapper">
+                    <table className="db-table">
+                      <thead>
+                        <tr>
+                          <th>Applicant Name & Email</th>
+                          <th>Specialization</th>
+                          <th>Certifications & Bio</th>
+                          <th>Uploaded Certificate</th>
+                          <th>Submission Date</th>
+                          <th style={{ textAlign: 'right' }}>Admin Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pendingApps.map((app, idx) => (
+                          <tr key={app.id || app.email || idx}>
+                            <td>
+                              <div style={{ fontWeight: 800, color: 'var(--text-white)' }}>{app.name}</div>
+                              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{app.email}</div>
+                              {app.phone && <div style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)' }}>📞 {app.phone}</div>}
+                            </td>
+                            <td>
+                              <span style={{
+                                padding: '0.2rem 0.6rem',
+                                borderRadius: '4px',
+                                fontSize: '0.72rem',
+                                fontWeight: 800,
+                                textTransform: 'uppercase',
+                                background: 'rgba(0, 240, 255, 0.1)',
+                                color: 'var(--accent-cyan)',
+                                border: '1px solid rgba(0, 240, 255, 0.3)'
+                              }}>
+                                {app.specialty || 'Strength & Conditioning'}
+                              </span>
+                            </td>
+                            <td>
+                              <div style={{ fontSize: '0.82rem', color: 'var(--text-white)', maxWidth: '240px', lineHeight: 1.3 }}>
+                                {app.certifications || 'Verified Fitness Coach'}
+                              </div>
+                            </td>
+                            <td>
+                              {app.certificateFile ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedTrainerCertModal(app)}
+                                  className="outline-btn"
+                                  style={{
+                                    padding: '0.35rem 0.75rem',
+                                    fontSize: '0.75rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.4rem',
+                                    color: '#00ff66',
+                                    borderColor: '#00ff66',
+                                    background: 'rgba(0, 255, 102, 0.05)'
+                                  }}
+                                >
+                                  <span>👁️ View Certificate</span>
+                                </button>
+                              ) : (
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>No File Attached</span>
+                              )}
+                            </td>
+                            <td>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                {app.createdAt ? new Date(app.createdAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : 'Recently'}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
+                              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                                <button
+                                  onClick={() => handleApproveTrainerApp(app)}
+                                  className="glow-btn"
+                                  style={{ padding: '0.4rem 0.9rem', fontSize: '0.75rem', fontWeight: 800, background: '#00ff66', color: '#000', cursor: 'pointer' }}
+                                >
+                                  ✓ Approve
+                                </button>
+                                <button
+                                  onClick={() => handleRejectTrainerApp(app)}
+                                  className="outline-btn"
+                                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', borderColor: '#ff3e6c', color: '#ff3e6c', cursor: 'pointer' }}
+                                >
+                                  ✕ Reject
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           <div className="db-card flex-card">
             <div className="card-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
               <div>
@@ -4832,7 +5079,7 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                       const clientCount = assignedMembers.length;
                       const totalEarnings = getEarnings(t);
 
-                      const formattedClientNames = assignedMembers.map(m => (m.name === 'The PC Workshop' ? 'Jeery' : m.name)).join(', ');
+                      const formattedClientNames = assignedMembers.map(m => m.name || 'Member').join(', ');
 
                       return (
                         <tr key={idx}>
@@ -5425,6 +5672,130 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* TRAINER CERTIFICATE PREVIEW MODAL */}
+      {selectedTrainerCertModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(0, 0, 0, 0.88)',
+          backdropFilter: 'blur(10px)',
+          zIndex: 999999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1.5rem'
+        }}>
+          <div style={{
+            background: 'var(--bg-card, #121319)',
+            border: '1px solid var(--accent-volt)',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '750px',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.85)',
+            color: 'var(--text-white)'
+          }}>
+            {/* Modal Header */}
+            <div style={{ padding: '1.2rem 1.6rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', textTransform: 'uppercase', color: 'var(--accent-volt)', fontWeight: 800 }}>
+                  📜 Trainer Fitness Certificate Review
+                </h3>
+                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  Applicant: <strong>{selectedTrainerCertModal.name}</strong> ({selectedTrainerCertModal.email})
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedTrainerCertModal(null)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.6rem', cursor: 'pointer' }}
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Modal Content - File View */}
+            <div style={{ padding: '1.5rem', overflowY: 'auto', flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '320px', background: '#0a0a0f' }}>
+              {selectedTrainerCertModal.certificateFile ? (
+                selectedTrainerCertModal.certificateFile.startsWith('data:image/') || selectedTrainerCertModal.certificateFile.includes('image') ? (
+                  <div style={{ textAlign: 'center', width: '100%' }}>
+                    <img
+                      src={selectedTrainerCertModal.certificateFile}
+                      alt={`Certificate of ${selectedTrainerCertModal.name}`}
+                      style={{ maxWidth: '100%', maxHeight: '55vh', objectFit: 'contain', borderRadius: '8px', border: '1px solid var(--border-color)', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}
+                    />
+                    <div style={{ marginTop: '0.8rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      📄 {selectedTrainerCertModal.certificateName || 'Certified Fitness Degree Document'}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ width: '100%', height: '55vh' }}>
+                    <iframe
+                      src={selectedTrainerCertModal.certificateFile}
+                      title={`Certificate of ${selectedTrainerCertModal.name}`}
+                      style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px', background: '#fff' }}
+                    />
+                  </div>
+                )
+              ) : (
+                <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>
+                  ⚠️ No certificate file uploaded for this application.
+                </div>
+              )}
+
+              {/* Applicant Summary */}
+              <div style={{ width: '100%', marginTop: '1.2rem', padding: '0.9rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', fontSize: '0.82rem' }}>
+                <div><strong>Coaching Specialization:</strong> {selectedTrainerCertModal.specialty || 'Strength & Conditioning'}</div>
+                <div><strong>Qualifications:</strong> {selectedTrainerCertModal.certifications || 'Verified Professional'}</div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ padding: '1rem 1.6rem', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)' }}>
+              <button
+                type="button"
+                onClick={() => setSelectedTrainerCertModal(null)}
+                style={{ padding: '0.5rem 1.2rem', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-muted)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
+              >
+                Close Preview
+              </button>
+
+              <div style={{ display: 'flex', gap: '0.8rem' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const app = selectedTrainerCertModal;
+                    setSelectedTrainerCertModal(null);
+                    handleRejectTrainerApp(app);
+                  }}
+                  className="outline-btn"
+                  style={{ padding: '0.55rem 1.2rem', fontSize: '0.85rem', borderColor: '#ff3e6c', color: '#ff3e6c', cursor: 'pointer' }}
+                >
+                  ✕ Reject Application
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const app = selectedTrainerCertModal;
+                    setSelectedTrainerCertModal(null);
+                    handleApproveTrainerApp(app);
+                  }}
+                  className="glow-btn"
+                  style={{ padding: '0.55rem 1.4rem', fontSize: '0.85rem', fontWeight: 800, background: '#00ff66', color: '#000', cursor: 'pointer' }}
+                >
+                  ✓ Approve & Certify Coach
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
