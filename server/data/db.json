@@ -1,13 +1,13 @@
 {
   "member": {
-    "id": "USR-1787813020170",
-    "name": "Jeery",
-    "email": "thepcworkshop1@gmail.com",
+    "id": "USR-1789542846975",
+    "name": "Keerthan",
+    "email": "gkeerthan583@gmail.com",
     "role": "member",
-    "membershipTier": "Muscle Core",
+    "membershipTier": "Muscle Core (Monthly)",
     "autoRenew": true,
     "daysLeft": 30,
-    "expiryDate": "October 12, 2026",
+    "expiryDate": "October 17, 2026",
     "nextChargeDate": "August 10, 2026",
     "renewed": true,
     "attendanceStreak": 14,
@@ -27,9 +27,13 @@
     "bio": "Dedicated athlete training 5 days a week. Focusing on progressive overload and powerlifting metrics.",
     "profileImage": null,
     "selectedTrainer": {
-      "id": "TRN-MARCUS",
-      "name": "Coach Marcus Vance",
-      "assignedDate": "Sep 10, 2026"
+      "id": "TRN-danush@gmail.com",
+      "name": "Coach danush",
+      "email": "coach@apex.com",
+      "specialty": "Strength & Conditioning",
+      "credentials": "CSCS Certified",
+      "bio": "",
+      "assignedDate": "Sep 17, 2026"
     }
   },
   "workouts": [
@@ -73,6 +77,163 @@
     }
   },
   "invoices": [
+    {
+      "id": "MH-RCP-2026-669487",
+      "date": "Sep 17, 2026",
+      "desc": "Hire Coach: Coach danush (1-Month Personal Coaching)",
+      "amount": "₹5,000",
+      "status": "Paid",
+      "userEmail": "rahul@gmail.com",
+      "receiptNumber": "MH-RCP-2026-669487",
+      "category": "trainer_booking",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)"
+    },
+    {
+      "id": "MH-RCP-2026-592222",
+      "date": "Sep 17, 2026",
+      "desc": "Hire Coach: Coach shravan (1-Month Personal Coaching)",
+      "amount": "₹5,000",
+      "status": "Paid",
+      "userEmail": "sameeksha.mca.2024@pim.ac.in",
+      "receiptNumber": "MH-RCP-2026-592222",
+      "category": "trainer_booking",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)"
+    },
+    {
+      "id": "MH-RCP-2026-366610",
+      "date": "Sep 17, 2026",
+      "desc": "Muscle Core (Monthly) Pass Subscription",
+      "amount": "₹800",
+      "status": "Paid",
+      "userEmail": "sameeksha.mca.2024@pim.ac.in",
+      "receiptNumber": "MH-RCP-2026-366610",
+      "category": "membership",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)"
+    },
+    {
+      "id": "MH-RCP-2026-633069",
+      "date": "Sep 16, 2026",
+      "desc": "Muscle Elite (Yearly) Pass Subscription",
+      "amount": "₹7,500",
+      "status": "Paid",
+      "userEmail": "siddi@gmail.com",
+      "receiptNumber": "MH-RCP-2026-633069",
+      "category": "membership",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)"
+    },
+    {
+      "id": "MH-RCP-2026-329198",
+      "txId": "pay_Tck1R2wZzw87Lj",
+      "receiptNumber": "MH-RCP-2026-329198",
+      "plan": "Supplements: ...",
+      "desc": "Supp Store: ...",
+      "amount": "₹0",
+      "numAmount": 0,
+      "status": "Paid",
+      "paymentMethod": "Online Payment (Razorpay)",
+      "userEmail": "manish@gmail.com",
+      "userName": "manish",
+      "date": "Sep 16, 2026, 07:58 PM"
+    },
+    {
+      "id": "MH-RCP-2026-329198",
+      "date": "Sep 16, 2026",
+      "desc": "MuScLe HuB Supplement Store Order",
+      "amount": "₹1,710",
+      "status": "Paid",
+      "userEmail": "manish@gmail.com",
+      "receiptNumber": "MH-RCP-2026-329198",
+      "category": "supplement_order",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)"
+    },
+    {
+      "id": "MH-RCP-2026-328362",
+      "date": "Sep 16, 2026",
+      "desc": "Muscle Pro (6-Month) Pass Subscription",
+      "amount": "₹3,500",
+      "status": "Paid",
+      "userEmail": "manish@gmail.com",
+      "receiptNumber": "MH-RCP-2026-328362",
+      "category": "membership",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)"
+    },
+    {
+      "id": "MH-RCP-2026-809702",
+      "date": "Sep 16, 2026",
+      "desc": "Hire Coach: Coach vishwambhara (1-Month Personal Coaching)",
+      "amount": "₹5,000",
+      "status": "Paid",
+      "userEmail": "manish@gmail.com",
+      "receiptNumber": "MH-RCP-2026-809702",
+      "category": "trainer_booking",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)"
+    },
+    {
+      "id": "MH-RCP-2026-154185",
+      "date": "Sep 16, 2026",
+      "desc": "Muscle Core (Monthly) Pass Subscription",
+      "amount": "₹800",
+      "status": "Paid",
+      "userEmail": "gkeerthan583@gmail.com",
+      "receiptNumber": "MH-RCP-2026-154185",
+      "category": "membership",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)"
+    },
+    {
+      "id": "MH-RCP-2026-725013",
+      "date": "Sep 16, 2026",
+      "desc": "Hire Coach: Coach vishwambhara (1-Month Personal Coaching)",
+      "amount": "₹5,000",
+      "status": "Paid",
+      "userEmail": "gkeerthan583@gmail.com",
+      "receiptNumber": "MH-RCP-2026-725013",
+      "category": "trainer_booking",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)"
+    },
+    {
+      "id": "MH-RCP-2026-744467",
+      "date": "Sep 16, 2026",
+      "desc": "Hire Coach: Coach sameksha (1-Month Personal Coaching)",
+      "amount": "₹5,000",
+      "status": "Paid",
+      "userEmail": "darshan.mca.2024@pim.ac.in",
+      "receiptNumber": "MH-RCP-2026-744467",
+      "category": "trainer_booking",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)"
+    },
+    {
+      "id": "MH-RCP-2026-933095",
+      "date": "Sep 16, 2026",
+      "desc": "Muscle Elite (Yearly) Pass Subscription",
+      "amount": "₹7,500",
+      "status": "Paid",
+      "userEmail": "darshan.mca.2024@pim.ac.in",
+      "receiptNumber": "MH-RCP-2026-933095",
+      "category": "membership",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)"
+    },
+    {
+      "id": "MH-RCP-2026-496457",
+      "date": "Sep 16, 2026",
+      "desc": "Muscle Core (Monthly) Pass Subscription",
+      "amount": "₹800",
+      "status": "Paid",
+      "userEmail": "gkeerthan583@gmail.com",
+      "receiptNumber": "MH-RCP-2026-496457",
+      "category": "membership",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)"
+    },
+    {
+      "id": "MH-RCP-2026-954386",
+      "date": "Sep 16, 2026",
+      "desc": "Hire Coach: Coach Vishwambhara (1-Month Personal Coaching)",
+      "amount": "₹5,000",
+      "status": "Paid",
+      "userEmail": "gkeerthan583@gmail.com",
+      "receiptNumber": "MH-RCP-2026-954386",
+      "category": "trainer_booking",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)"
+    },
     {
       "txId": "TX-9315",
       "userEmail": "thepcworkshop1@gmail.com",
@@ -137,10 +298,10 @@
     }
   ],
   "trainer": {
-    "coachName": "Coach Marcus Vance",
-    "credentials": "CSCS, M.Sc. Sports Physiology",
-    "specialty": "Barbell Biomechanics & Powerlifting",
-    "bio": "Marcus holds a Master of Science in Sports Physiology and has coached Olympic powerlifters for 8+ years. Specializes in barbell biomechanics, hypertrophy, and periodized training blocks.",
+    "coachName": "danush",
+    "credentials": "4",
+    "specialty": "strength",
+    "bio": "Dedicated certified trainer focused on progressive overload, form biomechanics, and personalized fitness goals.",
     "bookings": [
       {
         "id": "b-101",
@@ -203,25 +364,379 @@
         "time": "Sep 12, 12:12 PM",
         "read": false,
         "createdAt": "2026-09-12T06:42:42.954Z"
+      },
+      {
+        "id": "c-1789543901841",
+        "memberName": "Coach Vishwambhara",
+        "clientEmail": "gkeerthan583@gmail.com",
+        "memberEmail": "gkeerthan583@gmail.com",
+        "coachName": "Coach Vishwambhara",
+        "sender": "member",
+        "text": "Hi Coach Coach Vishwambhara! I just booked my coaching package. Looking forward to our sessions!",
+        "time": "Sep 16, 01:01 pm",
+        "read": true,
+        "createdAt": "2026-09-16T07:31:41.841Z"
+      },
+      {
+        "id": "c-1789549895902",
+        "memberName": "Coach sameksha",
+        "clientEmail": "darshan.mca.2024@pim.ac.in",
+        "memberEmail": "darshan.mca.2024@pim.ac.in",
+        "coachName": "Coach sameksha",
+        "sender": "member",
+        "text": "Hi Coach Coach sameksha! I just booked my coaching package. Looking forward to our sessions!",
+        "time": "Sep 16, 02:41 pm",
+        "read": false,
+        "createdAt": "2026-09-16T09:11:35.902Z"
+      },
+      {
+        "id": "c-1789549901223",
+        "memberName": "darshan",
+        "clientEmail": "darshan.mca.2024@pim.ac.in",
+        "memberEmail": "darshan.mca.2024@pim.ac.in",
+        "coachName": "Coach sameksha",
+        "sender": "member",
+        "text": "hloo",
+        "time": "Sep 16, 02:41 pm",
+        "read": false,
+        "createdAt": "2026-09-16T09:11:41.223Z"
+      },
+      {
+        "id": "c-1789565008283",
+        "memberName": "Coach vishwambhara",
+        "clientEmail": "gkeerthan583@gmail.com",
+        "memberEmail": "gkeerthan583@gmail.com",
+        "coachName": "Coach vishwambhara",
+        "sender": "member",
+        "text": "Hi Coach Coach vishwambhara! I just booked my coaching package. Looking forward to our sessions!",
+        "time": "Sep 16, 06:53 pm",
+        "read": true,
+        "createdAt": "2026-09-16T13:23:28.283Z"
+      },
+      {
+        "id": "c-1789565068864",
+        "memberName": "Ethan Hunt",
+        "clientEmail": "ethan.hunt@apex.com",
+        "coachName": "vishwambhara",
+        "sender": "coach",
+        "text": "⚠️ [SESSION CANCELLED] Session \"Heavy Squats & Lower Body\" (09:00 AM - 10:30 AM) was cancelled by Coach vishwambhara.",
+        "time": "Sep 16, 06:54 pm",
+        "read": false,
+        "createdAt": "2026-09-16T13:24:28.864Z"
+      },
+      {
+        "id": "c-1789565127969",
+        "memberName": "keerthan",
+        "clientEmail": "gkeerthan583@gmail.com",
+        "coachName": "vishwambhara",
+        "sender": "coach",
+        "text": "hello keerthan",
+        "time": "Sep 16, 06:55 pm",
+        "read": false,
+        "createdAt": "2026-09-16T13:25:27.969Z"
+      },
+      {
+        "id": "c-1789565211143",
+        "memberName": "keerthan",
+        "clientEmail": "gkeerthan583@gmail.com",
+        "coachName": "vishwambhara",
+        "sender": "coach",
+        "text": "🏋️‍♂️ [WORKOUT ASSIGNED] Coach vishwambhara has assigned you the training program: \"Hypertrophy Upper/Lower Split\" (6 weeks). Check your Prescribed Workout Program terminal!",
+        "time": "Sep 16, 06:56 pm",
+        "read": false,
+        "createdAt": "2026-09-16T13:26:51.143Z"
+      },
+      {
+        "id": "c-1789565233178",
+        "memberName": "keerthan",
+        "clientEmail": "gkeerthan583@gmail.com",
+        "coachName": "vishwambhara",
+        "sender": "coach",
+        "text": "🥗 [DIET PLAN ASSIGNED] Coach vishwambhara has assigned you the nutrition protocol: \"Competition Cutting Macro Protocol\" (2,100 kcal). Check your Prescribed Diet Plan terminal!",
+        "time": "Sep 16, 06:57 pm",
+        "read": false,
+        "createdAt": "2026-09-16T13:27:13.178Z"
+      },
+      {
+        "id": "c-1789565244652",
+        "memberName": "Sarah Connor",
+        "clientEmail": "sarah.c@apex.com",
+        "coachName": "vishwambhara",
+        "sender": "coach",
+        "text": "✅ [SESSION COMPLETED] Coach vishwambhara has marked your session \"HIIT Conditioning & Core\" (11:00 AM - 12:00 PM) as Completed! Great job! 💪",
+        "time": "Sep 16, 06:57 pm",
+        "read": false,
+        "createdAt": "2026-09-16T13:27:24.652Z"
+      },
+      {
+        "id": "c-1789565280750",
+        "sender": "coach",
+        "memberName": "Jeery",
+        "coachName": "Coach Marcus Vance",
+        "text": "📅 [SCHEDULE DISPATCH] Coaching Session Scheduled for Jeery: \"Hypertrophy Upper/Lower Split\" on Today 09:00 AM (Morning Shift).",
+        "time": "Sep 16, 06:58 pm",
+        "read": false,
+        "createdAt": "2026-09-16T13:28:00.750Z"
+      },
+      {
+        "id": "c-1789565280804",
+        "memberName": "Jeery",
+        "clientEmail": "thepcworkshop1@gmail.com",
+        "coachName": "vishwambhara",
+        "sender": "coach",
+        "text": "📅 [SCHEDULE DISPATCH] Coach vishwambhara scheduled session for Jeery: \"Hypertrophy Upper/Lower Split\" on Today 09:00 AM (Morning Shift). Check your Schedule & Trainer tab!",
+        "time": "Sep 16, 06:58 pm",
+        "read": false,
+        "createdAt": "2026-09-16T13:28:00.804Z"
+      },
+      {
+        "id": "c-1789565347479",
+        "memberName": "Keerthan",
+        "clientEmail": "gkeerthan583@gmail.com",
+        "memberEmail": "gkeerthan583@gmail.com",
+        "coachName": "Coach vishwambhara",
+        "sender": "member",
+        "text": "hloo sir",
+        "time": "Sep 16, 06:59 pm",
+        "read": true,
+        "createdAt": "2026-09-16T13:29:07.479Z"
+      },
+      {
+        "id": "c-1789566120676",
+        "sender": "coach",
+        "memberName": "Jeery",
+        "coachName": "Coach Marcus Vance",
+        "text": "📅 [SCHEDULE DISPATCH] Coaching Session Scheduled for Jeery: \"Powerlifting Peak Block\" on Today 06:00 AM (Morning Shift).",
+        "time": "Sep 16, 07:12 pm",
+        "read": false,
+        "createdAt": "2026-09-16T13:42:00.676Z"
+      },
+      {
+        "id": "c-1789566120733",
+        "memberName": "Jeery",
+        "clientEmail": "thepcworkshop1@gmail.com",
+        "coachName": "vishwambhara",
+        "sender": "coach",
+        "text": "📅 [SCHEDULE DISPATCH] Coach vishwambhara scheduled session for Jeery: \"Powerlifting Peak Block\" on Today 06:00 AM (Morning Shift). Check your Schedule & Trainer tab!",
+        "time": "Sep 16, 07:12 pm",
+        "read": false,
+        "createdAt": "2026-09-16T13:42:00.733Z"
+      },
+      {
+        "id": "c-1789566146448",
+        "sender": "coach",
+        "memberName": "keerthan",
+        "coachName": "Coach Marcus Vance",
+        "text": "📅 [SCHEDULE DISPATCH] Coaching Session Scheduled for keerthan: \"Hypertrophy Split Alpha (Upper/Lower)\" on Today 07:00 AM (Morning Shift).",
+        "time": "Sep 16, 07:12 pm",
+        "read": false,
+        "createdAt": "2026-09-16T13:42:26.448Z"
+      },
+      {
+        "id": "c-1789566146522",
+        "memberName": "keerthan",
+        "clientEmail": "gkeerthan583@gmail.com",
+        "coachName": "vishwambhara",
+        "sender": "coach",
+        "text": "📅 [SCHEDULE DISPATCH] Coach vishwambhara scheduled session for keerthan: \"Hypertrophy Split Alpha (Upper/Lower)\" on Today 07:00 AM (Morning Shift). Check your Schedule & Trainer tab!",
+        "time": "Sep 16, 07:12 pm",
+        "read": false,
+        "createdAt": "2026-09-16T13:42:26.522Z"
+      },
+      {
+        "id": "c-1789566159130",
+        "memberName": "Jeery",
+        "clientEmail": "thepcworkshop1@gmail.com",
+        "coachName": "vishwambhara",
+        "sender": "coach",
+        "text": "⚠️ [SESSION CANCELLED] Session \"Hypertrophy Upper/Lower Split\" (Today 09:00 AM) was cancelled by Coach vishwambhara.",
+        "time": "Sep 16, 07:12 pm",
+        "read": false,
+        "createdAt": "2026-09-16T13:42:39.130Z"
+      },
+      {
+        "id": "c-1789566163689",
+        "memberName": "Jeery",
+        "clientEmail": "thepcworkshop1@gmail.com",
+        "coachName": "vishwambhara",
+        "sender": "coach",
+        "text": "⚠️ [SESSION CANCELLED] Session \"Powerlifting Peak Block\" (Today 06:00 AM) was cancelled by Coach vishwambhara.",
+        "time": "Sep 16, 07:12 pm",
+        "read": false,
+        "createdAt": "2026-09-16T13:42:43.689Z"
+      },
+      {
+        "id": "c-1789566242852",
+        "memberName": "Jeery",
+        "clientEmail": "thepcworkshop1@gmail.com",
+        "coachName": "vishwambhara",
+        "sender": "coach",
+        "text": "⚠️ [SESSION CANCELLED] Session \"Powerlifting Peak Block\" (Today 06:00 AM) was cancelled by Coach vishwambhara.",
+        "time": "Sep 16, 07:14 pm",
+        "read": false,
+        "createdAt": "2026-09-16T13:44:02.852Z"
+      },
+      {
+        "id": "msg-1789566342337",
+        "sender": "coach",
+        "memberName": "Jeery",
+        "clientEmail": "thepcworkshop1@gmail.com",
+        "coachName": "vishwambhara",
+        "text": "🔔 Coaching Renewal Reminder: Hi Jeery! Your personal coaching plan with Coach vishwambhara expires in 28 days. Please renew your subscription to maintain uninterrupted coaching and workouts.",
+        "time": "07:15 PM",
+        "read": false,
+        "createdAt": "2026-09-16T13:45:42.338Z"
+      },
+      {
+        "id": "msg-1789566355285",
+        "sender": "coach",
+        "memberName": "keerthan",
+        "clientEmail": "gkeerthan583@gmail.com",
+        "coachName": "vishwambhara",
+        "text": "🔔 Coaching Renewal Reminder: Hi keerthan! Your personal coaching plan with Coach vishwambhara expires in 30 days. Please renew your subscription to maintain uninterrupted coaching and workouts.",
+        "time": "07:15 PM",
+        "read": false,
+        "createdAt": "2026-09-16T13:45:55.286Z"
+      },
+      {
+        "id": "c-1789620934572",
+        "memberName": "Coach shravan",
+        "clientEmail": "sameeksha.mca.2024@pim.ac.in",
+        "memberEmail": "sameeksha.mca.2024@pim.ac.in",
+        "coachName": "Coach shravan",
+        "sender": "member",
+        "text": "Hi Coach Coach shravan! I just booked my coaching package. Looking forward to our sessions!",
+        "time": "Sep 17, 10:25 am",
+        "read": true,
+        "createdAt": "2026-09-17T04:55:34.572Z"
+      },
+      {
+        "id": "c-1789625019090",
+        "memberName": "keerthan",
+        "clientEmail": "gkeerthan583@gmail.com",
+        "coachName": "danush",
+        "sender": "coach",
+        "text": "⚠️ [SESSION CANCELLED] Session \"Hypertrophy Split Alpha (Upper/Lower)\" (Today 07:00 AM) was cancelled by Coach danush.",
+        "time": "Sep 17, 11:33 am",
+        "read": false,
+        "createdAt": "2026-09-17T06:03:39.091Z"
+      },
+      {
+        "id": "c-1789625067882",
+        "memberName": "Sameeksha",
+        "clientEmail": "sameeksha.mca.2024@pim.ac.in",
+        "coachName": "danush",
+        "sender": "coach",
+        "text": "hloo",
+        "time": "Sep 17, 11:34 am",
+        "read": false,
+        "createdAt": "2026-09-17T06:04:27.882Z"
+      },
+      {
+        "id": "c-1789625106431",
+        "memberName": "Sameeksha",
+        "clientEmail": "sameeksha.mca.2024@pim.ac.in",
+        "memberEmail": "sameeksha.mca.2024@pim.ac.in",
+        "coachName": "Coach danush",
+        "sender": "member",
+        "text": "hiii",
+        "time": "Sep 17, 11:35 am",
+        "read": true,
+        "createdAt": "2026-09-17T06:05:06.431Z"
+      },
+      {
+        "id": "c-1789625110024",
+        "memberName": "Sameeksha",
+        "clientEmail": "sameeksha.mca.2024@pim.ac.in",
+        "memberEmail": "sameeksha.mca.2024@pim.ac.in",
+        "coachName": "Coach danush",
+        "sender": "member",
+        "text": "hhh",
+        "time": "Sep 17, 11:35 am",
+        "read": true,
+        "createdAt": "2026-09-17T06:05:10.024Z"
+      },
+      {
+        "id": "c-1789625178709",
+        "memberName": "Sameeksha",
+        "clientEmail": "sameeksha.mca.2024@pim.ac.in",
+        "coachName": "danush",
+        "sender": "coach",
+        "text": "hiii",
+        "time": "Sep 17, 11:36 am",
+        "read": false,
+        "createdAt": "2026-09-17T06:06:18.709Z"
+      },
+      {
+        "id": "c-1789637768564",
+        "memberName": "Coach danush",
+        "clientEmail": "sameeksha.mca.2024@pim.ac.in",
+        "memberEmail": "sameeksha.mca.2024@pim.ac.in",
+        "coachName": "Coach danush",
+        "sender": "member",
+        "text": "Hi Coach Coach danush! I just booked my coaching package. Looking forward to our sessions!",
+        "time": "Sep 17, 03:06 pm",
+        "read": false,
+        "createdAt": "2026-09-17T09:36:08.564Z"
       }
     ],
     "members": [
       {
-        "id": "USR-1789048351915",
-        "name": "Jeery",
-        "email": "thepcworkshop1@gmail.com",
+        "id": "MEM-90210",
+        "name": "rahul",
+        "email": "rahul@gmail.com",
+        "phone": "8345456565",
+        "tier": "VIP Athlete (monthly)",
+        "status": "Active",
+        "joined": "Sep 17, 2026",
+        "goal": "Custom Transformation & Strength Block",
+        "diet": "Custom Tailored Nutrition Protocol",
+        "workout": "Personalized Periodized Training",
+        "attendance": 100
+      },
+      {
+        "id": "USR-1789619228365",
+        "name": "Sameeksha",
+        "email": "sameeksha.mca.2024@pim.ac.in",
         "tier": "Pro Member",
         "status": "Active",
         "joined": "Sep 2026",
-        "goal": "Body Recomposition"
+        "goal": "General Fitness"
       },
       {
-        "id": "USR-1787813020170",
-        "name": "sam",
-        "email": "sam@gmail.com",
+        "id": "USR-1789575073122",
+        "name": "siddhi",
+        "email": "siddi@gmail.com",
         "tier": "Pro Member",
         "status": "Active",
-        "joined": "Aug 2026",
+        "joined": "Sep 2026",
+        "goal": "General Fitness"
+      },
+      {
+        "id": "USR-1789567817232",
+        "name": "manish",
+        "email": "manish@gmail.com",
+        "tier": "Pro Member",
+        "status": "Active",
+        "joined": "Sep 2026",
+        "goal": "General Fitness"
+      },
+      {
+        "id": "USR-1789549362691",
+        "name": "darshan",
+        "email": "darshan.mca.2024@pim.ac.in",
+        "tier": "Pro Member",
+        "status": "Active",
+        "joined": "Sep 2026",
+        "goal": "General Fitness"
+      },
+      {
+        "id": "USR-1789542846975",
+        "name": "Keerthan",
+        "email": "gkeerthan583@gmail.com",
+        "tier": "Pro Member",
+        "status": "Active",
+        "joined": "Sep 2026",
         "goal": "General Fitness"
       },
       {
@@ -259,7 +774,7 @@
         "target": "Muscle Mass",
         "duration": "6 weeks",
         "exercises": "Bench Press, Bent Rows, Overhead Press, Incline DB Press",
-        "clientsAssigned": 4,
+        "clientsAssigned": 5,
         "date": "Jul 15, 2026"
       },
       {
@@ -291,7 +806,7 @@
         "carbs": "160g",
         "fats": "55g",
         "desc": "Aggressive fat loss with lean tissue preservation.",
-        "clientsAssigned": 1
+        "clientsAssigned": 2
       }
     ],
     "agenda": [
@@ -306,21 +821,58 @@
         "status": "Completed"
       },
       {
-        "id": "ag-1",
-        "client": "Ethan Hunt",
-        "routine": "Heavy Squats & Lower Body",
-        "timeBlock": "09:00 AM - 10:30 AM",
-        "status": "confirmed"
-      },
-      {
         "id": "ag-2",
         "client": "Sarah Connor",
         "routine": "HIIT Conditioning & Core",
         "timeBlock": "11:00 AM - 12:00 PM",
-        "status": "confirmed"
+        "status": "Completed"
       }
     ],
     "attendanceLogs": [
+      {
+        "id": "att-1789726146003",
+        "name": "keerthan",
+        "code": "#1789542846975-CARD",
+        "scanMethod": "Manual Entry (Trainer)",
+        "inTime": "03:38 pm",
+        "outTime": "--",
+        "duration": "--",
+        "date": "Sep 18, 2026",
+        "status": "active"
+      },
+      {
+        "id": "att-1789573061087",
+        "name": "manish",
+        "code": "#1789567817232-CARD",
+        "scanMethod": "Manual Entry (Trainer)",
+        "inTime": "09:06 pm",
+        "outTime": "09:07 pm",
+        "duration": "1h 30m",
+        "date": "Sep 16, 2026",
+        "status": "done"
+      },
+      {
+        "id": "att-1789566455917",
+        "name": "keerthan",
+        "code": "#1789542846975-CARD",
+        "scanMethod": "Manual Entry (Trainer)",
+        "inTime": "07:16 pm",
+        "outTime": "02:46 pm",
+        "duration": "1h 30m",
+        "date": "Sep 16, 2026",
+        "status": "done"
+      },
+      {
+        "id": "att-1789545180840",
+        "name": "Keerthan",
+        "code": "#1789542846975-CARD",
+        "scanMethod": "Manual Entry (Trainer)",
+        "inTime": "01:21 pm",
+        "outTime": "06:54 pm",
+        "duration": "1h 30m",
+        "date": "Sep 16, 2026",
+        "status": "done"
+      },
       {
         "id": "att-1789194549100",
         "name": "Jeery",
@@ -356,12 +908,20 @@
     ]
   },
   "attendance": {
-    "isCheckedIn": false,
-    "checkInTime": null,
-    "streakDays": 0,
+    "isCheckedIn": true,
+    "checkInTime": "03:38 pm",
+    "streakDays": 1,
     "attendanceRate": 0,
-    "activeDaysInMonth": [],
-    "sessions": []
+    "activeDaysInMonth": [
+      18
+    ],
+    "sessions": [
+      {
+        "date": "Sep 18, 2026",
+        "time": "03:38 pm",
+        "type": "Manual Trainer (Check-in)"
+      }
+    ]
   },
   "supplements": {
     "products": [
@@ -425,68 +985,63 @@
           "Beta-Alanine": "3200mg",
           "Flavor": "Sour Green Apple"
         }
-      },
-      {
-        "id": "mass-gainer",
-        "name": "Apex Hydro Mass Gainer",
-        "category": "protein",
-        "price": 69.99,
-        "origPrice": 89.99,
-        "rating": 4.6,
-        "reviews": 340,
-        "tag": "Mass Builder",
-        "tagClass": "",
-        "image": "assets/images/gallery_weights.png",
-        "desc": "High calorie complex carbohydrate and whey isolate formula. Premium Vanilla flavor, 6 lbs bag.",
-        "specs": {
-          "Weight": "6.0 lbs",
-          "Calories": "1250 kcal",
-          "Protein": "50g",
-          "Carbohydrates": "250g",
-          "Flavor": "Vanilla Ice Cream"
-        }
-      },
-      {
-        "id": "bcaa-recovery",
-        "name": "Apex BCAA Recovery",
-        "category": "energy",
-        "price": 29.99,
-        "origPrice": 37.99,
-        "rating": 4.8,
-        "reviews": 480,
-        "tag": "Intra-Workout",
-        "tagClass": "best-seller",
-        "image": "assets/images/gallery_cardio.png",
-        "desc": "Optimal 2:1:1 ratio BCAAs for intra-workout muscle preservation and recovery. Blue Raspberry flavor.",
-        "specs": {
-          "Weight": "350g",
-          "Servings": "30",
-          "BCAA Ratio": "2:1:1 (7g)",
-          "Electrolytes": "1000mg",
-          "Flavor": "Blue Raspberry"
-        }
-      },
-      {
-        "id": "multivitamin",
-        "name": "Apex Sports Multivitamin",
-        "category": "strength",
-        "price": 19.99,
-        "origPrice": 24.99,
-        "rating": 4.5,
-        "reviews": 215,
-        "tag": "Daily Health",
-        "tagClass": "",
-        "image": "assets/images/gallery_yoga.png",
-        "desc": "Clinically formulated daily multivitamin pack optimized for athletes. Contains 90 active tablets.",
-        "specs": {
-          "Tablets": "90 Tablets",
-          "Supply": "30 Days",
-          "Target": "Athletes",
-          "Ingredients": "25+ active vitamins"
-        }
       }
     ],
     "orders": [
+      {
+        "_id": "6aaaa79c1ed14e5b286b8ded",
+        "orderId": "ORD-1789568924184",
+        "txId": "pay_Tck1R2wZzw87Lj",
+        "userEmail": "manish@gmail.com",
+        "userName": "manish",
+        "userPhone": "+919880156947",
+        "items": [],
+        "itemsSummary": "",
+        "subtotal": 0,
+        "memberDiscount": 0,
+        "promoDiscount": 0,
+        "shippingFee": 0,
+        "total": 0,
+        "totalAmount": 0,
+        "shippingInfo": {
+          "fullName": "manish",
+          "phone": "+919880156947",
+          "address": "742 Evergreen Terrace, Sector 4",
+          "city": "Bangalore",
+          "state": "Karnataka",
+          "pincode": "560001",
+          "deliveryType": "standard"
+        },
+        "paymentMethod": "Online Payment (Razorpay)",
+        "paymentStatus": "Paid",
+        "courierName": "Apex Express Logistics",
+        "trackingNumber": "",
+        "estimatedDelivery": "2-3 Business Days",
+        "status": "Confirmed",
+        "statusTimeline": [
+          {
+            "status": "Pending Confirmation",
+            "timestamp": "Sep 16, 2026, 07:58 PM",
+            "note": "Payment received & verified via Razorpay. Pending admin packing & dispatch.",
+            "_id": "6aaaa79c1ed14e5b286b8dee"
+          },
+          {
+            "status": "Confirmed",
+            "timestamp": "Sep 16, 2026, 08:00 PM",
+            "note": "Order confirmed by Admin",
+            "_id": "6aaaa7f11ed14e5b286b8fc1"
+          },
+          {
+            "status": "Confirmed",
+            "timestamp": "Sep 16, 2026, 08:00 PM",
+            "note": "Order confirmed by Admin"
+          }
+        ],
+        "date": "Sep 16, 2026, 07:58 PM",
+        "createdAt": "2026-09-16T14:28:44.220Z",
+        "updatedAt": "2026-09-16T14:30:09.363Z",
+        "__v": 0
+      },
       {
         "_id": "6aa4d4d5f27866ddfc803759",
         "orderId": "ORD-1789187285085",
@@ -660,23 +1215,6 @@
   },
   "users": [
     {
-      "userId": "USR-1787813020170",
-      "name": "sam",
-      "email": "sam@gmail.com",
-      "password": "sam@123",
-      "role": "member",
-      "age": 22,
-      "phone": "9638527410",
-      "specialty": null,
-      "certifications": null,
-      "credentials": null,
-      "bio": null,
-      "membershipTier": "Muscle Pro",
-      "status": "Active",
-      "joinedDate": "Aug 2026",
-      "trainer": "Coach Marcus Vance"
-    },
-    {
       "userId": "ADM-SUPER",
       "name": "System Admin",
       "email": "admin@apex.com",
@@ -737,6 +1275,122 @@
       "joinedDate": "July 2026"
     },
     {
+      "userId": "USR-1789542846975",
+      "name": "Keerthan",
+      "email": "gkeerthan583@gmail.com",
+      "password": "1234567",
+      "role": "member",
+      "age": 22,
+      "phone": "8147704924",
+      "specialty": null,
+      "certifications": null,
+      "credentials": null,
+      "bio": null,
+      "membershipTier": "Muscle Core (Monthly)",
+      "status": "Active",
+      "joinedDate": "Sep 2026",
+      "trainer": "Coach vishwambhara"
+    },
+    {
+      "userId": "TRN-1789545043161",
+      "name": "sameksha",
+      "email": "sam@gmail.com",
+      "password": "sam1234",
+      "role": "trainer",
+      "age": null,
+      "phone": null,
+      "specialty": "yoga",
+      "certifications": "4",
+      "credentials": "4",
+      "bio": "Dedicated certified trainer focused on progressive overload, form biomechanics, and personalized fitness goals.",
+      "membershipTier": "Staff Trainer",
+      "status": "Active",
+      "joinedDate": "Sep 2026"
+    },
+    {
+      "userId": "USR-1789549362691",
+      "name": "darshan",
+      "email": "darshan.mca.2024@pim.ac.in",
+      "password": "darshan123",
+      "role": "member",
+      "age": 22,
+      "phone": "8147704924",
+      "specialty": null,
+      "certifications": null,
+      "credentials": null,
+      "bio": null,
+      "membershipTier": "Muscle Elite (Yearly)",
+      "status": "Active",
+      "joinedDate": "Sep 2026",
+      "trainer": "Coach sameksha"
+    },
+    {
+      "userId": "USR-1789567817232",
+      "name": "manish",
+      "email": "manish@gmail.com",
+      "password": "manish123",
+      "role": "member",
+      "age": 23,
+      "phone": "8798676545",
+      "specialty": null,
+      "certifications": null,
+      "credentials": null,
+      "bio": null,
+      "membershipTier": "Muscle Pro (6-Month)",
+      "status": "Active",
+      "joinedDate": "Sep 2026",
+      "trainer": "Coach vishwambhara"
+    },
+    {
+      "userId": "USR-1789575073122",
+      "name": "siddhi",
+      "email": "siddi@gmail.com",
+      "password": "siddi123",
+      "role": "member",
+      "age": 22,
+      "phone": "7878789899",
+      "specialty": null,
+      "certifications": null,
+      "credentials": null,
+      "bio": null,
+      "membershipTier": "Muscle Elite (Yearly)",
+      "status": "Active",
+      "joinedDate": "Sep 2026"
+    },
+    {
+      "userId": "USR-1789619228365",
+      "name": "Sameeksha",
+      "email": "sameeksha.mca.2024@pim.ac.in",
+      "password": "Sam2004:)",
+      "role": "member",
+      "age": 22,
+      "phone": "9632038402",
+      "specialty": null,
+      "certifications": null,
+      "credentials": null,
+      "bio": null,
+      "membershipTier": "Muscle Core (Monthly)",
+      "status": "Active",
+      "joinedDate": "Sep 2026",
+      "trainer": "Coach danush"
+    },
+    {
+      "userId": "TRN-1789620233025",
+      "name": "danush",
+      "email": "danush@gmail.com",
+      "password": "danush",
+      "role": "trainer",
+      "age": null,
+      "phone": null,
+      "specialty": "strength",
+      "certifications": "4",
+      "credentials": "4",
+      "bio": "Dedicated certified trainer focused on progressive overload, form biomechanics, and personalized fitness goals.",
+      "membershipTier": "Staff Trainer",
+      "status": "Active",
+      "joinedDate": "Sep 2026"
+    },
+    {
       "userId": "MEM-90210",
       "name": "Ethan Hunt",
       "email": "member@apex.com",
@@ -751,22 +1405,51 @@
       "membershipTier": "Muscle Pro",
       "status": "Active",
       "joinedDate": "May 2026"
-    },
-    {
-      "userId": "USR-1789048351915",
-      "name": "The PC Workshop",
-      "email": "thepcworkshop1@gmail.com",
-      "password": "google_oauth_112904906917774012126",
-      "role": "member",
-      "picture": "https://lh3.googleusercontent.com/a/ACg8ocImkhSRyrK4RRCZryr31NDu3dsFSRh-XJJp5uE5GpqPRK1JSGQ=s96-c",
-      "membershipTier": "Muscle Core",
-      "status": "Active",
-      "joinedDate": "Sep 2026",
-      "authProvider": "google",
-      "trainer": "Coach Marcus Vance"
     }
   ],
   "alerts": [
+    {
+      "id": "alt-1789619359108",
+      "title": "holiday",
+      "message": "good",
+      "type": "general",
+      "date": "Sep 17, 2026, 09:59 AM",
+      "active": true
+    },
+    {
+      "id": "alt-1789568706926",
+      "title": "ghghg",
+      "message": "ytyg",
+      "type": "general",
+      "date": "Sep 16, 2026, 07:55 PM",
+      "active": true
+    },
+    {
+      "id": "alt-renewal-1789566355286",
+      "title": "Coaching Plan Renewal: EXPIRES IN 30 DAYS",
+      "message": "🔔 Coaching Renewal Reminder: Hi keerthan! Your personal coaching plan with Coach vishwambhara expires in 30 days. Please renew your subscription to maintain uninterrupted coaching and workouts.",
+      "type": "renewal_reminder",
+      "targetEmail": "gkeerthan583@gmail.com",
+      "date": "Sep 16, 2026, 07:15 PM",
+      "active": true
+    },
+    {
+      "id": "alt-renewal-1789566342338",
+      "title": "Coaching Plan Renewal: EXPIRES IN 28 DAYS",
+      "message": "🔔 Coaching Renewal Reminder: Hi Jeery! Your personal coaching plan with Coach vishwambhara expires in 28 days. Please renew your subscription to maintain uninterrupted coaching and workouts.",
+      "type": "renewal_reminder",
+      "targetEmail": "thepcworkshop1@gmail.com",
+      "date": "Sep 16, 2026, 07:15 PM",
+      "active": true
+    },
+    {
+      "id": "alt-1789549665619",
+      "title": "holi",
+      "message": "ghftghhb",
+      "type": "general",
+      "date": "Sep 16, 2026, 02:37 PM",
+      "active": true
+    },
     {
       "id": "alt-1789200926426",
       "title": "test",
@@ -777,6 +1460,498 @@
     }
   ],
   "receipts": [
+    {
+      "receiptNumber": "MH-RCP-2026-669487",
+      "orderId": "order_direct_JBqa1rzk_7533",
+      "paymentId": "pay_Td3Z4HJBqa1rzk",
+      "signature": "VERIFIED_GATEWAY",
+      "userId": "MEM-90210",
+      "userName": "rahul",
+      "userEmail": "rahul@gmail.com",
+      "userPhone": "8345456565",
+      "userRole": "member",
+      "paymentType": "trainer_booking",
+      "title": "Hire Coach: Coach danush (1-Month Personal Coaching)",
+      "amount": 5000,
+      "currency": "INR",
+      "status": "paid",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)",
+      "bankRrn": "RRN-803553987991",
+      "items": [
+        {
+          "name": "Personal Coaching (Coach danush) - 1-Month Personal Coaching",
+          "qty": 1,
+          "unitPrice": 5000,
+          "total": 5000
+        }
+      ],
+      "subtotal": 4237.29,
+      "gstRate": 18,
+      "gstAmount": 762.71,
+      "discountAmount": 0,
+      "netAmount": 5000,
+      "createdAt": "2026-09-17T09:36:07.533Z",
+      "metadata": {
+        "trainerId": "TRN-danush@gmail.com",
+        "trainerName": "Coach danush",
+        "package": "monthly",
+        "method": "Razorpay Online (UPI/Cards/NetBanking)",
+        "verifiedAt": "2026-09-17T09:36:07.533Z"
+      }
+    },
+    {
+      "receiptNumber": "MH-RCP-2026-592222",
+      "orderId": "order_direct_dTLU3LAn_7806",
+      "paymentId": "pay_TcymwpdTLU3LAn",
+      "signature": "VERIFIED_GATEWAY",
+      "userId": "MEM-90210",
+      "userName": "Sameeksha",
+      "userEmail": "sameeksha.mca.2024@pim.ac.in",
+      "userPhone": "+919880156947",
+      "userRole": "member",
+      "paymentType": "trainer_booking",
+      "title": "Hire Coach: Coach shravan (1-Month Personal Coaching)",
+      "amount": 5000,
+      "currency": "INR",
+      "status": "paid",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)",
+      "bankRrn": "RRN-741211285626",
+      "items": [
+        {
+          "name": "Personal Coaching (Coach shravan) - 1-Month Personal Coaching",
+          "qty": 1,
+          "unitPrice": 5000,
+          "total": 5000
+        }
+      ],
+      "subtotal": 4237.29,
+      "gstRate": 18,
+      "gstAmount": 762.71,
+      "discountAmount": 0,
+      "netAmount": 5000,
+      "createdAt": "2026-09-17T04:55:27.806Z",
+      "metadata": {
+        "trainerId": "TRN-shravan@gmail.com",
+        "trainerName": "Coach shravan",
+        "package": "monthly",
+        "method": "Razorpay Online (UPI/Cards/NetBanking)",
+        "verifiedAt": "2026-09-17T04:55:27.807Z"
+      }
+    },
+    {
+      "receiptNumber": "MH-RCP-2026-366610",
+      "orderId": "order_direct_lCjksxw3_2436",
+      "paymentId": "pay_TcylfOlCjksxw3",
+      "signature": "VERIFIED_GATEWAY",
+      "userId": "MEM-90210",
+      "userName": "Sameeksha",
+      "userEmail": "sameeksha.mca.2024@pim.ac.in",
+      "userPhone": "+919880156947",
+      "userRole": "member",
+      "paymentType": "membership",
+      "title": "Muscle Core (Monthly) Pass Subscription",
+      "amount": 800,
+      "currency": "INR",
+      "status": "paid",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)",
+      "bankRrn": "RRN-442697462709",
+      "items": [
+        {
+          "name": "Muscle Core (Monthly) Pass Subscription",
+          "qty": 1,
+          "unitPrice": 800,
+          "total": 800
+        }
+      ],
+      "subtotal": 677.97,
+      "gstRate": 18,
+      "gstAmount": 122.03,
+      "discountAmount": 0,
+      "netAmount": 800,
+      "createdAt": "2026-09-17T04:54:12.436Z",
+      "metadata": {
+        "planTier": "Muscle Core (Monthly)",
+        "durationDays": 30,
+        "method": "Razorpay Online (UPI/Cards/NetBanking)",
+        "verifiedAt": "2026-09-17T04:54:12.436Z"
+      }
+    },
+    {
+      "receiptNumber": "MH-RCP-2026-633069",
+      "orderId": "order_direct_YqxLj7lK_1627",
+      "paymentId": "pay_Tclz0kYqxLj7lK",
+      "signature": "VERIFIED_GATEWAY",
+      "userId": "MEM-90210",
+      "userName": "siddhi",
+      "userEmail": "siddi@gmail.com",
+      "userPhone": "+919880156947",
+      "userRole": "member",
+      "paymentType": "membership",
+      "title": "Muscle Elite (Yearly) Pass Subscription",
+      "amount": 7500,
+      "currency": "INR",
+      "status": "paid",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)",
+      "bankRrn": "RRN-278375354854",
+      "items": [
+        {
+          "name": "Muscle Elite (Yearly) Pass Subscription",
+          "qty": 1,
+          "unitPrice": 7500,
+          "total": 7500
+        }
+      ],
+      "subtotal": 6355.93,
+      "gstRate": 18,
+      "gstAmount": 1144.07,
+      "discountAmount": 0,
+      "netAmount": 7500,
+      "createdAt": "2026-09-16T16:23:51.627Z",
+      "metadata": {
+        "planTier": "Muscle Elite (Yearly)",
+        "durationDays": 365,
+        "method": "Razorpay Online (UPI/Cards/NetBanking)",
+        "verifiedAt": "2026-09-16T16:23:51.628Z"
+      }
+    },
+    {
+      "receiptNumber": "MH-RCP-2026-329198",
+      "orderId": "ORD-1789568924184",
+      "paymentId": "pay_Tck1R2wZzw87Lj",
+      "signature": "GATEWAY_VERIFIED",
+      "userId": "MEM-90210",
+      "userName": "manish",
+      "userEmail": "manish@gmail.com",
+      "userPhone": "+919880156947",
+      "userRole": "member",
+      "paymentType": "supplement_order",
+      "title": "MuScLe HuB Store: ",
+      "amount": 0,
+      "currency": "INR",
+      "status": "paid",
+      "paymentMethod": "Online Payment (Razorpay)",
+      "bankRrn": "RRN-387368002005",
+      "items": [],
+      "subtotal": 0,
+      "gstRate": 18,
+      "gstAmount": 0,
+      "discountAmount": 0,
+      "netAmount": 0,
+      "createdAt": "2026-09-16T14:28:44.186Z",
+      "metadata": {
+        "deliveryType": "standard",
+        "shippingAddress": "742 Evergreen Terrace, Sector 4, Bangalore, Karnataka - 560001",
+        "orderId": "ORD-1789568924184"
+      }
+    },
+    {
+      "receiptNumber": "MH-RCP-2026-328362",
+      "orderId": "order_direct_XqK6v0HJ_3041",
+      "paymentId": "pay_TcjlZtXqK6v0HJ",
+      "signature": "VERIFIED_GATEWAY",
+      "userId": "MEM-90210",
+      "userName": "manish",
+      "userEmail": "manish@gmail.com",
+      "userPhone": "+919880156947",
+      "userRole": "member",
+      "paymentType": "membership",
+      "title": "Muscle Pro (6-Month) Pass Subscription",
+      "amount": 3500,
+      "currency": "INR",
+      "status": "paid",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)",
+      "bankRrn": "RRN-675958944111",
+      "items": [
+        {
+          "name": "Muscle Pro (6-Month) Pass Subscription",
+          "qty": 1,
+          "unitPrice": 3500,
+          "total": 3500
+        }
+      ],
+      "subtotal": 2966.1,
+      "gstRate": 18,
+      "gstAmount": 533.9,
+      "discountAmount": 0,
+      "netAmount": 3500,
+      "createdAt": "2026-09-16T14:13:43.041Z",
+      "metadata": {
+        "planTier": "Muscle Pro (6-Month)",
+        "durationDays": 180,
+        "method": "Razorpay Online (UPI/Cards/NetBanking)",
+        "verifiedAt": "2026-09-16T14:13:43.041Z"
+      }
+    },
+    {
+      "receiptNumber": "MH-RCP-2026-809702",
+      "orderId": "order_direct_lprGVnrz_3734",
+      "paymentId": "pay_TcjjpclprGVnrz",
+      "signature": "VERIFIED_GATEWAY",
+      "userId": "MEM-90210",
+      "userName": "manish",
+      "userEmail": "manish@gmail.com",
+      "userPhone": "+919880156947",
+      "userRole": "member",
+      "paymentType": "trainer_booking",
+      "title": "Hire Coach: Coach vishwambhara (1-Month Personal Coaching)",
+      "amount": 5000,
+      "currency": "INR",
+      "status": "paid",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)",
+      "bankRrn": "RRN-608628815456",
+      "items": [
+        {
+          "name": "Personal Coaching (Coach vishwambhara) - 1-Month Personal Coaching",
+          "qty": 1,
+          "unitPrice": 5000,
+          "total": 5000
+        }
+      ],
+      "subtotal": 4237.29,
+      "gstRate": 18,
+      "gstAmount": 762.71,
+      "discountAmount": 0,
+      "netAmount": 5000,
+      "createdAt": "2026-09-16T14:12:03.735Z",
+      "metadata": {
+        "trainerId": "TRN-vishwa@gmail.com",
+        "trainerName": "Coach vishwambhara",
+        "package": "monthly",
+        "method": "Razorpay Online (UPI/Cards/NetBanking)",
+        "verifiedAt": "2026-09-16T14:12:03.735Z"
+      }
+    },
+    {
+      "receiptNumber": "MH-RCP-2026-154185",
+      "orderId": "order_direct_TIlN5K0r_3526",
+      "paymentId": "pay_TcjMwUTIlN5K0r",
+      "signature": "VERIFIED_GATEWAY",
+      "userId": "MEM-90210",
+      "userName": "Keerthan",
+      "userEmail": "gkeerthan583@gmail.com",
+      "userPhone": "+919880156947",
+      "userRole": "member",
+      "paymentType": "membership",
+      "title": "Muscle Core (Monthly) Pass Subscription",
+      "amount": 800,
+      "currency": "INR",
+      "status": "paid",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)",
+      "bankRrn": "RRN-546614918705",
+      "items": [
+        {
+          "name": "Muscle Core (Monthly) Pass Subscription",
+          "qty": 1,
+          "unitPrice": 800,
+          "total": 800
+        }
+      ],
+      "subtotal": 677.97,
+      "gstRate": 18,
+      "gstAmount": 122.03,
+      "discountAmount": 0,
+      "netAmount": 800,
+      "createdAt": "2026-09-16T13:50:23.526Z",
+      "metadata": {
+        "planTier": "Muscle Core (Monthly)",
+        "durationDays": 30,
+        "method": "Razorpay Online (UPI/Cards/NetBanking)",
+        "verifiedAt": "2026-09-16T13:50:23.526Z"
+      }
+    },
+    {
+      "receiptNumber": "MH-RCP-2026-725013",
+      "orderId": "order_direct_3hSkJfLn_4688",
+      "paymentId": "pay_TciuR43hSkJfLn",
+      "signature": "VERIFIED_GATEWAY",
+      "userId": "MEM-90210",
+      "userName": "Keerthan",
+      "userEmail": "gkeerthan583@gmail.com",
+      "userPhone": "+919880156947",
+      "userRole": "member",
+      "paymentType": "trainer_booking",
+      "title": "Hire Coach: Coach vishwambhara (1-Month Personal Coaching)",
+      "amount": 5000,
+      "currency": "INR",
+      "status": "paid",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)",
+      "bankRrn": "RRN-722406452087",
+      "items": [
+        {
+          "name": "Personal Coaching (Coach vishwambhara) - 1-Month Personal Coaching",
+          "qty": 1,
+          "unitPrice": 5000,
+          "total": 5000
+        }
+      ],
+      "subtotal": 4237.29,
+      "gstRate": 18,
+      "gstAmount": 762.71,
+      "discountAmount": 0,
+      "netAmount": 5000,
+      "createdAt": "2026-09-16T13:23:24.688Z",
+      "metadata": {
+        "trainerId": "TRN-vishwa@gmail.com",
+        "trainerName": "Coach vishwambhara",
+        "package": "monthly",
+        "method": "Razorpay Online (UPI/Cards/NetBanking)",
+        "verifiedAt": "2026-09-16T13:23:24.688Z"
+      }
+    },
+    {
+      "receiptNumber": "MH-RCP-2026-744467",
+      "orderId": "order_direct_ZxHa2BGA_2532",
+      "paymentId": "pay_TcecNTZxHa2BGA",
+      "signature": "VERIFIED_GATEWAY",
+      "userId": "MEM-90210",
+      "userName": "darshan",
+      "userEmail": "darshan.mca.2024@pim.ac.in",
+      "userPhone": "+919880156947",
+      "userRole": "member",
+      "paymentType": "trainer_booking",
+      "title": "Hire Coach: Coach sameksha (1-Month Personal Coaching)",
+      "amount": 5000,
+      "currency": "INR",
+      "status": "paid",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)",
+      "bankRrn": "RRN-650223009130",
+      "items": [
+        {
+          "name": "Personal Coaching (Coach sameksha) - 1-Month Personal Coaching",
+          "qty": 1,
+          "unitPrice": 5000,
+          "total": 5000
+        }
+      ],
+      "subtotal": 4237.29,
+      "gstRate": 18,
+      "gstAmount": 762.71,
+      "discountAmount": 0,
+      "netAmount": 5000,
+      "createdAt": "2026-09-16T09:11:32.532Z",
+      "metadata": {
+        "trainerId": "TRN-1789545043161",
+        "trainerName": "Coach sameksha",
+        "package": "monthly",
+        "method": "Razorpay Online (UPI/Cards/NetBanking)",
+        "verifiedAt": "2026-09-16T09:11:32.532Z"
+      }
+    },
+    {
+      "receiptNumber": "MH-RCP-2026-933095",
+      "orderId": "order_direct_2UhbB6ax_4405",
+      "paymentId": "pay_TceU7j2UhbB6ax",
+      "signature": "VERIFIED_GATEWAY",
+      "userId": "MEM-90210",
+      "userName": "darshan",
+      "userEmail": "darshan.mca.2024@pim.ac.in",
+      "userPhone": "+919880156947",
+      "userRole": "member",
+      "paymentType": "membership",
+      "title": "Muscle Elite (Yearly) Pass Subscription",
+      "amount": 7500,
+      "currency": "INR",
+      "status": "paid",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)",
+      "bankRrn": "RRN-147224336843",
+      "items": [
+        {
+          "name": "Muscle Elite (Yearly) Pass Subscription",
+          "qty": 1,
+          "unitPrice": 7500,
+          "total": 7500
+        }
+      ],
+      "subtotal": 6355.93,
+      "gstRate": 18,
+      "gstAmount": 1144.07,
+      "discountAmount": 0,
+      "netAmount": 7500,
+      "createdAt": "2026-09-16T09:03:44.405Z",
+      "metadata": {
+        "planTier": "Muscle Elite (Yearly)",
+        "durationDays": 365,
+        "method": "Razorpay Online (UPI/Cards/NetBanking)",
+        "verifiedAt": "2026-09-16T09:03:44.405Z"
+      }
+    },
+    {
+      "receiptNumber": "MH-RCP-2026-496457",
+      "orderId": "order_direct_reW8jM2V_2215",
+      "paymentId": "pay_TccvysreW8jM2V",
+      "signature": "VERIFIED_GATEWAY",
+      "userId": "MEM-90210",
+      "userName": "Keerthan",
+      "userEmail": "gkeerthan583@gmail.com",
+      "userPhone": "+919880156947",
+      "userRole": "member",
+      "paymentType": "membership",
+      "title": "Muscle Core (Monthly) Pass Subscription",
+      "amount": 800,
+      "currency": "INR",
+      "status": "paid",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)",
+      "bankRrn": "RRN-465258312414",
+      "items": [
+        {
+          "name": "Muscle Core (Monthly) Pass Subscription",
+          "qty": 1,
+          "unitPrice": 800,
+          "total": 800
+        }
+      ],
+      "subtotal": 677.97,
+      "gstRate": 18,
+      "gstAmount": 122.03,
+      "discountAmount": 0,
+      "netAmount": 800,
+      "createdAt": "2026-09-16T07:32:42.215Z",
+      "metadata": {
+        "planTier": "Muscle Core (Monthly)",
+        "durationDays": 30,
+        "method": "Razorpay Online (UPI/Cards/NetBanking)",
+        "verifiedAt": "2026-09-16T07:32:42.215Z"
+      }
+    },
+    {
+      "receiptNumber": "MH-RCP-2026-954386",
+      "orderId": "order_direct_xLoxL2ZA_5317",
+      "paymentId": "pay_TccukAxLoxL2ZA",
+      "signature": "VERIFIED_GATEWAY",
+      "userId": "MEM-90210",
+      "userName": "Keerthan",
+      "userEmail": "gkeerthan583@gmail.com",
+      "userPhone": "+919880156947",
+      "userRole": "member",
+      "paymentType": "trainer_booking",
+      "title": "Hire Coach: Coach Vishwambhara (1-Month Personal Coaching)",
+      "amount": 5000,
+      "currency": "INR",
+      "status": "paid",
+      "paymentMethod": "Razorpay Online (UPI/Cards/NetBanking)",
+      "bankRrn": "RRN-263356679155",
+      "items": [
+        {
+          "name": "Personal Coaching (Coach Vishwambhara) - 1-Month Personal Coaching",
+          "qty": 1,
+          "unitPrice": 5000,
+          "total": 5000
+        }
+      ],
+      "subtotal": 4237.29,
+      "gstRate": 18,
+      "gstAmount": 762.71,
+      "discountAmount": 0,
+      "netAmount": 5000,
+      "createdAt": "2026-09-16T07:31:35.317Z",
+      "metadata": {
+        "trainerId": "TRN-VISHWAMBHARA",
+        "trainerName": "Coach Vishwambhara",
+        "package": "monthly",
+        "method": "Razorpay Online (UPI/Cards/NetBanking)",
+        "verifiedAt": "2026-09-16T07:31:35.317Z"
+      }
+    },
     {
       "receiptNumber": "MH-RCP-2026-581717",
       "orderId": "order_direct_dxBVsqjO_3404",
@@ -893,6 +2068,70 @@
     }
   ],
   "attendanceLogs": [
+    {
+      "id": "att-1789726146004",
+      "userEmail": "gkeerthan583@gmail.com",
+      "memberName": "keerthan",
+      "code": "#1789542846975-CARD",
+      "scanMethod": "Manual Trainer Entry",
+      "gateAction": "Gate Entry Check-in",
+      "inTime": "03:38 pm",
+      "outTime": "--",
+      "duration": "--",
+      "hoursLogged": "--",
+      "date": "Sep 18, 2026",
+      "monthYear": "September 2026",
+      "dayOfMonth": 18,
+      "status": "Active"
+    },
+    {
+      "id": "att-1789573061087",
+      "userEmail": "manish@gmail.com",
+      "memberName": "manish",
+      "code": "#1789567817232-CARD",
+      "scanMethod": "Manual Trainer Entry",
+      "gateAction": "Gate Exit Check-out",
+      "inTime": "09:06 pm",
+      "outTime": "09:07 pm",
+      "duration": "1h 30m",
+      "hoursLogged": "1h 30m",
+      "date": "Sep 16, 2026",
+      "monthYear": "September 2026",
+      "dayOfMonth": 16,
+      "status": "Completed"
+    },
+    {
+      "id": "att-1789566455918",
+      "userEmail": "gkeerthan583@gmail.com",
+      "memberName": "keerthan",
+      "code": "#1789542846975-CARD",
+      "scanMethod": "Manual Trainer Entry",
+      "gateAction": "Gate Exit Check-out",
+      "inTime": "07:16 pm",
+      "outTime": "02:46 pm",
+      "duration": "1h 30m",
+      "hoursLogged": "1h 30m",
+      "date": "Sep 16, 2026",
+      "monthYear": "September 2026",
+      "dayOfMonth": 16,
+      "status": "Completed"
+    },
+    {
+      "id": "att-1789545180841",
+      "userEmail": "gkeerthan583@gmail.com",
+      "memberName": "Keerthan",
+      "code": "#1789542846975-CARD",
+      "scanMethod": "Manual Trainer Entry",
+      "gateAction": "Gate Exit Check-out",
+      "inTime": "01:21 pm",
+      "outTime": "06:54 pm",
+      "duration": "1h 30m",
+      "hoursLogged": "1h 30m",
+      "date": "Sep 16, 2026",
+      "monthYear": "September 2026",
+      "dayOfMonth": 16,
+      "status": "Completed"
+    },
     {
       "id": "att-1789194552931",
       "userEmail": "ethan@apex.com",

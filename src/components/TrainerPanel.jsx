@@ -1290,6 +1290,8 @@ export default function TrainerPanel({ activeView, currentUser }) {
       localStorage.setItem('apex_trainer_chat_history', JSON.stringify(savedChat));
       setAllMemberChats((prev) => [...prev, dispatchMsg]);
       trainerApi.sendChatMessage(dispatchMsg.text, 'coach', targetClient, clientEmail, currentCoachName);
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('apex_schedule_updated'));
     } catch (err) {
       console.warn("Schedule sync storage error:", err);
     }
@@ -1517,20 +1519,27 @@ export default function TrainerPanel({ activeView, currentUser }) {
 
     const assignedMember = members.find((m) => m.id === assignmentMemberId);
 
-    setMembers((prev) =>
-      prev.map((m) =>
-        m.id === assignmentMemberId
-          ? {
-              ...m,
-              workout: selectedAssignedWorkout || m.workout,
-              diet: selectedAssignedDiet || m.diet
-            }
-          : m
-      )
+    const updatedMembers = members.map((m) =>
+      m.id === assignmentMemberId
+        ? {
+            ...m,
+            workout: selectedAssignedWorkout || m.workout,
+            diet: selectedAssignedDiet || m.diet
+          }
+        : m
     );
+    setMembers(updatedMembers);
+    localStorage.setItem('apex_trainer_members', JSON.stringify(updatedMembers));
 
     if (selectedAssignedWorkout) {
+      if (assignedMember) {
+        const assignedWorkoutObj = workoutRoutines.find((w) => w.name === selectedAssignedWorkout);
+        if (assignedWorkoutObj) {
+          localStorage.setItem(`apex_member_assigned_workout_${assignedMember.name.toLowerCase()}`, JSON.stringify(assignedWorkoutObj));
+        }
+      }
       await trainerApi.assignWorkout(selectedAssignedWorkout, assignmentMemberId);
+      window.dispatchEvent(new CustomEvent('apex_workout_updated'));
     }
     if (selectedAssignedDiet) {
       if (assignedMember) {
@@ -1540,7 +1549,10 @@ export default function TrainerPanel({ activeView, currentUser }) {
         }
       }
       await trainerApi.assignDiet(selectedAssignedDiet, assignmentMemberId);
+      window.dispatchEvent(new CustomEvent('apex_diet_updated'));
     }
+
+    window.dispatchEvent(new Event('storage'));
 
     setAssignmentMemberId(null);
     setSelectedAssignedWorkout('');

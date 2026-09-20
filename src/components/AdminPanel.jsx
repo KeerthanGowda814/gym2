@@ -408,45 +408,128 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
 
   const [membersList, setMembersList] = useState(getRegisteredOnlyMembers);
 
+  const defaultTrainersSeed = [
+    {
+      id: 'TRN-VISHWAMBHARA',
+      name: 'Coach Vishwambhara',
+      email: 'vishwambhara@apex.com',
+      role: 'trainer',
+      specialty: 'hiit',
+      certifications: 'NASM-CPT, Kettlebell & Functional Master',
+      status: 'Active'
+    },
+    {
+      id: 'TRN-KEERTHU',
+      name: 'Coach Keerthu',
+      email: 'keerthu@apex.com',
+      role: 'trainer',
+      specialty: 'strength',
+      certifications: 'CSCS, Master of Sports Physiology',
+      status: 'Active'
+    },
+    {
+      id: 'tr-marcus',
+      name: 'Marcus Vance',
+      email: 'trainer@apex.com',
+      role: 'trainer',
+      specialty: 'strength',
+      certifications: 'CSCS Certified, 8+ Years Experience',
+      status: 'Active'
+    },
+    {
+      id: 'tr-sarah',
+      name: 'Sarah Connor',
+      email: 'sarah.c@apex.com',
+      role: 'trainer',
+      specialty: 'hiit',
+      certifications: 'NASM-CPT, Kettlebell Level 2',
+      status: 'Active'
+    },
+    {
+      id: 'tr-goggins',
+      name: 'David Goggins',
+      email: 'goggins@apex.com',
+      role: 'trainer',
+      specialty: 'combat',
+      certifications: 'Ex-Navy SEAL, Ultra-endurance Coach',
+      status: 'Active'
+    }
+  ];
+
   const getRegisteredTrainers = () => {
     const registeredUsers = JSON.parse(localStorage.getItem('apex_registered_users')) || [];
-    const trainers = registeredUsers.filter(u => u.role === 'trainer');
-    
-    // Seed default trainers if none exist (for demo purposes)
-    if (trainers.length === 0) {
-      const defaultTrainers = [
-        {
-          name: 'Marcus Vance',
-          email: 'trainer@apex.com',
-          role: 'trainer',
-          specialty: 'strength',
-          certifications: 'CSCS Certified, 8+ Years Experience'
-        },
-        {
-          name: 'Sarah Connor',
-          email: 'sarah.c@apex.com',
-          role: 'trainer',
-          specialty: 'hiit',
-          certifications: 'NASM-CPT, Kettlebell Level 2'
-        },
-        {
-          name: 'David Goggins',
-          email: 'goggins@apex.com',
-          role: 'trainer',
-          specialty: 'combat',
-          certifications: 'Ex-Navy SEAL, Ultra-endurance Coach'
-        }
-      ];
-      
-      const updatedUsers = [...registeredUsers, ...defaultTrainers];
-      localStorage.setItem('apex_registered_users', JSON.stringify(updatedUsers));
-      return defaultTrainers;
-    }
-    
-    return trainers;
+    const trainers = registeredUsers.filter(u => u.role === 'trainer' && u.name);
+
+    const combinedMap = new Map();
+    defaultTrainersSeed.forEach(t => combinedMap.set(t.email.toLowerCase(), t));
+    trainers.forEach(t => combinedMap.set(t.email.toLowerCase(), t));
+
+    return Array.from(combinedMap.values());
   };
 
   const [trainersList, setTrainersList] = useState(getRegisteredTrainers);
+
+  const fetchDbTrainers = async () => {
+    let apiTrainers = [];
+    try {
+      const res = await fetch('http://localhost:5000/api/member/trainers', {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('apex_auth_token') ? { Authorization: `Bearer ${localStorage.getItem('apex_auth_token')}` } : {})
+        }
+      });
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success && Array.isArray(result.data)) {
+          apiTrainers = result.data.map((u, index) => ({
+            id: u._id || u.userId || u.id || `tr-db-${index}-${u.email}`,
+            name: u.name,
+            email: u.email,
+            role: 'trainer',
+            specialty: u.specialty || 'strength',
+            certifications: u.certifications || u.credentials || 'Certified Fitness Coach',
+            status: u.status || 'Active'
+          }));
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch database trainers:", err);
+    }
+
+    const localUsers = JSON.parse(localStorage.getItem('apex_registered_users')) || [];
+    const localTrainers = localUsers.filter(u => u.role === 'trainer' && u.name).map((u, index) => ({
+      id: u.id || `tr-loc-${index}-${u.email}`,
+      name: u.name,
+      email: u.email,
+      role: 'trainer',
+      specialty: u.specialty || 'strength',
+      certifications: u.certifications || u.credentials || 'Certified Fitness Coach',
+      status: u.status || 'Active'
+    }));
+
+    const combinedMap = new Map();
+
+    defaultTrainersSeed.forEach(t => {
+      if (t && t.email) combinedMap.set(t.email.toLowerCase(), t);
+    });
+
+    apiTrainers.forEach(t => {
+      if (t && t.email) combinedMap.set(t.email.toLowerCase(), t);
+    });
+
+    localTrainers.forEach(t => {
+      if (t && t.email) {
+        const existing = combinedMap.get(t.email.toLowerCase());
+        if (existing) {
+          combinedMap.set(t.email.toLowerCase(), { ...existing, ...t });
+        } else {
+          combinedMap.set(t.email.toLowerCase(), t);
+        }
+      }
+    });
+
+    setTrainersList(Array.from(combinedMap.values()));
+  };
 
   const fetchDbMembers = async () => {
     try {
@@ -510,7 +593,7 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
   useEffect(() => {
     const syncRegisteredUsers = () => {
       fetchDbMembers();
-      setTrainersList(getRegisteredTrainers());
+      fetchDbTrainers();
     };
 
     syncRegisteredUsers();
@@ -521,12 +604,108 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
   const fetchFinancialAccounts = async () => {
     setIsAccountsLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/payment/admin/accounts');
-      const data = await res.json();
-      if (data.success) {
-        setAccountsSummary(data.summary || {});
-        setAdminTransactions(data.transactions || []);
+      let serverData = null;
+      try {
+        const res = await fetch('/api/payment/admin/accounts');
+        const data = await res.json();
+        if (data && data.success) {
+          serverData = data;
+        }
+      } catch (e) {
+        try {
+          const res = await fetch('http://localhost:5000/api/payment/admin/accounts');
+          const data = await res.json();
+          if (data && data.success) {
+            serverData = data;
+          }
+        } catch (e2) {}
       }
+
+      let localSuppOrders = [];
+      try {
+        localSuppOrders = JSON.parse(localStorage.getItem('apex_supplement_orders') || '[]');
+      } catch (e) {}
+
+      const map = new Map();
+
+      // 1. Add real server transactions with valid positive amounts
+      if (serverData && Array.isArray(serverData.transactions)) {
+        serverData.transactions.forEach(t => {
+          const key = t.receiptNumber || t.orderId || t.paymentId || t.txId;
+          const amt = Number(t.amount || t.netAmount || 0);
+          if (key && amt > 0) {
+            map.set(key, {
+              ...t,
+              amount: amt
+            });
+          }
+        });
+      }
+
+      // 2. Add real local supplement orders with valid positive amounts
+      localSuppOrders.forEach(o => {
+        if (!o) return;
+        const key = o.receiptNumber || o.orderId || o.txId;
+        
+        let realAmt = Number(o.total || o.totalAmount || o.netAmount || o.subtotal || 0);
+        if (!realAmt && Array.isArray(o.items) && o.items.length > 0) {
+          realAmt = o.items.reduce((sum, it) => sum + (Number(it.price || it.unitPrice || 0) * Number(it.qty || it.quantity || 1)), 0);
+        }
+
+        if (key && realAmt > 0) {
+          map.set(key, {
+            receiptNumber: o.receiptNumber || key,
+            orderId: o.orderId || key,
+            paymentId: o.txId || key,
+            userName: o.userName || o.shippingInfo?.fullName || 'Athlete Member',
+            userEmail: o.userEmail || o.shippingInfo?.email || '',
+            paymentType: 'supplement_order',
+            title: `MuScLe HuB Store: ${o.itemsSummary || (Array.isArray(o.items) ? o.items.map(i => `${i.quantity || i.qty || 1}x ${i.name}`).join(', ') : 'Supplement Purchase')}`,
+            amount: realAmt,
+            currency: 'INR',
+            status: o.status === 'Cancelled' ? 'cancelled' : 'paid',
+            paymentMethod: o.paymentMethod || 'Online Payment (Razorpay)',
+            createdAt: o.date || new Date().toISOString()
+          });
+        }
+      });
+
+      const combinedTx = Array.from(map.values());
+
+      let membershipRevenue = 0;
+      let supplementRevenue = 0;
+      let trainerRevenue = 0;
+      let totalGst = 0;
+
+      combinedTx.forEach(t => {
+        const amt = Math.round(Number(t.amount) || 0);
+        const gst = Math.round(Number(t.gstAmount) || (amt - (amt / 1.18)));
+        totalGst += gst;
+
+        if (t.paymentType === 'membership') {
+          membershipRevenue += amt;
+        } else if (t.paymentType === 'supplement_order') {
+          supplementRevenue += amt;
+        } else if (t.paymentType === 'trainer_booking') {
+          trainerRevenue += amt;
+        } else {
+          membershipRevenue += amt;
+        }
+      });
+
+      const grossRevenue = Math.round(membershipRevenue + supplementRevenue + trainerRevenue);
+
+      setAccountsSummary({
+        totalRevenue: grossRevenue,
+        grossRevenue: grossRevenue,
+        membershipRevenue: membershipRevenue,
+        supplementRevenue: supplementRevenue,
+        trainerRevenue: trainerRevenue,
+        totalGst: totalGst,
+        transactionCount: combinedTx.length
+      });
+
+      setAdminTransactions(combinedTx);
     } catch (err) {
       console.warn('Could not fetch financial accounts from backend:', err);
     } finally {
@@ -1422,6 +1601,57 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
     }
   };
 
+  // Trainer Attendance Board Terminal States & Handler
+  const [simTrainer, setSimTrainer] = useState('Coach Keerthan');
+  const [simTrainerAction, setSimTrainerAction] = useState('check-in');
+  const [trainerAttNote, setTrainerAttNote] = useState('Morning Shift & Floor Supervision');
+
+  const handleTrainerAttendanceSubmit = async (e) => {
+    e.preventDefault();
+    const trainerName = simTrainer.startsWith('Coach') ? simTrainer : `Coach ${simTrainer}`;
+    const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const timeStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+    const actionText = simTrainerAction === 'check-in' 
+      ? 'Shift Clock-In (Morning)' 
+      : simTrainerAction === 'evening-in' 
+      ? 'Shift Clock-In (Evening)' 
+      : simTrainerAction === 'check-out' 
+      ? 'Shift Clock-Out' 
+      : 'Coaching Session Completed';
+
+    const newLog = {
+      id: `tr-att-${Date.now()}`,
+      trainerName,
+      action: actionText,
+      time: `${dateStr}, ${timeStr}`,
+      notes: trainerAttNote || 'Standard Coaching Shift',
+      status: simTrainerAction === 'check-out' ? 'Completed' : 'On Duty'
+    };
+
+    try {
+      const existingLogs = JSON.parse(localStorage.getItem('apex_trainer_attendance') || '[]');
+      existingLogs.unshift(newLog);
+      localStorage.setItem('apex_trainer_attendance', JSON.stringify(existingLogs));
+      window.dispatchEvent(new Event('storage'));
+    } catch (err) {}
+
+    addActivity(`Trainer <strong>${trainerName}</strong> logged ${actionText}`, 'cyan');
+
+    if (CustomSwal) {
+      CustomSwal.fire({
+        icon: 'success',
+        title: 'Trainer Attendance Logged ⏱️',
+        html: `<div style="color:#fff;text-align:left;font-size:0.9rem;">
+          <p style="margin-bottom:0.4rem;"><strong>Coach:</strong> ${trainerName}</p>
+          <p style="margin-bottom:0.4rem;"><strong>Duty Status:</strong> ${actionText}</p>
+          <p style="margin-bottom:0.4rem;"><strong>Timestamp:</strong> ${timeStr}</p>
+          <p style="color:#c6ff00;font-weight:bold;margin-top:0.6rem;">✓ Recorded in Trainer Attendance Board!</p>
+        </div>`
+      });
+    }
+  };
+
   return (
     <div>
       {/* 1. ADMIN HOME VIEW */}
@@ -2024,47 +2254,56 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
           </div>
 
           {/* Financial KPI Summary Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.2rem', marginBottom: '1.5rem' }}>
-            <div className="db-card" style={{ padding: '1.4rem', borderLeft: '4px solid var(--accent-volt)' }}>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Total Gross Revenue</span>
-              <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-white)', margin: '0.3rem 0 0 0' }}>
-                ₹{((accountsSummary?.totalRevenue || 0) + payments.reduce((acc, p) => acc + (p.amount || 0), 0)).toLocaleString('en-IN')}
-              </h3>
-              <span style={{ fontSize: '0.72rem', color: '#10b981', marginTop: '0.2rem', display: 'block' }}>
-                ✓ Verified collections across all portals
-              </span>
-            </div>
+          {(() => {
+            const membershipVal = Math.round(accountsSummary?.membershipRevenue || 0);
+            const supplementVal = Math.round(accountsSummary?.supplementRevenue || 0);
+            const trainerVal = Math.round(accountsSummary?.trainerRevenue || 0);
+            const totalGrossVal = membershipVal + supplementVal + trainerVal;
 
-            <div className="db-card" style={{ padding: '1.4rem', borderLeft: '4px solid var(--accent-cyan)' }}>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Membership Subscriptions</span>
-              <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-white)', margin: '0.3rem 0 0 0' }}>
-                ₹{((accountsSummary?.membershipRevenue || 0) + payments.reduce((acc, p) => acc + (p.amount || 0), 0)).toLocaleString('en-IN')}
-              </h3>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem', display: 'block' }}>
-                Keycard passes & renewals
-              </span>
-            </div>
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.2rem', marginBottom: '1.5rem' }}>
+                <div className="db-card" style={{ padding: '1.4rem', borderLeft: '4px solid var(--accent-volt)' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Total Gross Revenue</span>
+                  <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-white)', margin: '0.3rem 0 0 0' }}>
+                    ₹{totalGrossVal.toLocaleString('en-IN')}
+                  </h3>
+                  <span style={{ fontSize: '0.72rem', color: '#10b981', marginTop: '0.2rem', display: 'block' }}>
+                    ✓ Verified collections across all portals
+                  </span>
+                </div>
 
-            <div className="db-card" style={{ padding: '1.4rem', borderLeft: '4px solid #f59e0b' }}>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Supplement Store Sales</span>
-              <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-white)', margin: '0.3rem 0 0 0' }}>
-                ₹{(accountsSummary?.supplementRevenue || 0).toLocaleString('en-IN')}
-              </h3>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem', display: 'block' }}>
-                Protein, Creatine & Stack orders
-              </span>
-            </div>
+                <div className="db-card" style={{ padding: '1.4rem', borderLeft: '4px solid var(--accent-cyan)' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Membership Subscriptions</span>
+                  <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-white)', margin: '0.3rem 0 0 0' }}>
+                    ₹{membershipVal.toLocaleString('en-IN')}
+                  </h3>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem', display: 'block' }}>
+                    Keycard passes & renewals
+                  </span>
+                </div>
 
-            <div className="db-card" style={{ padding: '1.4rem', borderLeft: '4px solid #8b5cf6' }}>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Personal Coach Bookings</span>
-              <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-white)', margin: '0.3rem 0 0 0' }}>
-                ₹{(accountsSummary?.trainerRevenue || 0).toLocaleString('en-IN')}
-              </h3>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem', display: 'block' }}>
-                1-on-1 coaching mentorships
-              </span>
-            </div>
-          </div>
+                <div className="db-card" style={{ padding: '1.4rem', borderLeft: '4px solid #f59e0b' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Supplement Store Sales</span>
+                  <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-white)', margin: '0.3rem 0 0 0' }}>
+                    ₹{supplementVal.toLocaleString('en-IN')}
+                  </h3>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem', display: 'block' }}>
+                    Protein, Creatine & Stack orders
+                  </span>
+                </div>
+
+                <div className="db-card" style={{ padding: '1.4rem', borderLeft: '4px solid #8b5cf6' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Personal Coach Bookings</span>
+                  <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text-white)', margin: '0.3rem 0 0 0' }}>
+                    ₹{trainerVal.toLocaleString('en-IN')}
+                  </h3>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem', display: 'block' }}>
+                    1-on-1 coaching mentorships
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Transaction Ledger Card */}
           <div className="db-card flex-card">
@@ -2813,27 +3052,38 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
           </div>
 
           <div className="db-grid-row" style={{ gridTemplateColumns: '0.8fr 1.2fr', gap: '1.5rem' }}>
-            {/* Simulation scan form */}
+            {/* Trainer Attendance Board Terminal Card */}
             <div className="db-card flex-card" style={{ height: '100%' }}>
-              <h4 style={{ textTransform: 'uppercase', fontSize: '1rem', fontWeight: 800 }}>Mock RFID Check-in Terminal</h4>
-              <p className="card-subtitle">Simulate members scanning their RFID card at the turnstiles to test dashboard reactions</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h4 style={{ textTransform: 'uppercase', fontSize: '1rem', fontWeight: 800, margin: 0, color: 'var(--text-white)' }}>
+                  🏋️ Trainer Attendance Board
+                </h4>
+                <span style={{ fontSize: '0.68rem', background: 'rgba(0, 240, 255, 0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(0, 240, 255, 0.3)', padding: '0.2rem 0.6rem', borderRadius: '4px', fontWeight: 800 }}>
+                  ● Staff Terminal
+                </span>
+              </div>
+              <p className="card-subtitle" style={{ margin: '0.3rem 0 0 0', fontSize: '0.8rem' }}>
+                Clock-in certified coaches, verify shift duty attendance, and log active mentorship hours.
+              </p>
               
-              <form onSubmit={handleSimulateScanSubmit} id="admin-attendance-sim-form" style={{ marginTop: '1.2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <form onSubmit={handleTrainerAttendanceSubmit} id="admin-trainer-attendance-form" style={{ marginTop: '1.2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div className="form-group">
-                  <label className="form-label" htmlFor="sim-member-select">Select Gym Member</label>
+                  <label className="form-label" htmlFor="sim-trainer-select" style={{ fontSize: '0.8rem', fontWeight: 700 }}>
+                    Select Personal Coach / Trainer
+                  </label>
                   <select
-                    id="sim-member-select"
+                    id="sim-trainer-select"
                     className="form-input"
-                    value={simMember}
-                    onChange={(e) => setSimMember(e.target.value)}
-                    style={{ background: 'var(--bg-black)', border: '1px solid var(--border-color)', color: 'var(--text-white)' }}
+                    value={simTrainer}
+                    onChange={(e) => setSimTrainer(e.target.value)}
+                    style={{ background: 'var(--bg-black)', border: '1px solid var(--border-color)', color: 'var(--text-white)', padding: '0.65rem' }}
                   >
-                    {membersList.length === 0 ? (
-                      <option value="Ethan Hunt">Ethan Hunt (ID: #8092-PRO)</option>
+                    {trainersList.length === 0 ? (
+                      <option value="Coach Keerthan">Coach Keerthan (CSCS Master Trainer)</option>
                     ) : (
-                      membersList.map((m, idx) => (
-                        <option key={idx} value={m.name}>
-                          {m.name} (ID: {m.rfid || 'RF-' + (8000 + idx)})
+                      trainersList.map((t, idx) => (
+                        <option key={idx} value={t.name}>
+                          {t.name.startsWith('Coach') ? t.name : `Coach ${t.name}`} ({t.specialty || 'Certified Trainer'})
                         </option>
                       ))
                     )}
@@ -2841,21 +3091,40 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                 </div>
                 
                 <div className="form-group">
-                  <label className="form-label" htmlFor="sim-member-action">Simulate Action</label>
+                  <label className="form-label" htmlFor="sim-trainer-action" style={{ fontSize: '0.8rem', fontWeight: 700 }}>
+                    Shift Duty Action
+                  </label>
                   <select
-                    id="sim-member-action"
+                    id="sim-trainer-action"
                     className="form-input"
-                    value={simAction}
-                    onChange={(e) => setSimAction(e.target.value)}
-                    style={{ background: 'var(--bg-black)', border: '1px solid var(--border-color)', color: 'var(--text-white)' }}
+                    value={simTrainerAction}
+                    onChange={(e) => setSimTrainerAction(e.target.value)}
+                    style={{ background: 'var(--bg-black)', border: '1px solid var(--border-color)', color: 'var(--text-white)', padding: '0.65rem' }}
                   >
-                    <option value="check-in">RFID Card Check-In</option>
-                    <option value="check-out">RFID Card Check-Out</option>
+                    <option value="check-in">🌅 Duty Clock-In (Morning Shift)</option>
+                    <option value="evening-in">🌙 Duty Clock-In (Evening Shift)</option>
+                    <option value="check-out">🏁 Duty Clock-Out (End Shift)</option>
+                    <option value="session-complete">⚡ 1-on-1 Mentorship Session Completed</option>
                   </select>
                 </div>
+
+                <div className="form-group">
+                  <label className="form-label" htmlFor="sim-trainer-notes" style={{ fontSize: '0.8rem', fontWeight: 700 }}>
+                    Shift Specialization / Duty Notes
+                  </label>
+                  <input
+                    type="text"
+                    id="sim-trainer-notes"
+                    className="form-input"
+                    placeholder="e.g. Floor Supervision & Client Assessment"
+                    value={trainerAttNote}
+                    onChange={(e) => setTrainerAttNote(e.target.value)}
+                    style={{ background: 'var(--bg-black)', border: '1px solid var(--border-color)', color: 'var(--text-white)', padding: '0.6rem' }}
+                  />
+                </div>
                 
-                <button type="submit" className="glow-btn" style={{ padding: '0.75rem', fontSize: '0.85rem', marginTop: '0.5rem', width: '100%' }}>
-                  Trigger Simulated Scan
+                <button type="submit" className="glow-btn" style={{ padding: '0.75rem', fontSize: '0.85rem', marginTop: '0.3rem', width: '100%', fontWeight: 800 }}>
+                  Log Trainer Attendance ⏱️
                 </button>
               </form>
             </div>
@@ -4487,10 +4756,12 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
 
                     const filteredTrainers = trainersList.filter((t) => {
                       const q = trainerSearchQuery.toLowerCase().trim();
-                      const assignedMembers = membersList.filter(m => 
-                        (m.trainer || '').toLowerCase().includes(t.name.toLowerCase()) || 
-                        (t.name.toLowerCase().includes('marcus') && ((m.trainer || '').toLowerCase().includes('marcus') || !m.trainer))
-                      );
+                      const trClean = t.name.toLowerCase().replace('coach ', '').trim();
+                      const assignedMembers = membersList.filter(m => {
+                        const mTr = (m.trainer || '').toLowerCase();
+                        if (!mTr) return trClean.includes('marcus');
+                        return mTr.includes(trClean) || trClean.includes(mTr.replace('coach ', '').trim());
+                      });
                       const clientNames = assignedMembers.map(m => m.name).join(' ').toLowerCase();
 
                       const matchesSearch = !q || (
@@ -4552,10 +4823,12 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                     }
 
                     return sortedTrainers.map((t, idx) => {
-                      const assignedMembers = membersList.filter(m => 
-                        (m.trainer || '').toLowerCase().includes(t.name.toLowerCase()) || 
-                        (t.name.toLowerCase().includes('marcus') && ((m.trainer || '').toLowerCase().includes('marcus') || !m.trainer))
-                      );
+                      const trClean = t.name.toLowerCase().replace('coach ', '').trim();
+                      const assignedMembers = membersList.filter(m => {
+                        const mTr = (m.trainer || '').toLowerCase();
+                        if (!mTr) return trClean.includes('marcus');
+                        return mTr.includes(trClean) || trClean.includes(mTr.replace('coach ', '').trim());
+                      });
                       const clientCount = assignedMembers.length;
                       const totalEarnings = getEarnings(t);
 

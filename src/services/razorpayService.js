@@ -147,7 +147,14 @@ export const initiateRazorpayPayment = async ({
     const rzp = new window.Razorpay(options);
     rzp.on('payment.failed', function (resp) {
       console.error('[Razorpay Payment Failed]:', resp.error);
-      if (onFailure) onFailure(resp.error);
+      const isAuthError = resp.error?.code === 'BAD_REQUEST_ERROR' || resp.error?.description?.includes('Authentication');
+      if (onFailure) {
+        onFailure({
+          ...resp.error,
+          isAuthError,
+          message: isAuthError ? 'Razorpay Test Key invalid. Please use local payment mode or update RAZORPAY_KEY_ID.' : resp.error?.description || 'Payment failed.'
+        });
+      }
     });
     rzp.open();
   } catch (err) {

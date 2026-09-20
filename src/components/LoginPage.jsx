@@ -51,11 +51,6 @@ export default function LoginPage({ navigate }) {
 
   const handleRoleSwitch = (role) => {
     setActiveRole(role);
-    const preset = mockDatabases[role];
-    if (preset) {
-      setEmail(preset.email);
-      setPassword(preset.password);
-    }
     setEmailError('');
     setPasswordError('');
   };
@@ -406,8 +401,7 @@ export default function LoginPage({ navigate }) {
                 </div>
                 {passwordError && <div className="error-feedback" id="password-error" style={{ display: 'block' }}>{passwordError}</div>}
               </div>
-
-              {/* Options row: remember checkbox and help tip wrapper */}
+              {/* Options row: remember checkbox */}
               <div className="form-options">
                 <label className="remember-me-label">
                   <input
@@ -419,21 +413,7 @@ export default function LoginPage({ navigate }) {
                   <span className="checkbox-box"></span>
                   Remember Me
                 </label>
-                
-                <div
-                  className="form-credential-helper"
-                  onClick={() => {
-                    setEmail(currentHelper.email);
-                    setPassword(currentHelper.password);
-                  }}
-                  style={{ cursor: 'pointer', background: 'rgba(198,255,0,0.06)', padding: '0.3rem 0.6rem', borderRadius: '4px', border: '1px solid rgba(198,255,0,0.2)' }}
-                  title="Click to auto-fill credentials"
-                >
-                  Click to Auto-fill: <strong style={{ color: 'var(--accent-volt)' }}>{currentHelper.email}</strong> / <strong style={{ color: 'var(--accent-cyan)' }}>{currentHelper.password}</strong> ⚡
-                </div>
               </div>
-
-              {/* Submit CTA */}
               <button
                 type="submit"
                 className="glow-btn login-submit-btn"

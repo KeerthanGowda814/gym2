@@ -108,6 +108,66 @@ const initialData = {
   supplements: {
     products: [
       {
+        id: "muscleblaze-biozyme",
+        name: "MuscleBlaze Biozyme Performance Whey",
+        category: "protein",
+        price: 2799,
+        origPrice: 3499,
+        rating: 4.9,
+        reviews: 2450,
+        tag: "50% Absorbability",
+        tagClass: "best-seller",
+        image: "assets/images/muscleblaze_whey.png",
+        desc: "Clinically tested 50% higher protein absorption rate. Biozyme Performance Whey with Enhanced Absorption Formula (EAF). Rich Chocolate, 2.0kg tub.",
+        specs: {
+          "Weight": "2.0 kg (4.4 lbs)",
+          "Protein / Serving": "25g",
+          "EAF Absorbability": "50% Higher",
+          "Flavor": "Rich Milk Chocolate",
+          "Servings": "50"
+        }
+      },
+      {
+        id: "gnc-whey-pro",
+        name: "GNC Pro Performance 100% Whey",
+        category: "protein",
+        price: 3199,
+        origPrice: 3999,
+        rating: 4.8,
+        reviews: 1890,
+        tag: "Official Brand",
+        tagClass: "best-seller",
+        image: "assets/images/gnc_whey.png",
+        desc: "Instantized 100% Whey Protein with 24g ultra-pure protein and 5.5g BCAAs per scoop. Fast absorbing muscle recovery blend. Chocolate Fudge flavor.",
+        specs: {
+          "Weight": "2.0 kg (4.4 lbs)",
+          "Protein / Serving": "24g",
+          "BCAAs": "5.5g",
+          "Flavor": "Chocolate Fudge",
+          "Servings": "57"
+        }
+      },
+      {
+        id: "wellcore-creatine",
+        name: "Wellcore Pure Micronized Creatine Powder",
+        category: "strength",
+        price: 1299,
+        origPrice: 1699,
+        rating: 4.9,
+        reviews: 3120,
+        tag: "Best Seller",
+        tagClass: "best-seller",
+        image: "assets/images/wellcore_creatine.png",
+        desc: "100% Pure Unflavored Micronized Creatine Monohydrate. Rapid ATP synthesis, uncompromised purity for explosive strength & muscular endurance.",
+        specs: {
+          "Weight": "250g Jar",
+          "Serving Size": "3g",
+          "Purity": "100% Micronized",
+          "Flavor": "Unflavored",
+          "Servings": "83"
+        }
+      },
+      {
         id: "whey-isolate",
         name: "Apex Whey Protein Isolate",
         category: "protein",

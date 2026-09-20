@@ -224,34 +224,78 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
     method: 'online' // 'online' | 'cod' | 'account'
   });
 
-  // Fetch backend products if available
+// Helper to deduplicate & merge product lists
+const mergeProducts = (...productArrays) => {
+  const map = new Map();
+  productArrays.forEach((arr) => {
+    if (Array.isArray(arr)) {
+      arr.forEach((p) => {
+        if (p && (p.id || p.name)) {
+          const key = (p.id || p.name).toString().toLowerCase();
+          if (map.has(key)) {
+            map.set(key, { ...map.get(key), ...p });
+          } else {
+            map.set(key, p);
+          }
+        }
+      });
+    }
+  });
+  return Array.from(map.values());
+};
+
+  // Fetch backend products & sync local storage catalog
   useEffect(() => {
     async function loadProducts() {
+      let localProds = [];
       try {
-        const fetched = await memberApi.getSupplementProducts();
-        if (fetched && Array.isArray(fetched) && fetched.length > 0) {
-          setStoreProducts(fetched);
-          localStorage.setItem('apex_supplement_products', JSON.stringify(fetched));
-          return;
+        const saved = localStorage.getItem('apex_supplement_products');
+        if (saved) localProds = JSON.parse(saved);
+      } catch (e) {}
+
+      let fetched = [];
+      try {
+        const remote = await memberApi.getSupplementProducts();
+        if (remote && Array.isArray(remote) && remote.length > 0) {
+          fetched = remote;
         }
       } catch (err) {
         console.warn('Failed to load remote products, checking local cache:', err);
       }
 
-      // Fallback: check localStorage
-      const localProds = localStorage.getItem('apex_supplement_products');
-      if (localProds) {
-        try {
-          setStoreProducts(JSON.parse(localProds));
-        } catch (e) {
-          setStoreProducts(DEFAULT_PRODUCTS);
-        }
-      } else {
-        setStoreProducts(DEFAULT_PRODUCTS);
-      }
+      // Merge DEFAULT_PRODUCTS, localStorage products, and remote fetched products
+      const merged = mergeProducts(DEFAULT_PRODUCTS, localProds, fetched);
+      setStoreProducts(merged);
+      try {
+        localStorage.setItem('apex_supplement_products', JSON.stringify(merged));
+      } catch (e) {}
     }
+
     loadProducts();
+
+    // Live Event listener for cross-tab & cross-component supplement catalog sync
+    const handleProductsUpdate = (e) => {
+      if (e && e.type === 'storage' && e.key && e.key !== 'apex_supplement_products') return;
+      try {
+        const saved = localStorage.getItem('apex_supplement_products');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setStoreProducts((prev) => mergeProducts(prev, parsed));
+          }
+        }
+      } catch (err) {}
+    };
+
+    window.addEventListener('storage', handleProductsUpdate);
+    window.addEventListener('apex_supplements_updated', handleProductsUpdate);
+
+    return () => {
+      window.removeEventListener('storage', handleProductsUpdate);
+      window.removeEventListener('apex_supplements_updated', handleProductsUpdate);
+    };
   }, []);
+
 
   // Filter and sort products
   let filtered = storeProducts.filter((p) => {
@@ -540,7 +584,12 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
         onFailure: (err) => {
           setIsProcessingPayment(false);
           if (err?.reason !== 'cancelled') {
-            alert(err?.message || 'Payment could not be completed via Razorpay. Please try again.');
+            if (err?.isAuthError || err?.code === 'BAD_REQUEST_ERROR') {
+              // Automatically switch to interactive simulated Gateway modal if API key is test/invalid
+              setShowGateway(true);
+            } else {
+              alert(err?.message || 'Payment could not be completed via Razorpay. Please try again.');
+            }
           }
         }
       });
@@ -596,24 +645,20 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
 
     const res = await memberApi.addSupplementProduct(payload);
 
-    if (res && res.success && res.data) {
-      setStoreProducts((prev) => {
-        const updated = [...prev, res.data];
+    let addedProduct = res && res.success && res.data ? res.data : {
+      ...payload,
+      id: newProdName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + Date.now()
+    };
+
+    setStoreProducts((prev) => {
+      const updated = mergeProducts(prev, [addedProduct]);
+      try {
         localStorage.setItem('apex_supplement_products', JSON.stringify(updated));
-        return updated;
-      });
-    } else {
-      console.warn("Backend addProduct failed, saving client-side.");
-      const clientProduct = {
-        ...payload,
-        id: newProdName.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now()
-      };
-      setStoreProducts((prev) => {
-        const updated = [...prev, clientProduct];
-        localStorage.setItem('apex_supplement_products', JSON.stringify(updated));
-        return updated;
-      });
-    }
+        window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new CustomEvent('apex_supplements_updated', { detail: updated }));
+      } catch (e) {}
+      return updated;
+    });
 
     // Reset Form
     setIsAddProductOpen(false);
@@ -636,11 +681,15 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
 
   const handleDeleteProduct = async (productId, productName) => {
     if (window.confirm(`Are you sure you want to delete the product "${productName}"?`)) {
-      const res = await memberApi.deleteSupplementProduct(productId);
+      await memberApi.deleteSupplementProduct(productId);
       
       setStoreProducts((prev) => {
         const updated = prev.filter((p) => p.id !== productId);
-        localStorage.setItem('apex_supplement_products', JSON.stringify(updated));
+        try {
+          localStorage.setItem('apex_supplement_products', JSON.stringify(updated));
+          window.dispatchEvent(new Event('storage'));
+          window.dispatchEvent(new CustomEvent('apex_supplements_updated', { detail: updated }));
+        } catch (e) {}
         return updated;
       });
       

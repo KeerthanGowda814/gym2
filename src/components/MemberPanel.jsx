@@ -185,38 +185,51 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
   const [orderStatusFilter, setOrderStatusFilter] = useState('All');
 
   const loadMemberOrders = async () => {
-    const userEmail = currentUser?.email || profileData?.email || 'member@apex.com';
-    const userName = currentUser?.name || profileData?.name || '';
+    const userEmail = (currentUser?.email || profileData?.email || '').toLowerCase().trim();
+    const userName = (currentUser?.name || profileData?.name || '').toLowerCase().trim();
+
+    if (!userEmail && !userName) {
+      setMemberOrders([]);
+      return;
+    }
+
     try {
-      const serverOrders = await memberApi.getSupplementOrders(userEmail);
-      const allServerOrders = await memberApi.getSupplementOrders();
+      const serverOrders = userEmail ? await memberApi.getSupplementOrders(userEmail) : [];
       let localOrders = [];
       try {
         localOrders = JSON.parse(localStorage.getItem('apex_supplement_orders') || '[]');
       } catch (e) {}
 
-      const rawCombined = [...(localOrders || []), ...(serverOrders || []), ...(allServerOrders || [])];
+      const rawCombined = [...(localOrders || []), ...(serverOrders || [])];
       
       const matched = rawCombined.filter((o) => {
         if (!o) return false;
-        if (!userEmail && !userName) return true;
-        const oEmail = (o.userEmail || '').toLowerCase();
-        const oName = (o.userName || '').toLowerCase();
-        const curEmail = (userEmail || '').toLowerCase();
-        const curName = (userName || '').toLowerCase();
+        const oEmail = (o.userEmail || o.email || o.shippingInfo?.email || '').toLowerCase().trim();
+        const oName = (o.userName || o.memberName || o.customerName || o.clientName || o.shippingInfo?.fullName || '').toLowerCase().trim();
 
-        return (
-          (curEmail && oEmail === curEmail) ||
-          (curName && oName.includes(curName)) ||
-          (curEmail && curEmail.includes('keerthan') && oEmail.includes('keerthan')) ||
-          curEmail === 'member@apex.com'
-        );
+        if (userEmail && oEmail) {
+          if (oEmail === userEmail) return true;
+        }
+
+        if (userName && oName) {
+          if (oName === userName) return true;
+          const userTokens = userName.split(/\s+/).filter(Boolean);
+          const orderTokens = oName.split(/\s+/).filter(Boolean);
+          if (userTokens.length > 0 && orderTokens.length > 0 && userTokens[0] === orderTokens[0]) {
+            if (userTokens.length === 1 || orderTokens.length === 1 || userTokens[userTokens.length - 1] === orderTokens[orderTokens.length - 1]) {
+              return true;
+            }
+          }
+        }
+
+        return false;
       });
 
       const map = new Map();
-      (matched.length > 0 ? matched : rawCombined).forEach((o) => {
-        if (o && (o.orderId || o.txId)) {
-          map.set(o.orderId || o.txId, o);
+      matched.forEach((o) => {
+        const key = o.orderId || o.txId || o.id || o._id;
+        if (key) {
+          map.set(key, o);
         }
       });
       setMemberOrders(Array.from(map.values()));
@@ -229,21 +242,43 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
     loadMemberOrders();
     window.addEventListener('storage', loadMemberOrders);
     return () => window.removeEventListener('storage', loadMemberOrders);
-  }, [currentUser]);
+  }, [currentUser, profileData]);
 
   // Billing states
   const [membershipTier, setMembershipTier] = useState('Muscle Pro');
   const [autoRenew, setAutoRenew] = useState(true);
   const [activeReceipt, setActiveReceipt] = useState(null);
   const [billingInvoices, setBillingInvoices] = useState(() => {
-    const memberKey = currentUser?.name || currentUser?.email || 'member_user';
-    const saved = localStorage.getItem(`apex_member_invoices_${memberKey}`);
-    if (saved) {
+    const keysToTry = [
+      currentUser?.email ? currentUser.email.toLowerCase().replace(/[^a-z0-9]/g, '_') : null,
+      currentUser?.name ? currentUser.name.toLowerCase().replace(/[^a-z0-9]/g, '_') : null,
+      currentUser?.name,
+      currentUser?.email
+    ].filter(Boolean);
+
+    let foundInvoices = [];
+    for (const k of keysToTry) {
       try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        const saved = localStorage.getItem(`apex_member_invoices_${k}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            foundInvoices.push(...parsed);
+          }
+        }
       } catch (e) {}
     }
+
+    if (foundInvoices.length > 0) {
+      const map = new Map();
+      foundInvoices.forEach(inv => {
+        if (inv && (inv.txId || inv.paymentId)) {
+          map.set(inv.txId || inv.paymentId, inv);
+        }
+      });
+      return Array.from(map.values());
+    }
+
     return [
       {
         txId: 'MH-RCP-2026-581717',
@@ -260,7 +295,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
           title: 'Muscle Core Pass Subscription',
           amount: 800,
           userName: currentUser?.name || 'Athlete Member',
-          userEmail: currentUser?.email || 'thepcworkshop1@gmail.com',
+          userEmail: currentUser?.email || 'gkeerthan583@gmail.com',
           userPhone: '+91 98801 56947',
           paymentMethod: 'Razorpay Online (UPI/Cards/NetBanking)',
           paymentType: 'membership',
@@ -281,7 +316,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
     }
   }, [billingInvoices, currentUser]);
 
-  // Sync official Razorpay Receipts from backend
+  // Sync official Razorpay Receipts from backend & local storage
   useEffect(() => {
     const fetchMemberReceipts = async () => {
       try {
@@ -295,8 +330,10 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
         const res = await fetch(url);
         const data = await res.json();
+        
+        let fetchedMapped = [];
         if (data.success && data.receipts && data.receipts.length > 0) {
-          const mapped = data.receipts.map((r) => ({
+          fetchedMapped = data.receipts.map((r) => ({
             txId: r.receiptNumber || r.paymentId,
             orderId: r.orderId,
             paymentId: r.paymentId,
@@ -308,20 +345,82 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
               : 'Recent',
             fullReceipt: r
           }));
-          setBillingInvoices((prev) => {
-            const map = new Map();
-            [...mapped, ...prev].forEach((item) => {
-              if (item && item.txId) map.set(item.txId, item);
-            });
-            return Array.from(map.values());
-          });
         }
+
+        // Also check any locally saved invoices across key variants
+        const keysToTry = [
+          memberKey,
+          currentUser?.name,
+          currentUser?.email,
+          profileData?.name,
+          profileData?.email,
+          'member_user'
+        ].filter(Boolean);
+
+        let localInvoices = [];
+        for (const k of keysToTry) {
+          try {
+            const raw = localStorage.getItem(`apex_member_invoices_${k}`);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) localInvoices.push(...parsed);
+            }
+          } catch (e) {}
+        }
+
+        // Convert member supplement orders into invoice format for unified payment history
+        const suppMappedInvoices = (memberOrders || []).map((o) => {
+          const txKey = o.receiptNumber || o.txId || o.orderId || ('SUPP-' + o.date);
+          const pMethod = o.paymentMethod || 'Online Payment (Razorpay)';
+          const numTotal = Number(o.total || o.totalAmount || 0);
+          const subNet = Math.round((numTotal / 1.18) * 100) / 100;
+          const gstAmt = Math.round((numTotal - subNet) * 100) / 100;
+          return {
+            txId: txKey,
+            orderId: o.orderId,
+            paymentId: o.txId || o.paymentId,
+            plan: `Supplement Store: ${o.itemsSummary || 'Products Purchase'}`,
+            amount: numTotal,
+            status: o.paymentStatus === 'Pending (COD)' ? 'pending (cod)' : (o.paymentStatus === 'Billed to Member Account' ? 'account' : 'paid'),
+            date: o.date || 'Recent',
+            fullReceipt: o.receiptObj || {
+              receiptNumber: txKey,
+              orderId: o.orderId,
+              paymentId: o.txId,
+              title: `MuScLe HuB Store: ${o.itemsSummary || 'Supplement Order'}`,
+              amount: numTotal,
+              userName: o.userName || profileData?.name || currentUser?.name || 'Athlete Member',
+              userEmail: o.userEmail || profileData?.email || currentUser?.email || 'athlete@musclehub.club',
+              userPhone: o.userPhone || (o.shippingInfo && o.shippingInfo.phone) || '+91 98765 43210',
+              paymentMethod: pMethod,
+              paymentType: 'supplement_order',
+              status: o.status || 'paid',
+              createdAt: o.date ? new Date(o.date).toISOString() : new Date().toISOString(),
+              items: (o.items && o.items.length > 0)
+                ? o.items.map(i => ({ name: i.name, qty: i.quantity || i.qty || 1, unitPrice: Number(i.price), total: Number(i.price) * Number(i.quantity || i.qty || 1) }))
+                : [{ name: o.itemsSummary || 'Supplement Items', qty: 1, unitPrice: numTotal, total: numTotal }],
+              subtotal: subNet,
+              gstAmount: gstAmt,
+              netAmount: numTotal
+            }
+          };
+        });
+
+        setBillingInvoices((prev) => {
+          const map = new Map();
+          [...fetchedMapped, ...suppMappedInvoices, ...localInvoices, ...prev].forEach((item) => {
+            if (item && (item.txId || item.paymentId)) {
+              map.set(item.txId || item.paymentId, item);
+            }
+          });
+          return Array.from(map.values());
+        });
       } catch (err) {
         console.warn('Could not load backend receipts:', err);
       }
     };
     fetchMemberReceipts();
-  }, [currentUser, profileData?.email, profileData?.name]);
+  }, [currentUser, profileData?.email, profileData?.name, memberKey, memberOrders]);
 
   const [renewed, setRenewed] = useState(false);
   const [daysLeft, setDaysLeft] = useState(() => {
@@ -406,27 +505,76 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
     if (saved) {
       try { return JSON.parse(saved); } catch (e) { }
     }
+    const userTrainer = profileData?.trainer || currentUser?.trainer || currentUser?.coachingTrainer || currentUser?.assignedTrainer;
+    if (userTrainer && userTrainer !== 'No Trainer Assigned' && userTrainer !== 'None') {
+      const cleanName = userTrainer.startsWith('Coach') ? userTrainer : `Coach ${userTrainer}`;
+      return {
+        name: cleanName,
+        email: 'coach@apex.com',
+        specialty: 'Personal Strength & Biomechanics Coach',
+        credentials: 'Certified Fitness Specialist',
+        bio: 'Dedicated certified trainer assigned to your personal coaching program.'
+      };
+    }
     return null;
   });
   const [trainerTabMode, setTrainerTabMode] = useState('assigned'); // 'assigned' | 'select'
   const [isTrainerPaid, setIsTrainerPaid] = useState(() => {
     const paid = localStorage.getItem(`apex_trainer_paid_${memberKey}`);
-    if (paid) return paid === 'true';
+    if (paid === 'true') return true;
+    if (paid === 'false') return false;
     const savedTrainer = localStorage.getItem(`apex_selected_trainer_${memberKey}`);
-    return !!savedTrainer;
+    if (savedTrainer) return true;
+    const userTrainer = profileData?.trainer || currentUser?.trainer || currentUser?.coachingTrainer || currentUser?.assignedTrainer;
+    if (userTrainer && userTrainer !== 'No Trainer Assigned' && userTrainer !== 'None') return true;
+    return false;
   });
   const [showTrainerSelection, setShowTrainerSelection] = useState(false);
   const [isMembershipPaid, setIsMembershipPaid] = useState(() => {
     const paid = localStorage.getItem(`apex_membership_paid_${memberKey}`);
-    if (paid) return paid === 'true';
+    if (paid === 'true') return true;
+    if (paid === 'false') return false;
     const savedPlan = localStorage.getItem(`apex_selected_plan_${memberKey}`);
     if (savedPlan) return true;
+    const tier = currentUser?.membershipTier || profileData?.membershipTier || currentUser?.plan;
+    if (tier && tier !== 'None' && tier !== 'Free' && tier !== '0' && tier !== 'Select Plan') return true;
     return false;
   });
   const [showMembershipSelection, setShowMembershipSelection] = useState(false);
 
-  // Prescribed Diet Plan Modal States & Dynamic Refresh
+  // Automatically sync active coach & membership state if user profile has an assigned trainer or active plan
+  useEffect(() => {
+    const userTrainer = profileData?.trainer || currentUser?.trainer || currentUser?.coachingTrainer || currentUser?.assignedTrainer;
+    if (userTrainer && userTrainer !== 'No Trainer Assigned' && userTrainer !== 'None') {
+      const cleanName = userTrainer.startsWith('Coach') ? userTrainer : `Coach ${userTrainer}`;
+      if (!selectedTrainer || selectedTrainer.name !== cleanName) {
+        const trainerObj = {
+          name: cleanName,
+          email: 'coach@apex.com',
+          specialty: 'Personal Strength & Biomechanics Coach',
+          credentials: 'Certified Fitness Specialist',
+          bio: 'Dedicated certified trainer assigned to your personal coaching program.'
+        };
+        setSelectedTrainer(trainerObj);
+        localStorage.setItem(`apex_selected_trainer_${memberKey}`, JSON.stringify(trainerObj));
+      }
+      setIsTrainerPaid(true);
+      localStorage.setItem(`apex_trainer_paid_${memberKey}`, 'true');
+    }
+
+    const tier = currentUser?.membershipTier || profileData?.membershipTier || currentUser?.plan;
+    if (tier && tier !== 'None' && tier !== 'Free' && tier !== '0' && tier !== 'Select Plan') {
+      setIsMembershipPaid(true);
+      localStorage.setItem(`apex_membership_paid_${memberKey}`, 'true');
+      if (!localStorage.getItem(`apex_selected_plan_${memberKey}`)) {
+        localStorage.setItem(`apex_selected_plan_${memberKey}`, tier);
+      }
+    }
+  }, [profileData?.trainer, profileData?.membershipTier, currentUser?.trainer, currentUser?.membershipTier, memberKey]);
+
+  // Prescribed Diet & Workout Plan Modal States & Dynamic Refresh
   const [showDietModal, setShowDietModal] = useState(false);
+  const [showWorkoutModal, setShowWorkoutModal] = useState(false);
   const [hasProceededToMembership, setHasProceededToMembership] = useState(false);
 
   const [calcInputs, setCalcInputs] = useState(() => {
@@ -548,6 +696,12 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
     const latestPlan = loadAssignedDietPlan();
     setMemberDietPlan(latestPlan);
     setShowDietModal(true);
+  };
+
+  const handleOpenWorkoutModal = () => {
+    const latestPlan = loadAssignedWorkoutPlan();
+    setMemberWorkoutPlan(latestPlan);
+    setShowWorkoutModal(true);
   };
 
   useEffect(() => {
@@ -748,11 +902,15 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
         onFailure: (err) => {
           setIsProcessingTrainerPayment(false);
           if (err?.reason !== 'cancelled') {
-            CustomSwal.fire({
-              icon: 'error',
-              title: 'Payment Incomplete',
-              text: err?.message || 'Payment could not be completed via Razorpay. Please try again.'
-            });
+            if (err?.isAuthError || err?.code === 'BAD_REQUEST_ERROR') {
+              setShowTrainerGateway(true);
+            } else {
+              CustomSwal.fire({
+                icon: 'error',
+                title: 'Payment Incomplete',
+                text: err?.message || 'Payment could not be completed via Razorpay. Please try again.'
+              });
+            }
           }
         }
       });
@@ -904,6 +1062,8 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
   const handleCandidateSelectTrainer = async (trainer) => {
     setSelectedTrainer(trainer);
     localStorage.setItem(`apex_selected_trainer_${memberKey}`, JSON.stringify(trainer));
+    setIsTrainerPaid(true);
+    localStorage.setItem(`apex_trainer_paid_${memberKey}`, 'true');
     setTrainerTabMode('assigned');
     try {
       await memberApi.selectTrainer(trainer.userId || trainer.id, trainer.name);
@@ -1109,19 +1269,64 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
   const loadMemberSchedules = async () => {
     try {
-      const currentName = currentUser?.name || profileData?.name || '';
+      const currentName = profileData?.name || currentUser?.name || 'Athlete';
       const remoteSchedules = await memberApi.getTrainerSchedule(currentName);
-      const localAgenda = JSON.parse(localStorage.getItem('apex_trainer_agenda') || '[]');
       
-      const combined = [...(remoteSchedules || []), ...localAgenda];
+      let localAgenda = [];
+      try {
+        const raw = localStorage.getItem('apex_trainer_agenda');
+        if (raw) {
+          localAgenda = JSON.parse(raw);
+        } else {
+          localAgenda = [
+            {
+              id: 'ag-def-1',
+              timeBlock: '06:00 AM - 07:30 AM',
+              time: '06:00 AM - 07:30 AM',
+              client: currentName || 'Keerthan',
+              routine: 'Hypertrophy Power Bench & Upper Body Overload',
+              objective: 'Hypertrophy Power Bench & Upper Body Overload',
+              shiftCategory: 'Morning Shift',
+              status: 'Ready'
+            },
+            {
+              id: 'ag-def-2',
+              timeBlock: '05:00 PM - 06:30 PM',
+              time: '05:00 PM - 06:30 PM',
+              client: 'All Members',
+              routine: 'High-Intensity Conditioning & Core Stability',
+              objective: 'High-Intensity Conditioning & Core Stability',
+              shiftCategory: 'Evening Shift',
+              status: 'Scheduled'
+            }
+          ];
+          localStorage.setItem('apex_trainer_agenda', JSON.stringify(localAgenda));
+        }
+      } catch (e) {}
+
+      const combined = [...(remoteSchedules || []), ...(localAgenda || [])];
       const map = new Map();
+      const currentClean = (currentName || '').toLowerCase().trim();
+      const firstWord = currentClean.split(' ')[0];
+
       for (const item of combined) {
-        if (item.id && !map.has(item.id)) {
-          if (!currentName || !item.client || item.client.toLowerCase().trim() === currentName.toLowerCase().trim() || item.client === 'All Members') {
-            map.set(item.id, item);
+        const itemId = item.id || item._id || `${item.timeBlock}-${item.routine}`;
+        if (!map.has(itemId)) {
+          const clientClean = (item.client || item.memberName || '').toLowerCase().trim();
+          const isMatch = !currentClean || !clientClean || 
+            clientClean === 'all members' || 
+            clientClean === 'all athletes' || 
+            clientClean === currentClean || 
+            currentClean.includes(clientClean) || 
+            clientClean.includes(currentClean) ||
+            (firstWord && firstWord.length > 2 && clientClean.includes(firstWord));
+
+          if (isMatch) {
+            map.set(itemId, item);
           }
         }
       }
+
       setMemberSchedules(Array.from(map.values()));
     } catch (err) {
       console.warn("Error loading member schedules:", err);
@@ -1326,6 +1531,25 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
     };
     fetchAttForMonth();
   }, [selectedAttMonth, currentUser]);
+
+  // Real-time synchronization event listeners for trainer dispatches
+  useEffect(() => {
+    const handleSyncEvents = () => {
+      setMemberDietPlan(loadAssignedDietPlan());
+      setMemberWorkoutPlan(loadAssignedWorkoutPlan());
+      loadMemberSchedules();
+    };
+    window.addEventListener('storage', handleSyncEvents);
+    window.addEventListener('apex_workout_updated', handleSyncEvents);
+    window.addEventListener('apex_diet_updated', handleSyncEvents);
+    window.addEventListener('apex_schedule_updated', handleSyncEvents);
+    return () => {
+      window.removeEventListener('storage', handleSyncEvents);
+      window.removeEventListener('apex_workout_updated', handleSyncEvents);
+      window.removeEventListener('apex_diet_updated', handleSyncEvents);
+      window.removeEventListener('apex_schedule_updated', handleSyncEvents);
+    };
+  }, [currentUser]);
 
   const handleGateCheckIn = async () => {
     const userEmail = currentUser?.email || currentUser?.sub || profileData?.email || 'gkeerthan583@gmail.com';
@@ -1823,11 +2047,15 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
         onFailure: (err) => {
           setIsProcessingMembershipPayment(false);
           if (err?.reason !== 'cancelled') {
-            CustomSwal.fire({
-              icon: 'error',
-              title: 'Payment Incomplete',
-              text: err?.message || 'Payment could not be completed via Razorpay. Please try again.'
-            });
+            if (err?.isAuthError || err?.code === 'BAD_REQUEST_ERROR') {
+              setShowMembershipGateway(true);
+            } else {
+              CustomSwal.fire({
+                icon: 'error',
+                title: 'Payment Incomplete',
+                text: err?.message || 'Payment could not be completed via Razorpay. Please try again.'
+              });
+            }
           }
         }
       });
@@ -3781,6 +4009,14 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
                   <div style={{ display: 'flex', gap: '0.8rem', marginTop: '1rem', flexDirection: 'column' }}>
                     <button
+                      onClick={handleOpenWorkoutModal}
+                      className="outline-btn"
+                      id="btn-member-view-workout"
+                      style={{ width: '100%', padding: '0.8rem', fontSize: '0.85rem', borderColor: 'var(--primary-color)', color: 'var(--primary-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontWeight: 800, cursor: 'pointer' }}
+                    >
+                      🏋️‍♂️ View Prescribed Workout Plan
+                    </button>
+                    <button
                       onClick={handleOpenDietModal}
                       className="outline-btn"
                       id="btn-member-view-diet"
@@ -4122,6 +4358,147 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                 </div>
               )}
 
+              {/* PRESCRIBED WORKOUT PLAN MODAL OVERLAY */}
+              {showWorkoutModal && (
+                <div style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  background: 'rgba(0, 0, 0, 0.65)',
+                  backdropFilter: 'blur(8px)',
+                  zIndex: 999999,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '1rem'
+                }}>
+                  <div style={{
+                    background: 'var(--bg-card, #ffffff)',
+                    border: '1px solid var(--border-color)',
+                    boxShadow: '0 20px 50px rgba(0, 0, 0, 0.3), var(--glow-volt)',
+                    borderRadius: '14px',
+                    width: '100%',
+                    maxWidth: '650px',
+                    maxHeight: '90vh',
+                    overflowY: 'auto',
+                    padding: '2rem',
+                    position: 'relative',
+                    color: 'var(--text-white)'
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowWorkoutModal(false)}
+                      style={{
+                        position: 'absolute',
+                        top: '1.2rem',
+                        right: '1.2rem',
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        fontSize: '1.8rem',
+                        cursor: 'pointer',
+                        lineHeight: 1
+                      }}
+                    >
+                      &times;
+                    </button>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '0.5rem' }}>
+                      <span style={{ fontSize: '1.8rem' }}>🏋️‍♂️</span>
+                      <div>
+                        <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.35rem', color: 'var(--text-white)', margin: 0, textTransform: 'uppercase' }}>
+                          Prescribed Workout Program
+                        </h3>
+                        <p style={{ color: 'var(--accent-volt)', fontSize: '0.78rem', margin: 0, fontWeight: 700 }}>
+                          Prescribed by {selectedTrainer?.name || 'Personal Coach'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {memberWorkoutPlan ? (
+                      <div style={{ marginTop: '1.2rem' }}>
+                        {/* Plan Header Card */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-dark, rgba(255,255,255,0.03))', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '1.2rem' }}>
+                          <div>
+                            <h4 style={{ color: 'var(--text-white)', fontWeight: 800, fontSize: '1.1rem', margin: 0, textTransform: 'uppercase' }}>
+                              {memberWorkoutPlan.name}
+                            </h4>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0.3rem 0 0 0', lineHeight: 1.4 }}>
+                              Target Goal: <span style={{ color: 'var(--accent-volt)', fontWeight: 700 }}>{memberWorkoutPlan.target || 'General Strength'}</span>
+                            </p>
+                          </div>
+                          <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '1rem' }}>
+                            <span style={{ fontSize: '0.7rem', background: 'rgba(0,240,255,0.12)', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan)', padding: '0.2rem 0.6rem', borderRadius: '4px', fontWeight: 800, textTransform: 'uppercase' }}>
+                              ⏱️ {memberWorkoutPlan.duration || '45-60 Mins'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Prescribed Exercises Breakdown */}
+                        <h4 style={{ color: 'var(--accent-volt)', fontSize: '0.9rem', textTransform: 'uppercase', marginBottom: '0.8rem', fontWeight: 800 }}>
+                          💪 Prescribed Exercises & Training Protocol
+                        </h4>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                          {(() => {
+                            const rawEx = memberWorkoutPlan.exercises || memberWorkoutPlan.desc || '';
+                            const exercisesList = Array.isArray(rawEx)
+                              ? rawEx
+                              : typeof rawEx === 'string'
+                              ? rawEx.split(',').map(s => s.trim()).filter(Boolean)
+                              : [rawEx];
+
+                            if (exercisesList.length === 0) {
+                              return <p style={{ color: 'var(--text-dim)', fontStyle: 'italic' }}>No specific exercises detailed.</p>;
+                            }
+
+                            return exercisesList.map((ex, idx) => (
+                              <div key={idx} style={{ background: 'var(--bg-dark, rgba(255,255,255,0.02))', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.8rem 1rem', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                                <span style={{ background: 'rgba(255,94,0,0.15)', color: 'var(--primary-color, #ff5e00)', border: '1px solid rgba(255,94,0,0.3)', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 800 }}>
+                                  {idx + 1}
+                                </span>
+                                <div style={{ color: 'var(--text-white)', fontSize: '0.88rem', fontWeight: 600, flexGrow: 1 }}>
+                                  {ex}
+                                </div>
+                                <span style={{ fontSize: '0.72rem', color: 'var(--accent-volt)', background: 'rgba(198,255,0,0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 700 }}>
+                                  Prescribed
+                                </span>
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    ) : (
+                      <p style={{ color: 'var(--text-muted)' }}>No assigned workout plan found.</p>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+                      <button
+                        type="button"
+                        className="outline-btn"
+                        style={{ padding: '0.6rem 1.2rem', fontSize: '0.8rem' }}
+                        onClick={() => setShowWorkoutModal(false)}
+                      >
+                        Close
+                      </button>
+                      <button
+                        type="button"
+                        className="glow-btn"
+                        style={{ padding: '0.6rem 1.2rem', fontSize: '0.8rem' }}
+                        onClick={() => {
+                          setShowWorkoutModal(false);
+                          setChatInput(`Hi ${selectedTrainer?.name || 'Coach'}, can you explain or update the exercises in my prescribed workout program (${memberWorkoutPlan?.name || 'Workout Split'})?`);
+                        }}
+                      >
+                        💬 Request Workout Revision from Coach
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* PRESCRIBED COACHING SCHEDULE & SHIFT DISPATCHES CARD */}
               <div className="db-card" style={{ marginTop: '1.5rem', width: '100%' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.8rem' }}>
@@ -4419,24 +4796,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                 <p className="card-subtitle" style={{ margin: '0.2rem 0 0 0' }}>Generate & export certified attendance statements for training verification</p>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.8rem' }}>
-                <button
-                  type="button"
-                  onClick={() => handleDownloadAttReport('pdf')}
-                  className="glow-btn"
-                  style={{ padding: '0.45rem 1.1rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-                >
-                  📄 Download PDF Report
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDownloadAttReport('csv')}
-                  className="outline-btn"
-                  style={{ padding: '0.45rem 1.1rem', fontSize: '0.78rem', borderColor: 'var(--accent-cyan)', color: 'var(--accent-cyan)' }}
-                >
-                  📊 Export CSV Log
-                </button>
-              </div>
+
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.2rem' }}>

@@ -120,22 +120,32 @@ router.post('/checkout', async (req, res) => {
   const detailedItems = [];
 
   for (const item of cartItems) {
-    const prod = db.supplements.products.find((p) => p.id === item.productId || p.id === item.product?.id);
-    const qty = Number(item.qty) || 1;
+    const prod = Array.isArray(db.supplements?.products)
+      ? db.supplements.products.find((p) => p.id === item.productId || p.id === item.id || p.id === item.product?.id || p.name === item.name || p.name === item.product?.name)
+      : null;
+    
+    const qty = Number(item.qty || item.quantity) || 1;
+    const itemPrice = prod ? Number(prod.price) : Number(item.price || item.unitPrice || item.product?.price || item.total || 0);
+    const itemName = prod ? prod.name : (item.name || item.product?.name || 'Supplement Product');
 
-    if (prod) {
-      const itemSub = prod.price * qty;
+    if (itemPrice > 0 || itemName) {
+      const itemSub = itemPrice * qty;
       subtotal += itemSub;
-      itemsSummaryList.push(`${qty}x ${prod.name}`);
+      itemsSummaryList.push(`${qty}x ${itemName}`);
       detailedItems.push({
-        id: prod.id,
-        name: prod.name,
-        price: prod.price,
+        id: prod?.id || item.id || item.productId || `prod-${Date.now()}`,
+        name: itemName,
+        price: itemPrice,
         quantity: qty,
-        image: prod.image,
-        category: prod.category
+        image: prod?.image || item.image || item.product?.image || '',
+        category: prod?.category || item.category || item.product?.category || 'Supplements'
       });
     }
+  }
+
+  // Fallback to request body total if subtotal could not be calculated from items
+  if (subtotal === 0 && (req.body.total || req.body.totalBilled || req.body.amount)) {
+    subtotal = Number(req.body.total || req.body.totalBilled || req.body.amount || 0);
   }
 
   const memberDiscount = subtotal * 0.10; // Automatic 10% Member discount
