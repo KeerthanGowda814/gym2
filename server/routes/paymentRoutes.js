@@ -404,11 +404,6 @@ router.get('/receipts', async (req, res) => {
         if (type && type !== 'all' && r.paymentType !== type) return false;
         return true;
       });
-
-      // If specific email filter returned 0, return all receipts so members never see an empty table
-      if (receipts.length === 0 && allReceipts.length > 0) {
-        receipts = allReceipts;
-      }
     }
 
     return res.json({

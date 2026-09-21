@@ -79,7 +79,7 @@ export const initiateRazorpayPayment = async ({
       currency: 'INR',
       name: 'MuScLe HuB',
       description: title,
-      image: '/favicon.svg',
+      image: 'https://cdn-icons-png.flaticon.com/512/2964/2964514.png',
       prefill: {
         name: memberInfo.name || 'Athlete Member',
         email: memberInfo.email || 'athlete@apex.club',

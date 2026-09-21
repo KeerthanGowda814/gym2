@@ -3,6 +3,7 @@ import { memberApi } from '../services/memberApi';
 import DummyPaymentGateway from './DummyPaymentGateway';
 import ReceiptModal from './ReceiptModal';
 import { initiateRazorpayPayment } from '../services/razorpayService';
+import { safeSetItem } from '../utils/storage';
 
 
 const DEFAULT_PRODUCTS = [
@@ -492,7 +493,7 @@ const mergeProducts = (...productArrays) => {
     try {
       const existingOrders = JSON.parse(localStorage.getItem('apex_supplement_orders') || '[]');
       existingOrders.unshift(fullOrderObj);
-      localStorage.setItem('apex_supplement_orders', JSON.stringify(existingOrders));
+      safeSetItem('apex_supplement_orders', existingOrders);
       window.dispatchEvent(new Event('storage'));
     } catch (err) {
       console.warn("Error updating localStorage orders:", err);

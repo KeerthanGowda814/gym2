@@ -151,7 +151,7 @@ export const ApexAuth = {
       name: payload.name || (payload.email ? payload.email.split('@')[0] : 'User'),
       role: payload.role || 'member',
       picture: payload.picture || null,
-      membershipTier: payload.membershipTier || 'Muscle Pro',
+      membershipTier: payload.membershipTier || 'None',
       ...payload
     };
   }

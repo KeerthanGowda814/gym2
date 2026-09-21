@@ -3,6 +3,7 @@ import { memberApi } from '../services/memberApi';
 import { trainerApi } from '../services/trainerApi';
 import { CustomSwal } from '../utils/swal';
 import ReceiptModal from './ReceiptModal';
+import { safeSetItem } from '../utils/storage';
 
 export default function TrainerPanel({ activeView, currentUser }) {
   const validTabs = ['overview', 'members', 'workouts', 'diets', 'schedule', 'attendance'];
@@ -911,23 +912,23 @@ export default function TrainerPanel({ activeView, currentUser }) {
 
   // Auto-sync state edits back to localStorage
   useEffect(() => {
-    localStorage.setItem('apex_trainer_members', JSON.stringify(members));
+    safeSetItem('apex_trainer_members', members);
   }, [members]);
 
   useEffect(() => {
-    localStorage.setItem('apex_trainer_workouts', JSON.stringify(workoutPlans));
+    safeSetItem('apex_trainer_workouts', workoutPlans);
   }, [workoutPlans]);
 
   useEffect(() => {
-    localStorage.setItem('apex_trainer_diets', JSON.stringify(dietPlans));
+    safeSetItem('apex_trainer_diets', dietPlans);
   }, [dietPlans]);
 
   useEffect(() => {
-    localStorage.setItem('apex_trainer_agenda', JSON.stringify(agenda));
+    safeSetItem('apex_trainer_agenda', agenda);
   }, [agenda]);
 
   useEffect(() => {
-    localStorage.setItem('apex_trainer_attendance', JSON.stringify(attendanceLogs));
+    safeSetItem('apex_trainer_attendance', attendanceLogs);
   }, [attendanceLogs]);
 
   // --- FORM STATES ---

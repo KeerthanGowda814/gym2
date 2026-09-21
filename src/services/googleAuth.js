@@ -110,7 +110,7 @@ export const processGoogleCredential = async (credential, targetRole = 'member')
       name: userName,
       role: targetRole,
       picture: userPicture,
-      membershipTier: targetRole === 'trainer' ? 'Staff Trainer' : (targetRole === 'admin' ? 'System Admin' : 'Muscle Pro'),
+      membershipTier: targetRole === 'trainer' ? 'Staff Trainer' : (targetRole === 'admin' ? 'System Admin' : 'None'),
       joinedDate: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
       authProvider: 'google'
     };

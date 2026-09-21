@@ -48,15 +48,16 @@ router.get('/membership', (req, res) => {
  */
 router.get('/invoices', (req, res) => {
   const db = getDB();
-  const userEmail = req.user?.email ? req.user.email.toLowerCase() : '';
-  
-  // Filter invoices for current user, or return user's invoices
+  const userEmail = (req.query.email || req.user?.email || '').toLowerCase().trim();
+  const userName = (req.query.userName || req.user?.name || '').toLowerCase().trim();
+
   const userInvoices = (db.invoices || []).filter(inv => {
     if (!inv) return false;
-    if (inv.userEmail) {
-      return inv.userEmail.toLowerCase() === userEmail;
-    }
-    return userEmail === 'member@apex.com';
+    const invEmail = (inv.userEmail || inv.email || '').toLowerCase().trim();
+    const invName = (inv.userName || inv.name || '').toLowerCase().trim();
+    if (userEmail && invEmail) return invEmail === userEmail;
+    if (userName && invName) return invName === userName;
+    return false;
   });
 
   res.json({

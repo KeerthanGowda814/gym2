@@ -5,6 +5,7 @@ import ReceiptModal from './ReceiptModal';
 import { initiateRazorpayPayment } from '../services/razorpayService';
 import { memberApi } from '../services/memberApi';
 import { CustomSwal } from '../utils/swal';
+import { safeSetItem, safeGetItem, safeRemoveItem, sanitizeForStorage } from '../utils/storage';
 
 
 // Helper to parse weight strings (e.g., "175 lbs", "80 kg", "150")
@@ -84,7 +85,7 @@ const sanitizeProfile = (raw, currentUser) => {
       emergencyContact: 'Jane Hunt (+91 98765 43210)',
       address: 'Apex Fitness Member Residence',
       bio: 'Dedicated athlete focusing on progressive overload and powerlifting metrics.',
-      membershipTier: currentUser?.membershipTier || 'Muscle Pro',
+      membershipTier: (currentUser?.membershipTier && currentUser.membershipTier !== 'Muscle Pro') ? currentUser.membershipTier : 'None',
       joinedDate: resolvedJoinDate,
       profileImage: null
     };
@@ -103,7 +104,7 @@ const sanitizeProfile = (raw, currentUser) => {
     emergencyContact: cleanStr(raw.emergencyContact, ''),
     address: cleanStr(raw.address, ''),
     bio: cleanStr(raw.bio, ''),
-    membershipTier: raw.membershipTier || currentUser?.membershipTier || 'Muscle Pro',
+    membershipTier: (raw.membershipTier && raw.membershipTier !== 'Muscle Pro') ? raw.membershipTier : ((currentUser?.membershipTier && currentUser.membershipTier !== 'Muscle Pro') ? currentUser.membershipTier : 'None'),
     joinedDate: resolvedJoinDate,
     profileImage: raw.profileImage || currentUser?.picture || currentUser?.profileImage || null
   };
@@ -208,18 +209,11 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
         const oName = (o.userName || o.memberName || o.customerName || o.clientName || o.shippingInfo?.fullName || '').toLowerCase().trim();
 
         if (userEmail && oEmail) {
-          if (oEmail === userEmail) return true;
+          return oEmail === userEmail;
         }
 
         if (userName && oName) {
-          if (oName === userName) return true;
-          const userTokens = userName.split(/\s+/).filter(Boolean);
-          const orderTokens = oName.split(/\s+/).filter(Boolean);
-          if (userTokens.length > 0 && orderTokens.length > 0 && userTokens[0] === orderTokens[0]) {
-            if (userTokens.length === 1 || orderTokens.length === 1 || userTokens[userTokens.length - 1] === orderTokens[orderTokens.length - 1]) {
-              return true;
-            }
-          }
+          return oName === userName;
         }
 
         return false;
@@ -245,15 +239,60 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
   }, [currentUser, profileData]);
 
   // Billing states
-  const [membershipTier, setMembershipTier] = useState('Muscle Pro');
+  const [membershipTier, setMembershipTier] = useState(() => {
+    const savedPlan = localStorage.getItem(`apex_selected_plan_${memberKey}`);
+    if (savedPlan && savedPlan !== 'None' && savedPlan !== 'Select Plan') return savedPlan;
+    const tier = profileData?.membershipTier || currentUser?.membershipTier || currentUser?.plan;
+    if (tier && tier !== 'None' && tier !== 'Free' && tier !== '0' && tier !== 'Select Plan') return tier;
+    return 'None';
+  });
   const [autoRenew, setAutoRenew] = useState(true);
   const [activeReceipt, setActiveReceipt] = useState(null);
+  const isInvoiceBelongingToCurrentMember = (inv) => {
+    if (!inv) return false;
+    const currentEmail = (currentUser?.email || profileData?.email || '').toLowerCase().trim();
+    const currentName = (currentUser?.name || profileData?.name || '').toLowerCase().trim();
+
+    const invEmail = (
+      inv.userEmail ||
+      inv.email ||
+      inv.fullReceipt?.userEmail ||
+      inv.fullReceipt?.email ||
+      ''
+    ).toLowerCase().trim();
+
+    const invName = (
+      inv.userName ||
+      inv.name ||
+      inv.fullReceipt?.userName ||
+      inv.fullReceipt?.name ||
+      ''
+    ).toLowerCase().trim();
+
+    if (currentEmail && invEmail) {
+      return invEmail === currentEmail;
+    }
+
+    if (currentName && invName) {
+      return invName === currentName;
+    }
+
+    const isMockUser = currentEmail === 'member@apex.com' || currentName === 'ethan hunt';
+    if (!invEmail && !invName) {
+      return isMockUser;
+    }
+
+    return false;
+  };
+
   const [billingInvoices, setBillingInvoices] = useState(() => {
+    const currentEmail = (currentUser?.email || '').toLowerCase().trim();
+    const currentName = (currentUser?.name || '').toLowerCase().trim();
+
     const keysToTry = [
-      currentUser?.email ? currentUser.email.toLowerCase().replace(/[^a-z0-9]/g, '_') : null,
-      currentUser?.name ? currentUser.name.toLowerCase().replace(/[^a-z0-9]/g, '_') : null,
-      currentUser?.name,
-      currentUser?.email
+      memberKey,
+      currentEmail ? currentEmail.replace(/[^a-z0-9]/g, '_') : null,
+      currentName ? currentName.replace(/[^a-z0-9]/g, '_') : null
     ].filter(Boolean);
 
     let foundInvoices = [];
@@ -269,50 +308,31 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
       } catch (e) {}
     }
 
-    if (foundInvoices.length > 0) {
-      const map = new Map();
-      foundInvoices.forEach(inv => {
-        if (inv && (inv.txId || inv.paymentId)) {
-          map.set(inv.txId || inv.paymentId, inv);
-        }
-      });
-      return Array.from(map.values());
-    }
+    const filtered = foundInvoices.filter(inv => {
+      if (!inv) return false;
+      const invEmail = (inv.userEmail || inv.email || '').toLowerCase().trim();
+      const invName = (inv.userName || inv.name || '').toLowerCase().trim();
+      if (currentEmail && invEmail) return invEmail === currentEmail;
+      if (currentName && invName) return invName === currentName;
+      const isMockUser = currentEmail === 'member@apex.com' || currentName === 'ethan hunt';
+      if (!invEmail && !invName) return isMockUser;
+      return false;
+    });
 
-    return [
-      {
-        txId: 'MH-RCP-2026-581717',
-        orderId: 'ORD-MEM-PRO-3404',
-        paymentId: 'pay_TazxZ2dxBVsqjO',
-        plan: 'Muscle Core Pass Subscription',
-        amount: 800,
-        status: 'paid',
-        date: 'Sep 12, 2026',
-        fullReceipt: {
-          receiptNumber: 'MH-RCP-2026-581717',
-          orderId: 'ORD-MEM-PRO-3404',
-          paymentId: 'pay_TazxZ2dxBVsqjO',
-          title: 'Muscle Core Pass Subscription',
-          amount: 800,
-          userName: currentUser?.name || 'Athlete Member',
-          userEmail: currentUser?.email || 'gkeerthan583@gmail.com',
-          userPhone: '+91 98801 56947',
-          paymentMethod: 'Razorpay Online (UPI/Cards/NetBanking)',
-          paymentType: 'membership',
-          createdAt: new Date().toISOString(),
-          items: [{ name: 'Muscle Core Pass Subscription', qty: 1, unitPrice: 800, total: 800 }]
-        }
+    const map = new Map();
+    filtered.forEach(inv => {
+      if (inv && (inv.txId || inv.paymentId)) {
+        map.set(inv.txId || inv.paymentId, inv);
       }
-    ];
+    });
+    return Array.from(map.values());
   });
 
   // Auto-persist member billing invoices to local storage
   useEffect(() => {
     const memberKey = currentUser?.name || currentUser?.email || 'member_user';
     if (billingInvoices && billingInvoices.length > 0) {
-      try {
-        localStorage.setItem(`apex_member_invoices_${memberKey}`, JSON.stringify(billingInvoices));
-      } catch (e) {}
+      safeSetItem(`apex_member_invoices_${memberKey}`, billingInvoices);
     }
   }, [billingInvoices, currentUser]);
 
@@ -340,6 +360,8 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
             plan: r.title || 'Gym Membership & Services',
             amount: r.amount || r.netAmount || 0,
             status: r.status || 'paid',
+            userEmail: r.userEmail,
+            userName: r.userName,
             date: r.createdAt
               ? new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
               : 'Recent',
@@ -350,11 +372,10 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
         // Also check any locally saved invoices across key variants
         const keysToTry = [
           memberKey,
-          currentUser?.name,
-          currentUser?.email,
-          profileData?.name,
-          profileData?.email,
-          'member_user'
+          currentUser?.email ? currentUser.email.toLowerCase().replace(/[^a-z0-9]/g, '_') : null,
+          currentUser?.name ? currentUser.name.toLowerCase().replace(/[^a-z0-9]/g, '_') : null,
+          profileData?.email ? profileData.email.toLowerCase().replace(/[^a-z0-9]/g, '_') : null,
+          profileData?.name ? profileData.name.toLowerCase().replace(/[^a-z0-9]/g, '_') : null
         ].filter(Boolean);
 
         let localInvoices = [];
@@ -382,6 +403,8 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
             plan: `Supplement Store: ${o.itemsSummary || 'Products Purchase'}`,
             amount: numTotal,
             status: o.paymentStatus === 'Pending (COD)' ? 'pending (cod)' : (o.paymentStatus === 'Billed to Member Account' ? 'account' : 'paid'),
+            userEmail: o.userEmail || profileData?.email || currentUser?.email,
+            userName: o.userName || profileData?.name || currentUser?.name,
             date: o.date || 'Recent',
             fullReceipt: o.receiptObj || {
               receiptNumber: txKey,
@@ -409,11 +432,13 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
         setBillingInvoices((prev) => {
           const map = new Map();
           [...fetchedMapped, ...suppMappedInvoices, ...localInvoices, ...prev].forEach((item) => {
-            if (item && (item.txId || item.paymentId)) {
+            if (item && (item.txId || item.paymentId) && isInvoiceBelongingToCurrentMember(item)) {
               map.set(item.txId || item.paymentId, item);
             }
           });
-          return Array.from(map.values());
+          const result = Array.from(map.values());
+          safeSetItem(`apex_member_invoices_${memberKey}`, result);
+          return result;
         });
       } catch (err) {
         console.warn('Could not load backend receipts:', err);
@@ -422,21 +447,33 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
     fetchMemberReceipts();
   }, [currentUser, profileData?.email, profileData?.name, memberKey, memberOrders]);
 
+  const [isMembershipPaid, setIsMembershipPaid] = useState(() => {
+    const paid = localStorage.getItem(`apex_membership_paid_${memberKey}`);
+    if (paid === 'true') return true;
+    if (paid === 'false') return false;
+    const savedPlan = localStorage.getItem(`apex_selected_plan_${memberKey}`);
+    if (savedPlan && savedPlan !== 'None' && savedPlan !== 'Select Plan') return true;
+    const tier = currentUser?.membershipTier || profileData?.membershipTier || currentUser?.plan;
+    if (tier && tier !== 'None' && tier !== 'Free' && tier !== '0' && tier !== 'Select Plan') return true;
+    return false;
+  });
+  const [showMembershipSelection, setShowMembershipSelection] = useState(false);
+
   const [renewed, setRenewed] = useState(false);
   const [daysLeft, setDaysLeft] = useState(() => {
-    // Compute days left from stored purchase date + plan duration
     try {
+      const paid = localStorage.getItem(`apex_membership_paid_${memberKey}`);
       const purchaseDateStr = localStorage.getItem(`apex_membership_paid_date_${memberKey}`);
-      const planName = localStorage.getItem(`apex_selected_plan_${memberKey}`) || 'Muscle Pro';
-      const durationDays = planName === 'Muscle Elite' ? 365 : planName === 'Muscle Pro' ? 180 : 30;
-      if (purchaseDateStr) {
+      const planName = localStorage.getItem(`apex_selected_plan_${memberKey}`);
+      if (paid === 'true' && purchaseDateStr && planName && planName !== 'None') {
+        const durationDays = planName === 'Muscle Elite' ? 365 : planName === 'Muscle Pro' ? 180 : 30;
         const purchaseDate = new Date(purchaseDateStr);
         const expiryDate = new Date(purchaseDate.getTime() + durationDays * 24 * 60 * 60 * 1000);
         const diff = Math.ceil((expiryDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
         return Math.max(0, diff);
       }
     } catch (e) {}
-    return 30;
+    return 0;
   });
   const [trainerDaysLeft, setTrainerDaysLeft] = useState(() => {
     try {
@@ -450,7 +487,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
         return Math.max(0, diff);
       }
     } catch (e) {}
-    return 30;
+    return 0;
   });
   // Persistent member pass ID (generated once, tied to member key)
   const [memberPassId] = useState(() => {
@@ -458,29 +495,33 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
     if (stored) return stored;
     const hash = memberKey.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
     const newId = `MEM-${(10000 + (hash % 89999)).toString().padStart(5, '0')}`;
-    localStorage.setItem(`apex_pass_id_${memberKey}`, newId);
+    safeSetItem(`apex_pass_id_${memberKey}`, newId);
     return newId;
   });
   // Dynamic membership expiry date
   const membershipExpiryDate = (() => {
     try {
+      const paid = localStorage.getItem(`apex_membership_paid_${memberKey}`);
       const purchaseDateStr = localStorage.getItem(`apex_membership_paid_date_${memberKey}`);
-      const planName = membershipTier || localStorage.getItem(`apex_selected_plan_${memberKey}`) || 'Muscle Pro';
-      const durationDays = planName === 'Muscle Elite' ? 365 : planName === 'Muscle Pro' ? 180 : 30;
-      if (purchaseDateStr) {
+      const planName = membershipTier !== 'None' ? membershipTier : localStorage.getItem(`apex_selected_plan_${memberKey}`);
+      if (paid === 'true' && purchaseDateStr && planName && planName !== 'None') {
+        const durationDays = planName === 'Muscle Elite' ? 365 : planName === 'Muscle Pro' ? 180 : 30;
         const expiryDate = new Date(new Date(purchaseDateStr).getTime() + durationDays * 24 * 60 * 60 * 1000);
         return expiryDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       }
     } catch (e) {}
-    return profileData?.membershipExpiry || new Date(Date.now() + daysLeft * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    return isMembershipPaid && daysLeft > 0
+      ? new Date(Date.now() + daysLeft * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+      : 'No Active Expiry';
   })();
   // Dynamic membership expiry in card format MM/YY
   const membershipExpiryCardFormat = (() => {
     try {
+      const paid = localStorage.getItem(`apex_membership_paid_${memberKey}`);
       const purchaseDateStr = localStorage.getItem(`apex_membership_paid_date_${memberKey}`);
-      const planName = membershipTier || localStorage.getItem(`apex_selected_plan_${memberKey}`) || 'Muscle Pro';
-      const durationDays = planName === 'Muscle Elite' ? 365 : planName === 'Muscle Pro' ? 180 : 30;
-      if (purchaseDateStr) {
+      const planName = membershipTier !== 'None' ? membershipTier : localStorage.getItem(`apex_selected_plan_${memberKey}`);
+      if (paid === 'true' && purchaseDateStr && planName && planName !== 'None') {
+        const durationDays = planName === 'Muscle Elite' ? 365 : planName === 'Muscle Pro' ? 180 : 30;
         const expiryDate = new Date(new Date(purchaseDateStr).getTime() + durationDays * 24 * 60 * 60 * 1000);
         const m = String(expiryDate.getMonth() + 1).padStart(2, '0');
         const d = String(expiryDate.getDate()).padStart(2, '0');
@@ -488,7 +529,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
         return `${m}/${d}/${y}`;
       }
     } catch (e) {}
-    return '12/31/2027';
+    return '--/--/----';
   })();
 
   // Chat states
@@ -530,17 +571,6 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
     return false;
   });
   const [showTrainerSelection, setShowTrainerSelection] = useState(false);
-  const [isMembershipPaid, setIsMembershipPaid] = useState(() => {
-    const paid = localStorage.getItem(`apex_membership_paid_${memberKey}`);
-    if (paid === 'true') return true;
-    if (paid === 'false') return false;
-    const savedPlan = localStorage.getItem(`apex_selected_plan_${memberKey}`);
-    if (savedPlan) return true;
-    const tier = currentUser?.membershipTier || profileData?.membershipTier || currentUser?.plan;
-    if (tier && tier !== 'None' && tier !== 'Free' && tier !== '0' && tier !== 'Select Plan') return true;
-    return false;
-  });
-  const [showMembershipSelection, setShowMembershipSelection] = useState(false);
 
   // Coaching Application & Approval Request states
   const [trainerIntakeGoal, setTrainerIntakeGoal] = useState('Hypertrophy & Max Strength');
@@ -551,6 +581,79 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
   const [trainerIntakeDesc, setTrainerIntakeDesc] = useState('');
   const [trainerIntakeSelectedCoach, setTrainerIntakeSelectedCoach] = useState(null);
   const [trainerIntakePackage, setTrainerIntakePackage] = useState('monthly');
+
+  // Handler for target workout pill clicks -> Navigate to Equipment view and scroll to station
+  const handleTargetWorkoutClick = (workoutName) => {
+    const stationIdMap = {
+      'chest': 'chest',
+      'back': 'back',
+      'biceps': 'biceps',
+      'triceps': 'triceps',
+      'shoulder': 'shoulder',
+      'leg': 'legs',
+      'legs': 'legs'
+    };
+
+    const cleanName = (workoutName || '').toLowerCase().trim();
+    const stationId = stationIdMap[cleanName] || 'chest';
+
+    if (typeof onNavigateSubView === 'function') {
+      onNavigateSubView('equipment');
+    }
+
+    // Scroll and highlight equipment card after DOM updates
+    setTimeout(() => {
+      const el = document.getElementById(`equipment-card-${stationId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Neon Glow highlight effect
+        el.style.transition = 'all 0.4s ease';
+        el.style.boxShadow = '0 0 35px rgba(0, 240, 255, 0.9), 0 0 15px rgba(198, 255, 0, 0.6)';
+        el.style.borderColor = 'var(--accent-volt, #c6ff00)';
+        el.style.transform = 'scale(1.02)';
+
+        setTimeout(() => {
+          el.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.04)';
+          el.style.borderColor = 'var(--border-color)';
+          el.style.transform = 'none';
+          el.style.transition = 'transform 0.25s ease, box-shadow 0.25s ease';
+        }, 2500);
+      }
+    }, 120);
+  };
+
+  const renderWorkoutPill = (name, bg, color) => (
+    <span
+      onClick={() => handleTargetWorkoutClick(name)}
+      title={`Click to navigate to ${name} equipment station`}
+      style={{
+        background: bg,
+        color: color,
+        padding: '0.25rem 0.6rem',
+        borderRadius: '4px',
+        fontWeight: 700,
+        cursor: 'pointer',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.25rem',
+        transition: 'transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease',
+        userSelect: 'none'
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = 'translateY(-1px) scale(1.05)';
+        e.currentTarget.style.filter = 'brightness(1.25)';
+        e.currentTarget.style.boxShadow = `0 0 10px ${color}80`;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'none';
+        e.currentTarget.style.filter = 'none';
+        e.currentTarget.style.boxShadow = 'none';
+      }}
+    >
+      {name}
+    </span>
+  );
 
   const [activeTrainerRequest, setActiveTrainerRequest] = useState(() => {
     const saved = localStorage.getItem(`apex_trainer_request_${memberKey}`);
@@ -585,11 +688,11 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
             const req = res.request;
             setActiveTrainerRequest(req);
             setTrainerRequestStatus(req.status);
-            localStorage.setItem(`apex_trainer_request_${memberKey}`, JSON.stringify(req));
+            safeSetItem(`apex_trainer_request_${memberKey}`, req);
 
             if (req.status === 'accepted') {
               setIsTrainerPaid(true);
-              localStorage.setItem(`apex_trainer_paid_${memberKey}`, 'true');
+              safeSetItem(`apex_trainer_paid_${memberKey}`, 'true');
               if (req.trainerName) {
                 const coachObj = availableTrainers.find(t => t.name.toLowerCase() === req.trainerName.toLowerCase()) || {
                   name: req.trainerName,
@@ -599,11 +702,11 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                   bio: 'Dedicated certified trainer assigned to your personal coaching program.'
                 };
                 setSelectedTrainer(coachObj);
-                localStorage.setItem(`apex_selected_trainer_${memberKey}`, JSON.stringify(coachObj));
+                safeSetItem(`apex_selected_trainer_${memberKey}`, coachObj);
               }
             } else if (req.status === 'rejected') {
               setIsTrainerPaid(false);
-              localStorage.setItem(`apex_trainer_paid_${memberKey}`, 'false');
+              safeSetItem(`apex_trainer_paid_${memberKey}`, 'false');
             }
           }
         }
@@ -630,6 +733,9 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
   const getResolvedMemberCertSrc = (certData, certName, goal, name) => {
     if (certData && typeof certData === 'string') {
+      if (certData.includes('BASE64_TRUNCATED')) {
+        return defaultMemberSignatureImage;
+      }
       if (certData.startsWith('data:image') || certData.startsWith('blob:') || certData.startsWith('http://') || certData.startsWith('https://')) {
         return certData;
       }
@@ -1052,6 +1158,8 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
             amount: packageDetails.price,
             status: 'paid',
             date: 'Today',
+            userEmail: profileData?.email || currentUser?.email || 'member@apex.com',
+            userName: profileData?.name || currentUser?.name || 'Athlete Member',
             fullReceipt: receipt
           };
           setBillingInvoices((prev) => [newInvoice, ...prev]);
@@ -1078,19 +1186,19 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
             if (apiRes && apiRes.data) {
               setActiveTrainerRequest(apiRes.data);
               setTrainerRequestStatus('pending');
-              localStorage.setItem(`apex_trainer_request_${memberKey}`, JSON.stringify(apiRes.data));
+              safeSetItem(`apex_trainer_request_${memberKey}`, apiRes.data);
             } else {
               const fallbackReq = { ...requestPayload, status: 'pending', id: `REQ-${Date.now()}`, createdAt: new Date().toISOString() };
               setActiveTrainerRequest(fallbackReq);
               setTrainerRequestStatus('pending');
-              localStorage.setItem(`apex_trainer_request_${memberKey}`, JSON.stringify(fallbackReq));
+              safeSetItem(`apex_trainer_request_${memberKey}`, fallbackReq);
             }
           } catch (e) {
             console.warn("Submit request error:", e);
             const fallbackReq = { ...requestPayload, status: 'pending', id: `REQ-${Date.now()}`, createdAt: new Date().toISOString() };
             setActiveTrainerRequest(fallbackReq);
             setTrainerRequestStatus('pending');
-            localStorage.setItem(`apex_trainer_request_${memberKey}`, JSON.stringify(fallbackReq));
+            safeSetItem(`apex_trainer_request_${memberKey}`, fallbackReq);
           }
 
           if (addActivity) {
@@ -1438,9 +1546,9 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
     setRegisteredDate(regDateStr);
 
     // Save to localStorage for instant local client persistence
-    localStorage.setItem(`apex_face_registered_${candidateName}`, 'true');
-    localStorage.setItem(`apex_face_photo_${candidateName}`, photoToSave);
-    localStorage.setItem(`apex_face_date_${candidateName}`, regDateStr);
+    safeSetItem(`apex_face_registered_${candidateName}`, 'true');
+    safeSetItem(`apex_face_photo_${candidateName}`, photoToSave);
+    safeSetItem(`apex_face_date_${candidateName}`, regDateStr);
 
     // Save to global apex_registered_faces map in localStorage
     try {
@@ -1451,7 +1559,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
         registeredAt: regDateStr,
         status: 'Active'
       };
-      localStorage.setItem('apex_registered_faces', JSON.stringify(existingFaces));
+      safeSetItem('apex_registered_faces', existingFaces);
 
       // Sync to local apex_trainer_members roster so Trainer Panel Attendance module sees new candidate
       const trainerMembers = JSON.parse(localStorage.getItem('apex_trainer_members') || '[]');
@@ -2253,6 +2361,8 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
             amount: planPrice,
             status: 'paid',
             date: 'Today',
+            userEmail: profileData?.email || currentUser?.email || 'member@apex.com',
+            userName: profileData?.name || currentUser?.name || 'Athlete Member',
             fullReceipt: receipt
           };
 
@@ -2361,10 +2471,12 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
   const handleCheckoutSuccess = (detail) => {
     const newInvoice = {
       txId: detail.txId,
-      plan: 'Supp Store Purchase',
+      plan: `Supplement Store: ${detail.itemsSummary || 'Products Purchase'}`,
       amount: detail.total,
       status: 'paid',
-      date: 'Today'
+      date: 'Today',
+      userEmail: profileData?.email || currentUser?.email || 'member@apex.com',
+      userName: profileData?.name || currentUser?.name || 'Athlete Member'
     };
 
     setBillingInvoices((prev) => [newInvoice, ...prev]);
@@ -3471,27 +3583,27 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                       <tbody>
                         <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                           <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: 'var(--text-white)' }}>Monday</td>
-                          <td style={{ padding: '0.6rem 0.8rem' }}><span style={{ background: 'rgba(0, 240, 255, 0.15)', color: '#00f0ff', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Chest</span></td>
+                          <td style={{ padding: '0.6rem 0.8rem' }}>{renderWorkoutPill('Chest', 'rgba(0, 240, 255, 0.15)', '#00f0ff')}</td>
                         </tr>
                         <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                           <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: 'var(--text-white)' }}>Tuesday</td>
-                          <td style={{ padding: '0.6rem 0.8rem' }}><span style={{ background: 'rgba(198, 255, 0, 0.15)', color: '#c6ff00', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Back</span></td>
+                          <td style={{ padding: '0.6rem 0.8rem' }}>{renderWorkoutPill('Back', 'rgba(198, 255, 0, 0.15)', '#c6ff00')}</td>
                         </tr>
                         <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                           <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: 'var(--text-white)' }}>Wednesday</td>
-                          <td style={{ padding: '0.6rem 0.8rem' }}><span style={{ background: 'rgba(255, 204, 0, 0.15)', color: '#ffcc00', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Biceps</span></td>
+                          <td style={{ padding: '0.6rem 0.8rem' }}>{renderWorkoutPill('Biceps', 'rgba(255, 204, 0, 0.15)', '#ffcc00')}</td>
                         </tr>
                         <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                           <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: 'var(--text-white)' }}>Thursday</td>
-                          <td style={{ padding: '0.6rem 0.8rem' }}><span style={{ background: 'rgba(170, 0, 255, 0.15)', color: '#d070ff', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Triceps</span></td>
+                          <td style={{ padding: '0.6rem 0.8rem' }}>{renderWorkoutPill('Triceps', 'rgba(170, 0, 255, 0.15)', '#d070ff')}</td>
                         </tr>
                         <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                           <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: 'var(--text-white)' }}>Friday</td>
-                          <td style={{ padding: '0.6rem 0.8rem' }}><span style={{ background: 'rgba(255, 128, 0, 0.15)', color: '#ff8000', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Shoulder</span></td>
+                          <td style={{ padding: '0.6rem 0.8rem' }}>{renderWorkoutPill('Shoulder', 'rgba(255, 128, 0, 0.15)', '#ff8000')}</td>
                         </tr>
                         <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                           <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: 'var(--text-white)' }}>Saturday</td>
-                          <td style={{ padding: '0.6rem 0.8rem' }}><span style={{ background: 'rgba(255, 0, 85, 0.15)', color: '#ff0055', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Leg</span></td>
+                          <td style={{ padding: '0.6rem 0.8rem' }}>{renderWorkoutPill('Leg', 'rgba(255, 0, 85, 0.15)', '#ff0055')}</td>
                         </tr>
                         <tr>
                           <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>Sunday</td>
@@ -3531,9 +3643,9 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                           <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: 'var(--text-white)' }}>Monday</td>
                           <td style={{ padding: '0.6rem 0.8rem' }}>
                             <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                              <span style={{ background: 'rgba(0, 240, 255, 0.15)', color: '#00f0ff', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Chest</span>
+                              {renderWorkoutPill('Chest', 'rgba(0, 240, 255, 0.15)', '#00f0ff')}
                               <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>&</span>
-                              <span style={{ background: 'rgba(170, 0, 255, 0.15)', color: '#d070ff', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Triceps</span>
+                              {renderWorkoutPill('Triceps', 'rgba(170, 0, 255, 0.15)', '#d070ff')}
                             </div>
                           </td>
                         </tr>
@@ -3541,9 +3653,9 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                           <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: 'var(--text-white)' }}>Tuesday</td>
                           <td style={{ padding: '0.6rem 0.8rem' }}>
                             <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                              <span style={{ background: 'rgba(198, 255, 0, 0.15)', color: '#c6ff00', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Back</span>
+                              {renderWorkoutPill('Back', 'rgba(198, 255, 0, 0.15)', '#c6ff00')}
                               <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>&</span>
-                              <span style={{ background: 'rgba(255, 204, 0, 0.15)', color: '#ffcc00', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Biceps</span>
+                              {renderWorkoutPill('Biceps', 'rgba(255, 204, 0, 0.15)', '#ffcc00')}
                             </div>
                           </td>
                         </tr>
@@ -3551,9 +3663,9 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                           <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: 'var(--text-white)' }}>Wednesday</td>
                           <td style={{ padding: '0.6rem 0.8rem' }}>
                             <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                              <span style={{ background: 'rgba(255, 0, 85, 0.15)', color: '#ff0055', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Leg</span>
+                              {renderWorkoutPill('Leg', 'rgba(255, 0, 85, 0.15)', '#ff0055')}
                               <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>&</span>
-                              <span style={{ background: 'rgba(255, 128, 0, 0.15)', color: '#ff8000', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Shoulder</span>
+                              {renderWorkoutPill('Shoulder', 'rgba(255, 128, 0, 0.15)', '#ff8000')}
                             </div>
                           </td>
                         </tr>
@@ -3561,9 +3673,9 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                           <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: 'var(--text-white)' }}>Thursday</td>
                           <td style={{ padding: '0.6rem 0.8rem' }}>
                             <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                              <span style={{ background: 'rgba(0, 240, 255, 0.15)', color: '#00f0ff', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Chest</span>
+                              {renderWorkoutPill('Chest', 'rgba(0, 240, 255, 0.15)', '#00f0ff')}
                               <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>&</span>
-                              <span style={{ background: 'rgba(170, 0, 255, 0.15)', color: '#d070ff', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Triceps</span>
+                              {renderWorkoutPill('Triceps', 'rgba(170, 0, 255, 0.15)', '#d070ff')}
                             </div>
                           </td>
                         </tr>
@@ -3571,9 +3683,9 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                           <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: 'var(--text-white)' }}>Friday</td>
                           <td style={{ padding: '0.6rem 0.8rem' }}>
                             <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                              <span style={{ background: 'rgba(198, 255, 0, 0.15)', color: '#c6ff00', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Back</span>
+                              {renderWorkoutPill('Back', 'rgba(198, 255, 0, 0.15)', '#c6ff00')}
                               <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>&</span>
-                              <span style={{ background: 'rgba(255, 204, 0, 0.15)', color: '#ffcc00', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Biceps</span>
+                              {renderWorkoutPill('Biceps', 'rgba(255, 204, 0, 0.15)', '#ffcc00')}
                             </div>
                           </td>
                         </tr>
@@ -3581,9 +3693,9 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                           <td style={{ padding: '0.6rem 0.8rem', fontWeight: 700, color: 'var(--text-white)' }}>Saturday</td>
                           <td style={{ padding: '0.6rem 0.8rem' }}>
                             <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                              <span style={{ background: 'rgba(255, 0, 85, 0.15)', color: '#ff0055', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Leg</span>
+                              {renderWorkoutPill('Leg', 'rgba(255, 0, 85, 0.15)', '#ff0055')}
                               <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>&</span>
-                              <span style={{ background: 'rgba(255, 128, 0, 0.15)', color: '#ff8000', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Shoulder</span>
+                              {renderWorkoutPill('Shoulder', 'rgba(255, 128, 0, 0.15)', '#ff8000')}
                             </div>
                           </td>
                         </tr>
@@ -6875,6 +6987,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
               ].map((eq) => (
                 <div
                   key={eq.id}
+                  id={`equipment-card-${eq.id}`}
                   className="equipment-card"
                   style={{
                     background: 'var(--bg-main)',
