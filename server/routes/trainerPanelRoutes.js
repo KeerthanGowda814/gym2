@@ -6,68 +6,7 @@ import { isMongoConnected } from '../config/mongodb.js';
 
 const router = express.Router();
 
-const defaultTrainerMembers = [
-  {
-    id: 'MEM-98801',
-    name: 'The PC Workshop',
-    email: 'thepcworkshop1@gmail.com',
-    tier: 'Muscle Core Member',
-    status: 'Active',
-    joined: '01 Sep 2026',
-    goal: 'Form Consultation & Baseline Testing',
-    diet: 'Lean Calorie Deficit Plan',
-    workout: 'Hypertrophy Split Alpha (Upper/Lower)',
-    attendance: 96
-  },
-  {
-    id: 'MEM-10892',
-    name: 'Ethan Hunt',
-    email: 'ethan.hunt@apex.com',
-    tier: 'Pro Member',
-    status: 'Active',
-    joined: '12 Jan 2024',
-    goal: 'Hypertrophy & Powerlifting',
-    diet: 'Mass Gainer Bulking Protocol',
-    workout: 'Hypertrophy Split Alpha (Upper/Lower)',
-    attendance: 98
-  },
-  {
-    id: 'MEM-24901',
-    name: 'Sarah Connor',
-    email: 'sarah.c@apex.com',
-    tier: 'VIP Athlete',
-    status: 'Active',
-    joined: '05 Mar 2024',
-    goal: 'Lean Calorie Deficit & Conditioning',
-    diet: 'Lean Calorie Deficit Plan',
-    workout: 'High-Intensity Tactical Conditioning',
-    attendance: 94
-  },
-  {
-    id: 'MEM-31044',
-    name: 'John Wick',
-    email: 'john.wick@apex.com',
-    tier: 'Elite Athlete',
-    status: 'Active',
-    joined: '20 Feb 2024',
-    goal: 'Competition Shredded Cut',
-    diet: 'Competition Shredded Cut',
-    workout: 'Olympic Weightlifting & Power Block',
-    attendance: 100
-  },
-  {
-    id: 'MEM-45812',
-    name: 'Alex Mercer',
-    email: 'alex.m@apex.com',
-    tier: 'Pro Member',
-    status: 'Active',
-    joined: '18 Apr 2024',
-    goal: 'Mass Gainer Bulking',
-    diet: 'Mass Gainer Bulking Protocol',
-    workout: 'Hypertrophy Split Alpha (Upper/Lower)',
-    attendance: 91
-  }
-];
+const defaultTrainerMembers = [];
 
 const defaultWorkoutPlans = [
   {
@@ -187,7 +126,7 @@ const defaultAttendanceLogs = [];
 // Helper to ensure trainer db structure exists
 function ensureTrainerDB(db) {
   if (!db.trainer) db.trainer = {};
-  if (!Array.isArray(db.trainer.members) || db.trainer.members.length === 0) db.trainer.members = defaultTrainerMembers;
+  if (!Array.isArray(db.trainer.members)) db.trainer.members = [];
   if (!Array.isArray(db.trainer.workoutPlans) || db.trainer.workoutPlans.length === 0) db.trainer.workoutPlans = defaultWorkoutPlans;
   if (!Array.isArray(db.trainer.dietPlans) || db.trainer.dietPlans.length === 0) db.trainer.dietPlans = defaultDietPlans;
   if (!Array.isArray(db.trainer.agenda) || db.trainer.agenda.length === 0) db.trainer.agenda = defaultAgenda;
@@ -328,28 +267,58 @@ router.post('/requests/:id/reject', (req, res) => {
  */
 
 // GET /api/trainer/members - Get client roster
-router.get('/members', (req, res) => {
+router.get('/members', async (req, res) => {
   let db = getDB();
   db = ensureTrainerDB(db);
 
-  // Auto-ensure primary member exists in trainer roster
-  const activeMemberName = (db.member && db.member.name) || 'The PC Workshop';
-  if (!db.trainer.members.some(m => m.name && m.name.toLowerCase() === activeMemberName.toLowerCase())) {
-    db.trainer.members.unshift({
-      id: db.member?.id || 'MEM-98801',
-      name: activeMemberName,
-      email: db.member?.email || 'member@apex.com',
-      tier: db.member?.membershipTier || 'Muscle Core Member',
-      status: 'Active',
-      joined: '01 Sep 2026',
-      goal: db.member?.fitnessGoal || 'Form Consultation & Baseline Testing',
-      diet: 'Lean Calorie Deficit Plan',
-      workout: 'Hypertrophy Split Alpha (Upper/Lower)',
-      attendance: db.member?.attendanceRate || 96
-    });
+  // Sync with real members from MongoDB Atlas TrainerData if present
+  if (isMongoConnected()) {
+    try {
+      const coachName = req.query.coachName || req.user?.name;
+      let td = null;
+      if (coachName) {
+        td = await TrainerData.findOne({ coachName: new RegExp(`^${coachName.trim()}$`, 'i') });
+      }
+      if (!td) {
+        td = await TrainerData.findOne();
+      }
+      if (td && Array.isArray(td.members) && td.members.length > 0) {
+        const existingEmails = new Set(db.trainer.members.map(m => (m.email || '').toLowerCase()));
+        for (const tm of td.members) {
+          if (tm.email && !existingEmails.has(tm.email.toLowerCase())) {
+            db.trainer.members.push(tm);
+            existingEmails.add(tm.email.toLowerCase());
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Error reading TrainerData members:', err.message);
+    }
   }
 
-  saveDB(db);
+  // Also include real registered member users from db.users
+  if (Array.isArray(db.users)) {
+    const registeredMembers = db.users.filter(u => u.role === 'member' || !u.role);
+    const existingEmails = new Set(db.trainer.members.map(m => (m.email || '').toLowerCase()));
+    for (const rm of registeredMembers) {
+      if (rm.email && !existingEmails.has(rm.email.toLowerCase())) {
+        db.trainer.members.push({
+          id: rm.userId || `MEM-${Date.now()}`,
+          name: rm.name,
+          email: rm.email,
+          tier: rm.membershipTier || 'Muscle Pro',
+          status: rm.status || 'Active',
+          joined: rm.joinedDate || 'Recent',
+          goal: rm.fitnessGoal || 'General Fitness',
+          diet: 'Prescribed Protocol',
+          workout: 'Prescribed Program',
+          attendance: 95
+        });
+        existingEmails.add(rm.email.toLowerCase());
+      }
+    }
+  }
+
   res.json({ success: true, data: db.trainer.members });
 });
 
@@ -385,17 +354,41 @@ router.post('/members', (req, res) => {
 });
 
 // DELETE /api/trainer/members/:id - Remove client from roster
-router.delete('/members/:id', (req, res) => {
+router.delete('/members/:id', async (req, res) => {
   const { id } = req.params;
   let db = getDB();
   db = ensureTrainerDB(db);
 
-  db.trainer.members = db.trainer.members.filter(m => m.id !== id);
+  const cleanId = (id || '').trim().toLowerCase();
+  db.trainer.members = db.trainer.members.filter(m => 
+    (!m.id || m.id.toLowerCase() !== cleanId) && 
+    (!m.email || m.email.toLowerCase() !== cleanId)
+  );
   saveDB(db);
+
+  if (isMongoConnected()) {
+    try {
+      await TrainerData.updateMany(
+        {},
+        {
+          $pull: {
+            members: {
+              $or: [
+                { id: new RegExp(`^${cleanId}$`, 'i') },
+                { email: new RegExp(`^${cleanId}$`, 'i') }
+              ]
+            }
+          }
+        }
+      );
+    } catch (err) {
+      console.warn('Error syncing member removal with MongoDB TrainerData:', err.message);
+    }
+  }
 
   res.json({
     success: true,
-    message: 'Client removed from trainer roster',
+    message: 'Client removed from trainer roster and MongoDB Atlas',
     members: db.trainer.members
   });
 });

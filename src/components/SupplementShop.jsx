@@ -193,15 +193,15 @@ export default function SupplementShop({ onCheckoutSuccess, isAdmin = false, cur
 
   const initialProfile = getResolvedProfile();
 
-  // Shipping Form State (Auto-populated with actual user profile data)
+  // Gym Pickup Form State (Auto-populated with member profile details)
   const [shippingInfo, setShippingInfo] = useState(() => ({
-    fullName: initialProfile?.name || currentUser?.name || 'Member Athlete',
-    phone: initialProfile?.phone || currentUser?.phone || '',
-    address: initialProfile?.address || '742 Evergreen Terrace, Sector 4',
-    city: initialProfile?.city || 'Bangalore',
-    state: initialProfile?.state || 'Karnataka',
-    pincode: initialProfile?.pincode || '560001',
-    deliveryType: 'standard' // 'standard' (Free) | 'express' (₹49)
+    fullName: initialProfile?.name || currentUser?.name || 'Ethan Hunt',
+    phone: initialProfile?.phone || currentUser?.phone || '+1 (555) 777-7777',
+    pickupLocation: 'Apex Athletics Front Desk & Nutrition Bar (742 Evergreen Terrace, Sector 4, Bangalore)',
+    pickupDesk: 'Reception Desk - Counter 1',
+    pickupTimePreference: 'Today during workout',
+    pickupNotes: '',
+    deliveryType: 'gym_pickup'
   }));
 
   // Synchronize shipping info whenever profileData or currentUser updates
@@ -348,12 +348,12 @@ const mergeProducts = (...productArrays) => {
     );
   };
 
-  // Pricing calculations
+  // Pricing calculations: 100% Gym Pickup (Always Free ₹0.00)
   const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.qty, 0);
   const memberDiscount = subtotal * 0.10; // Automatic 10% Member discount
   const promoDiscount = promoApplied ? subtotal * 0.10 : 0; // Extra 10%
-  const shippingFee = shippingInfo.deliveryType === 'express' ? 49.00 : 0.00;
-  const totalPrice = Math.max(0, subtotal - memberDiscount - promoDiscount + shippingFee);
+  const shippingFee = 0.00;
+  const totalPrice = Math.max(0, subtotal - memberDiscount - promoDiscount);
   const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
 
   // Apply promo code
@@ -380,17 +380,17 @@ const mergeProducts = (...productArrays) => {
     const uName = shippingInfo.fullName || prof?.name || currentUser?.name || 'Member Athlete';
     const uPhone = shippingInfo.phone || prof?.phone || currentUser?.phone || '';
 
-    const isCod = paymentInfo.method === 'cod';
+    const isPayAtGym = paymentInfo.method === 'cod' || paymentInfo.method === 'pay_at_gym';
     const isAccount = paymentInfo.method === 'account';
 
-    const pMethod = methodLabel || (isCod
-      ? 'Cash on Delivery (COD)'
+    const pMethod = methodLabel || (isPayAtGym
+      ? 'Pay at Gym Desk (Cash/Card/UPI)'
       : isAccount
       ? 'Apex Member Account'
       : 'Online Payment (Razorpay)');
 
-    const pStatus = statusLabel || (isCod
-      ? 'Pending (COD)'
+    const pStatus = statusLabel || (isPayAtGym
+      ? 'Pending (Pay at Gym Desk)'
       : isAccount
       ? 'Billed to Member Account'
       : 'Paid');
@@ -440,25 +440,33 @@ const mergeProducts = (...productArrays) => {
       subtotal,
       memberDiscount,
       promoDiscount,
-      shippingFee,
+      shippingFee: 0,
       total: finalTotal,
       totalAmount: finalTotal,
-      shippingInfo: { ...shippingInfo },
+      deliveryType: 'gym_pickup',
+      pickupLocation: shippingInfo.pickupLocation || 'Apex Athletics Front Desk & Nutrition Bar',
+      pickupDesk: shippingInfo.pickupDesk || 'Reception Desk - Counter 1',
+      pickupTimePreference: shippingInfo.pickupTimePreference || 'Next Gym Visit',
+      pickupNotes: shippingInfo.pickupNotes || '',
+      readyForPickupAt: '',
+      collectedAt: '',
+      collectedByAdmin: '',
+      shippingInfo: { ...shippingInfo, deliveryType: 'gym_pickup' },
       paymentMethod: pMethod,
       paymentStatus: pStatus,
-      courierName: 'Apex Express Logistics',
-      trackingNumber: '',
-      estimatedDelivery: shippingInfo.deliveryType === 'express' ? '24 Hours Priority' : '2-3 Business Days',
+      courierName: 'Gym Desk Collection',
+      trackingNumber: 'PICKUP-' + orderId,
+      estimatedDelivery: 'Ready for Collection within 2-4 Hours',
       status: 'Pending Confirmation',
       statusTimeline: [
         {
           status: 'Pending Confirmation',
           timestamp: orderDate,
-          note: isCod
-            ? 'Order placed with Cash on Delivery. Pending admin verification & dispatch.'
+          note: isPayAtGym
+            ? `Order placed for Gym Pickup. Payment of ₹${finalTotal.toFixed(2)} due upon collection at Gym Reception Desk.`
             : isAccount
-            ? 'Order charged to Member Account. Pending admin confirmation.'
-            : 'Payment received via Razorpay. Pending admin packing & dispatch.'
+            ? 'Order charged to Member Account for Gym Pickup. Pending staff preparation.'
+            : 'Payment received via Razorpay. Order placed for Gym Pickup at Apex Athletics Front Desk.'
         }
       ],
       date: orderDate
@@ -538,8 +546,8 @@ const mergeProducts = (...productArrays) => {
     if (e) e.preventDefault();
     if (cart.length === 0) return;
 
-    if (paymentInfo.method === 'cod') {
-      await processCheckoutInDB(null, null, 'Cash on Delivery (COD)', 'Pending (COD)');
+    if (paymentInfo.method === 'cod' || paymentInfo.method === 'pay_at_gym') {
+      await processCheckoutInDB(null, null, 'Pay at Gym Desk (Cash/Card/UPI)', 'Pending (Pay at Gym Desk)');
       return;
     }
 
@@ -1259,26 +1267,42 @@ const mergeProducts = (...productArrays) => {
         </div>
       )}
 
-      {/* STEP 1: SHIPPING ADDRESS PAGE / MODAL */}
+      {/* STEP 1: GYM PICKUP & MEMBER DETAILS PAGE / MODAL */}
       {checkoutStep === 'shipping' && (
         <div className="store-modal-overlay" style={{ zIndex: 999900 }} onClick={() => setCheckoutStep('cart')}>
-          <div className="store-modal-card" style={{ maxWidth: '600px', padding: '2rem' }} onClick={(e) => e.stopPropagation()}>
+          <div className="store-modal-card" style={{ maxWidth: '620px', padding: '2rem' }} onClick={(e) => e.stopPropagation()}>
             {/* Step Progress Bar */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--accent-volt)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem' }}>1</span>
                 <div>
-                  <h4 style={{ color: 'var(--text-white)', margin: 0, fontSize: '1rem', fontWeight: 800 }}>Shipping Address</h4>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Step 1 of 2: Enter Delivery Details</span>
+                  <h4 style={{ color: 'var(--text-white)', margin: 0, fontSize: '1rem', fontWeight: 800 }}>Gym Pickup Collection Details</h4>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Step 1 of 2: Confirm Member Details & Pickup Counter</span>
                 </div>
               </div>
               <button className="modal-close-btn" style={{ position: 'static' }} onClick={() => setCheckoutStep('cart')}>&times;</button>
             </div>
 
+            {/* Gym Pickup Exclusive Banner */}
+            <div style={{ background: 'rgba(0, 240, 255, 0.05)', border: '1px solid rgba(0, 240, 255, 0.25)', borderRadius: '8px', padding: '0.9rem 1.1rem', marginBottom: '1.3rem', display: 'flex', alignItems: 'flex-start', gap: '0.8rem' }}>
+              <span style={{ fontSize: '1.4rem', marginTop: '0.1rem' }}>📍</span>
+              <div>
+                <strong style={{ color: 'var(--accent-cyan)', fontSize: '0.84rem', display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Gym Counter Collection (No Home Delivery)
+                </strong>
+                <p style={{ color: 'var(--text-white)', fontSize: '0.78rem', margin: '0.2rem 0 0 0', lineHeight: 1.45 }}>
+                  Collect your supplements directly from the <strong>Apex Athletics Front Desk & Nutrition Bar</strong>. Admin will prepare your order and update you when it is <strong>Ready for Pickup</strong>.
+                </p>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.35rem' }}>
+                  🕒 Pickup Hours: 6:00 AM – 10:00 PM (Monday to Sunday) • Address: 742 Evergreen Terrace, Sector 4, Bangalore
+                </span>
+              </div>
+            </div>
+
             <form onSubmit={(e) => { e.preventDefault(); setCheckoutStep('payment'); }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
                 <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label" style={{ fontSize: '0.75rem' }}>Full Name *</label>
+                  <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: 700 }}>Collecting Member Name *</label>
                   <input
                     type="text"
                     className="form-input"
@@ -1288,7 +1312,7 @@ const mergeProducts = (...productArrays) => {
                   />
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label" style={{ fontSize: '0.75rem' }}>Phone Number *</label>
+                  <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: 700 }}>Contact Phone (For Pickup Alert) *</label>
                   <input
                     type="text"
                     className="form-input"
@@ -1300,99 +1324,57 @@ const mergeProducts = (...productArrays) => {
               </div>
 
               <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label className="form-label" style={{ fontSize: '0.75rem' }}>Street Address / Flat No. *</label>
+                <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: 700 }}>Pickup Location & Counter</label>
                 <input
                   type="text"
                   className="form-input"
-                  required
-                  value={shippingInfo.address}
-                  onChange={(e) => setShippingInfo({ ...shippingInfo, address: e.target.value })}
+                  readOnly
+                  style={{ background: 'rgba(255,255,255,0.03)', color: 'var(--text-muted)', cursor: 'not-allowed' }}
+                  value="Apex Athletics Front Desk & Nutrition Bar — Counter 1"
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.2rem' }}>
                 <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label" style={{ fontSize: '0.75rem' }}>City *</label>
-                  <input
-                    type="text"
+                  <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: 700 }}>When will you collect?</label>
+                  <select
                     className="form-input"
-                    required
-                    value={shippingInfo.city}
-                    onChange={(e) => setShippingInfo({ ...shippingInfo, city: e.target.value })}
-                  />
+                    value={shippingInfo.pickupTimePreference || 'Today during workout'}
+                    onChange={(e) => setShippingInfo({ ...shippingInfo, pickupTimePreference: e.target.value })}
+                    style={{ background: 'var(--bg-dark)', border: '1px solid var(--border-color)', color: 'var(--text-white)' }}
+                  >
+                    <option value="Today during workout">Today during workout</option>
+                    <option value="Tomorrow morning">Tomorrow morning (6 AM - 12 PM)</option>
+                    <option value="Tomorrow evening">Tomorrow evening (4 PM - 9 PM)</option>
+                    <option value="This weekend">This weekend</option>
+                    <option value="Within 48 hours">Within 48 hours</option>
+                  </select>
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label" style={{ fontSize: '0.75rem' }}>State *</label>
+                  <label className="form-label" style={{ fontSize: '0.75rem', fontWeight: 700 }}>Pickup Note for Staff (Optional)</label>
                   <input
                     type="text"
                     className="form-input"
-                    required
-                    value={shippingInfo.state}
-                    onChange={(e) => setShippingInfo({ ...shippingInfo, state: e.target.value })}
-                  />
-                </div>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label" style={{ fontSize: '0.75rem' }}>Pincode *</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    required
-                    value={shippingInfo.pincode}
-                    onChange={(e) => setShippingInfo({ ...shippingInfo, pincode: e.target.value })}
+                    placeholder="e.g. Keep in locker #4 or with Coach"
+                    value={shippingInfo.pickupNotes || ''}
+                    onChange={(e) => setShippingInfo({ ...shippingInfo, pickupNotes: e.target.value })}
                   />
                 </div>
               </div>
 
-              {/* Delivery Speed Options */}
-              <h5 style={{ color: 'var(--text-white)', fontSize: '0.8rem', textTransform: 'uppercase', marginBottom: '0.8rem', letterSpacing: '0.05em' }}>
-                Select Delivery Speed
-              </h5>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.8rem' }}>
-                <div
-                  onClick={() => setShippingInfo({ ...shippingInfo, deliveryType: 'standard' })}
-                  style={{
-                    background: shippingInfo.deliveryType === 'standard' ? 'rgba(0, 240, 255, 0.08)' : 'rgba(255, 255, 255, 0.01)',
-                    border: shippingInfo.deliveryType === 'standard' ? '1px solid var(--accent-cyan)' : '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    padding: '0.9rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.2rem'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <strong style={{ color: 'var(--text-white)', fontSize: '0.85rem' }}>Standard Express</strong>
-                    <span style={{ color: '#00ff66', fontWeight: 800, fontSize: '0.78rem' }}>FREE</span>
-                  </div>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Estimated Delivery: 2 - 3 Business Days</span>
+              {/* Gym Collection Fee Badge */}
+              <div style={{ background: 'rgba(0, 255, 102, 0.05)', border: '1px solid rgba(0, 255, 102, 0.25)', borderRadius: '8px', padding: '0.8rem 1rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <strong style={{ color: '#00ff66', fontSize: '0.84rem' }}>✓ Gym Counter Collection</strong>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>Zero shipping fees • Assembled & inspected on-site</span>
                 </div>
-
-                <div
-                  onClick={() => setShippingInfo({ ...shippingInfo, deliveryType: 'express' })}
-                  style={{
-                    background: shippingInfo.deliveryType === 'express' ? 'rgba(198, 255, 0, 0.08)' : 'rgba(255, 255, 255, 0.01)',
-                    border: shippingInfo.deliveryType === 'express' ? '1px solid var(--accent-volt)' : '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    padding: '0.9rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.2rem'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <strong style={{ color: 'var(--text-white)', fontSize: '0.85rem' }}>VIP Fast-Track ⚡</strong>
-                    <span style={{ color: 'var(--accent-volt)', fontWeight: 800, fontSize: '0.78rem' }}>+₹49</span>
-                  </div>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Guaranteed 24-Hour Priority Delivery</span>
-                </div>
+                <span style={{ color: '#00ff66', fontWeight: 800, fontSize: '0.9rem', background: 'rgba(0, 255, 102, 0.12)', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>FREE (₹0.00)</span>
               </div>
 
               {/* Order Summary Pill */}
               <div style={{ background: 'var(--bg-dark)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.8rem 1rem', marginBottom: '1.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Order Total ({totalQty} item{totalQty > 1 ? 's' : ''}):</span>
-                <span style={{ color: 'var(--accent-volt)', fontWeight: 800, fontSize: '1rem' }}>₹{totalPrice.toFixed(2)}</span>
+                <span style={{ color: 'var(--accent-volt)', fontWeight: 800, fontSize: '1.05rem', fontFamily: 'monospace' }}>₹{totalPrice.toFixed(2)}</span>
               </div>
 
               {/* Action buttons */}
@@ -1412,7 +1394,7 @@ const mergeProducts = (...productArrays) => {
                 <button
                   type="submit"
                   className="glow-btn"
-                  style={{ padding: '0.75rem 1.5rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                  style={{ padding: '0.75rem 1.6rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700 }}
                 >
                   <span>Continue to Payment</span>
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
@@ -1435,17 +1417,18 @@ const mergeProducts = (...productArrays) => {
                 <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--accent-cyan)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem' }}>2</span>
                 <div>
                   <h4 style={{ color: 'var(--text-white)', margin: 0, fontSize: '1rem', fontWeight: 800 }}>Payment Method</h4>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Step 2 of 2: Confirm Order & Pay</span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Step 2 of 2: Confirm Order & Select Payment</span>
                 </div>
               </div>
               <button className="modal-close-btn" style={{ position: 'static' }} onClick={() => setCheckoutStep('shipping')}>&times;</button>
             </div>
 
-            {/* Delivery Destination Badge */}
-            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.8rem 1rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem' }}>
+            {/* Collection Summary Badge */}
+            <div style={{ background: 'rgba(0, 240, 255, 0.04)', border: '1px solid rgba(0, 240, 255, 0.2)', borderRadius: '6px', padding: '0.8rem 1rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem' }}>
               <div>
-                <span style={{ color: 'var(--text-dim)', display: 'block', fontSize: '0.68rem', textTransform: 'uppercase' }}>Delivering To:</span>
-                <strong style={{ color: 'var(--text-white)' }}>{shippingInfo.fullName}</strong> — {shippingInfo.address}, {shippingInfo.city} ({shippingInfo.pincode})
+                <span style={{ color: 'var(--accent-cyan)', display: 'block', fontSize: '0.68rem', textTransform: 'uppercase', fontWeight: 800 }}>Gym Collection Summary:</span>
+                <strong style={{ color: 'var(--text-white)' }}>{shippingInfo.fullName}</strong> (📞 {shippingInfo.phone}) • Apex Athletics Front Desk
+                <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.72rem', marginTop: '0.15rem' }}>Timing: {shippingInfo.pickupTimePreference || 'Next Gym Visit'}</span>
               </div>
               <button
                 type="button"
@@ -1453,7 +1436,7 @@ const mergeProducts = (...productArrays) => {
                 onClick={() => setCheckoutStep('shipping')}
                 style={{ padding: '0.2rem 0.6rem', fontSize: '0.68rem' }}
               >
-                Edit
+                Edit Details
               </button>
             </div>
 
@@ -1462,7 +1445,7 @@ const mergeProducts = (...productArrays) => {
                 Select Payment Option
               </h5>
 
-              {/* Payment Methods Grid: 3 Options (Online via Razorpay, Cash on Delivery, Apex Member Account) */}
+              {/* Payment Methods Grid: 3 Options (Online Razorpay, Pay at Gym Desk on Collection, Apex Member Account) */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.8rem', marginBottom: '1.2rem' }}>
                 {/* 1. Online Razorpay Gateway Option */}
                 <div
@@ -1499,11 +1482,11 @@ const mergeProducts = (...productArrays) => {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>Online Payment via Razorpay</strong>
                         <span style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', padding: '0.15rem 0.4rem', borderRadius: '4px', background: 'rgba(0, 240, 255, 0.15)', color: 'var(--accent-cyan)', border: '1px solid rgba(0, 240, 255, 0.3)' }}>
-                          Recommended
+                          Recommended • Zero Due at Desk
                         </span>
                       </div>
                       <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.2rem' }}>
-                        Cards (Visa/Mastercard/RuPay), Instant UPI (GPay/PhonePe/Paytm), NetBanking & Wallets
+                        Cards, Instant UPI (GPay/PhonePe/Paytm), NetBanking • Collect hassle-free with Order ID
                       </span>
                     </div>
                   </div>
@@ -1518,13 +1501,13 @@ const mergeProducts = (...productArrays) => {
                   }} />
                 </div>
 
-                {/* 2. Cash on Delivery (COD) Option */}
+                {/* 2. Pay at Gym Desk on Collection Option */}
                 <div
-                  onClick={() => setPaymentInfo({ method: 'cod' })}
+                  onClick={() => setPaymentInfo({ method: 'pay_at_gym' })}
                   style={{
-                    background: paymentInfo.method === 'cod' ? 'rgba(198, 255, 0, 0.08)' : 'rgba(255, 255, 255, 0.02)',
-                    border: paymentInfo.method === 'cod' ? '1.5px solid var(--accent-volt)' : '1px solid var(--border-color)',
-                    boxShadow: paymentInfo.method === 'cod' ? '0 0 15px rgba(198, 255, 0, 0.15)' : 'none',
+                    background: (paymentInfo.method === 'cod' || paymentInfo.method === 'pay_at_gym') ? 'rgba(198, 255, 0, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                    border: (paymentInfo.method === 'cod' || paymentInfo.method === 'pay_at_gym') ? '1.5px solid var(--accent-volt)' : '1px solid var(--border-color)',
+                    boxShadow: (paymentInfo.method === 'cod' || paymentInfo.method === 'pay_at_gym') ? '0 0 15px rgba(198, 255, 0, 0.15)' : 'none',
                     borderRadius: '10px',
                     padding: '1rem 1.2rem',
                     cursor: 'pointer',
@@ -1547,12 +1530,17 @@ const mergeProducts = (...productArrays) => {
                       justifyContent: 'center',
                       fontSize: '1.3rem'
                     }}>
-                      💵
+                      🏋️
                     </div>
                     <div>
-                      <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem', display: 'block' }}>Cash on Delivery (COD)</strong>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>Pay at Gym Desk on Collection</strong>
+                        <span style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', padding: '0.15rem 0.4rem', borderRadius: '4px', background: 'rgba(198, 255, 0, 0.15)', color: 'var(--accent-volt)', border: '1px solid rgba(198, 255, 0, 0.3)' }}>
+                          Cash / Card / UPI at Desk
+                        </span>
+                      </div>
                       <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.2rem' }}>
-                        Pay cash upon doorstep courier arrival • Exact change recommended
+                        No online payment required now. Pay directly at the front desk when picking up your items.
                       </span>
                     </div>
                   </div>
@@ -1561,7 +1549,7 @@ const mergeProducts = (...productArrays) => {
                     width: '20px',
                     height: '20px',
                     borderRadius: '50%',
-                    border: paymentInfo.method === 'cod' ? '5px solid var(--accent-volt)' : '2px solid var(--border-color)',
+                    border: (paymentInfo.method === 'cod' || paymentInfo.method === 'pay_at_gym') ? '5px solid var(--accent-volt)' : '2px solid var(--border-color)',
                     background: '#fff',
                     flexShrink: 0
                   }} />
@@ -1622,16 +1610,16 @@ const mergeProducts = (...productArrays) => {
                 <div style={{ background: 'rgba(0, 240, 255, 0.04)', border: '1px solid rgba(0, 240, 255, 0.2)', borderRadius: '8px', padding: '0.9rem 1.1rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
                   <span style={{ fontSize: '1.4rem' }}>🔒</span>
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                    <strong style={{ color: 'var(--accent-cyan)' }}>Razorpay 256-Bit SSL Gateway:</strong> You will be seamlessly redirected to the verified Razorpay payment modal to complete transaction via UPI, Cards, NetBanking, or Wallets.
+                    <strong style={{ color: 'var(--accent-cyan)' }}>Online Paid:</strong> You will complete payment via Razorpay. When your order is ready, simply walk up to the gym counter and collect it with zero pending payments.
                   </div>
                 </div>
               )}
 
-              {paymentInfo.method === 'cod' && (
+              {(paymentInfo.method === 'cod' || paymentInfo.method === 'pay_at_gym') && (
                 <div style={{ background: 'rgba(198, 255, 0, 0.04)', border: '1px solid rgba(198, 255, 0, 0.2)', borderRadius: '8px', padding: '0.9rem 1.1rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                  <span style={{ fontSize: '1.4rem' }}>📦</span>
+                  <span style={{ fontSize: '1.4rem' }}>🏋️</span>
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                    <strong style={{ color: 'var(--accent-volt)' }}>Cash on Delivery:</strong> Please keep exact cash of <strong style={{ color: 'var(--text-white)' }}>₹{totalPrice.toFixed(2)}</strong> ready for payment to the Apex Express courier at your doorstep.
+                    <strong style={{ color: 'var(--accent-volt)' }}>Pay at Gym Desk on Collection:</strong> Please pay <strong style={{ color: 'var(--text-white)' }}>₹{totalPrice.toFixed(2)}</strong> via Cash, Card, or UPI to the front desk reception executive when collecting your items.
                   </div>
                 </div>
               )}
@@ -1662,8 +1650,8 @@ const mergeProducts = (...productArrays) => {
                   </div>
                 )}
                 <div className="price-row">
-                  <span>Delivery Charge ({shippingInfo.deliveryType.toUpperCase()})</span>
-                  <span>{shippingFee === 0 ? 'FREE' : `₹${shippingFee.toFixed(2)}`}</span>
+                  <span>Fulfillment (Gym Desk Collection)</span>
+                  <span style={{ color: '#00ff66', fontWeight: 700 }}>FREE (₹0.00)</span>
                 </div>
                 <div className="price-row total" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.5rem', marginTop: '0.3rem' }}>
                   <span>Total Amount Payable</span>
@@ -1679,21 +1667,21 @@ const mergeProducts = (...productArrays) => {
                   onClick={() => setCheckoutStep('shipping')}
                   style={{ padding: '0.75rem 1.2rem', fontSize: '0.82rem' }}
                 >
-                  ← Back to Shipping
+                  ← Back to Pickup Details
                 </button>
 
                 <button
                   type="submit"
                   className="glow-btn"
                   disabled={isProcessingPayment}
-                  style={{ padding: '0.75rem 1.8rem', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                  style={{ padding: '0.75rem 1.8rem', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}
                 >
                   {isProcessingPayment ? (
                     'Opening Razorpay...'
                   ) : paymentInfo.method === 'online' ? (
-                    `Pay ₹${totalPrice.toFixed(2)} via Razorpay ➔`
-                  ) : paymentInfo.method === 'cod' ? (
-                    `Confirm Cash on Delivery Order (₹${totalPrice.toFixed(2)}) ✓`
+                    `Pay ₹${totalPrice.toFixed(2)} Online & Reserve for Pickup ➔`
+                  ) : (paymentInfo.method === 'cod' || paymentInfo.method === 'pay_at_gym') ? (
+                    `Place Gym Pickup Order (Pay ₹${totalPrice.toFixed(2)} at Desk) ✓`
                   ) : (
                     `Charge ₹${totalPrice.toFixed(2)} to Member Account ✓`
                   )}
@@ -1714,19 +1702,32 @@ const mergeProducts = (...productArrays) => {
               </svg>
             </div>
             
-            <h3 style={{ textTransform: 'uppercase', fontWeight: 800, fontSize: '1.3rem', marginBottom: '0.2rem', color: 'var(--text-white)' }}>Order Confirmed & Placed!</h3>
-            <p className="card-subtitle" style={{ marginBottom: '1.2rem' }}>Receipt Invoice: <span id="success-invoice-id" style={{ color: 'var(--accent-cyan)', fontFamily: 'monospace', fontWeight: 700 }}>{lastCheckoutDetail.txId}</span></p>
+            <h3 style={{ textTransform: 'uppercase', fontWeight: 800, fontSize: '1.3rem', marginBottom: '0.2rem', color: 'var(--text-white)' }}>Order Placed for Gym Pickup!</h3>
+            <p className="card-subtitle" style={{ marginBottom: '1.2rem' }}>Order Reference: <span id="success-invoice-id" style={{ color: 'var(--accent-cyan)', fontFamily: 'monospace', fontWeight: 700 }}>{lastCheckoutDetail.orderId || lastCheckoutDetail.txId}</span></p>
             
-            {/* Delivery address summary */}
-            {lastCheckoutDetail.shippingInfo && (
-              <div style={{ background: 'rgba(0, 240, 255, 0.03)', border: '1px solid rgba(0, 240, 255, 0.15)', borderRadius: '6px', padding: '0.8rem', textAlign: 'left', marginBottom: '1rem', fontSize: '0.78rem' }}>
-                <span style={{ color: 'var(--accent-cyan)', fontWeight: 'bold', display: 'block', fontSize: '0.7rem', textTransform: 'uppercase' }}>Delivery Destination:</span>
-                <div style={{ color: 'var(--text-white)', marginTop: '0.2rem' }}>
-                  <strong>{lastCheckoutDetail.shippingInfo.fullName}</strong> ({lastCheckoutDetail.shippingInfo.phone})
-                  <div style={{ color: 'var(--text-muted)' }}>{lastCheckoutDetail.shippingInfo.address}, {lastCheckoutDetail.shippingInfo.city}, {lastCheckoutDetail.shippingInfo.state} - {lastCheckoutDetail.shippingInfo.pincode}</div>
+            {/* Gym Pickup Collection Point Summary */}
+            <div style={{ background: 'rgba(0, 240, 255, 0.05)', border: '1px solid rgba(0, 240, 255, 0.25)', borderRadius: '8px', padding: '0.9rem', textAlign: 'left', marginBottom: '1rem', fontSize: '0.78rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                <span style={{ color: 'var(--accent-cyan)', fontWeight: 800, fontSize: '0.72rem', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <span>📍</span> Gym Collection Desk (No Home Delivery)
+                </span>
+                <span style={{ color: lastCheckoutDetail.paymentStatus === 'Pending (Pay at Gym Desk)' ? '#ff9f00' : '#00ff66', fontWeight: 800, fontSize: '0.68rem', textTransform: 'uppercase', background: lastCheckoutDetail.paymentStatus === 'Pending (Pay at Gym Desk)' ? 'rgba(255, 159, 0, 0.12)' : 'rgba(0, 255, 102, 0.12)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+                  {lastCheckoutDetail.paymentStatus === 'Pending (Pay at Gym Desk)' ? '💵 Pay at Desk' : '✓ Paid Online'}
+                </span>
+              </div>
+              <div style={{ color: 'var(--text-white)', fontWeight: 700 }}>
+                Apex Athletics Front Desk & Nutrition Bar — Counter 1
+              </div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginTop: '0.2rem' }}>
+                742 Evergreen Terrace, Sector 4, Bangalore • Hours: 6:00 AM – 10:00 PM Daily
+              </div>
+              <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: '0.74rem', color: 'var(--text-white)' }}>
+                Member: <strong>{lastCheckoutDetail.shippingInfo?.fullName}</strong> (📞 {lastCheckoutDetail.shippingInfo?.phone})
+                <div style={{ color: 'var(--accent-volt)', fontSize: '0.7rem', marginTop: '0.2rem' }}>
+                  🔔 Gym staff will prepare your items. You can collect once status shows "Ready for Pickup"!
                 </div>
               </div>
-            )}
+            </div>
 
             {/* Summary lines */}
             <div className="success-order-summary" id="success-order-summary" style={{ background: 'var(--bg-dark)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.9rem', textAlign: 'left', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>

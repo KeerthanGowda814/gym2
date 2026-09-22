@@ -4,9 +4,11 @@ import { trainerApi } from '../services/trainerApi';
 import { CustomSwal } from '../utils/swal';
 import ReceiptModal from './ReceiptModal';
 import { safeSetItem } from '../utils/storage';
+import { progressApi } from '../services/progressApi';
+import CompetitionModule from './CompetitionModule';
 
 export default function TrainerPanel({ activeView, currentUser }) {
-  const validTabs = ['overview', 'members', 'workouts', 'diets', 'schedule', 'attendance'];
+  const validTabs = ['overview', 'members', 'workouts', 'diets', 'schedule', 'attendance', 'progress', 'competitions'];
 
   const [activeTrainerReceipt, setActiveTrainerReceipt] = useState(null);
   const [trainerClientPayments, setTrainerClientPayments] = useState([]);
@@ -94,70 +96,59 @@ export default function TrainerPanel({ activeView, currentUser }) {
     }
   }, [trainerClientPayments]);
 
+  // Client progress tracking state (daily activities and progress photos)
+  const [clientActivities, setClientActivities] = useState([]);
+  const [clientPhotos, setClientPhotos] = useState([]);
+  const [selectedClientFilter, setSelectedClientFilter] = useState('all');
+  const [feedbackInput, setFeedbackInput] = useState({});
+  const [ratingInput, setRatingInput] = useState({});
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState({});
+  const [trainerLightboxPhoto, setTrainerLightboxPhoto] = useState(null);
+
+  const fetchClientProgressData = async () => {
+    try {
+      const [activities, photos] = await Promise.all([
+        progressApi.getDailyActivities({}),
+        progressApi.getProgressPhotos('')
+      ]);
+      setClientActivities(activities || []);
+      setClientPhotos(photos || []);
+    } catch (err) {
+      console.warn('Error fetching client progress data:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchClientProgressData();
+  }, [currentUser]);
+
+  const handleTrainerFeedbackSubmit = async (activityId) => {
+    const comment = feedbackInput[activityId];
+    const rating = ratingInput[activityId] || 5;
+    if (!comment || !comment.trim()) {
+      CustomSwal.fire({ title: 'Feedback Required', text: 'Please type a review or comment for your athlete.', icon: 'warning' });
+      return;
+    }
+    setIsSubmittingFeedback(prev => ({ ...prev, [activityId]: true }));
+    try {
+      await progressApi.submitTrainerFeedback(activityId, {
+        comment,
+        rating,
+        trainerName: currentUser?.name || 'Coach Shravan'
+      });
+      CustomSwal.fire({ title: 'Feedback Sent! 💬', text: 'Athlete received your coach notes and rating.', icon: 'success' });
+      fetchClientProgressData();
+      setFeedbackInput(prev => ({ ...prev, [activityId]: '' }));
+    } catch (err) {
+      CustomSwal.fire({ title: 'Error', text: err.message, icon: 'error' });
+    } finally {
+      setIsSubmittingFeedback(prev => ({ ...prev, [activityId]: false }));
+    }
+  };
+
   // --- STATE INITIALIZATION WITH LOCALSTORAGE PERSISTENCE ---
 
-  const defaultMembers = [
-    {
-      id: 'MEM-98801',
-      name: 'The PC Workshop',
-      email: 'thepcworkshop1@gmail.com',
-      tier: 'Muscle Core Member',
-      status: 'Active',
-      joined: '01 Sep 2024',
-      goal: 'Form Consultation & Baseline Testing',
-      diet: 'Lean Calorie Deficit Plan',
-      workout: 'Hypertrophy Split Alpha (Upper/Lower)',
-      attendance: 96
-    },
-    {
-      id: 'MEM-10892',
-      name: 'Ethan Hunt',
-      email: 'ethan.hunt@apex.com',
-      tier: 'Pro Member',
-      status: 'Active',
-      joined: '12 Jan 2024',
-      goal: 'Hypertrophy & Powerlifting',
-      diet: 'Mass Gainer Bulking Protocol',
-      workout: 'Hypertrophy Split Alpha (Upper/Lower)',
-      attendance: 98
-    },
-    {
-      id: 'MEM-24901',
-      name: 'Sarah Connor',
-      email: 'sarah.c@apex.com',
-      tier: 'VIP Athlete',
-      status: 'Active',
-      joined: '05 Mar 2024',
-      goal: 'Lean Calorie Deficit & Conditioning',
-      diet: 'Lean Calorie Deficit Plan',
-      workout: 'High-Intensity Tactical Conditioning',
-      attendance: 94
-    },
-    {
-      id: 'MEM-31044',
-      name: 'John Wick',
-      email: 'john.wick@apex.com',
-      tier: 'Elite Athlete',
-      status: 'Active',
-      joined: '20 Feb 2024',
-      goal: 'Competition Shredded Cut',
-      diet: 'Competition Shredded Cut',
-      workout: 'Olympic Weightlifting & Power Block',
-      attendance: 100
-    },
-    {
-      id: 'MEM-45812',
-      name: 'Alex Mercer',
-      email: 'alex.m@apex.com',
-      tier: 'Pro Member',
-      status: 'Active',
-      joined: '18 Apr 2024',
-      goal: 'Mass Gainer Bulking',
-      diet: 'Mass Gainer Bulking Protocol',
-      workout: 'Hypertrophy Split Alpha (Upper/Lower)',
-      attendance: 91
-    }
-  ];
+  const defaultMembers = [];
 
   const defaultWorkouts = [
     {
@@ -237,84 +228,11 @@ export default function TrainerPanel({ activeView, currentUser }) {
     }
   ];
 
-  const defaultAgenda = [
-    {
-      id: 'ag-1',
-      client: 'Ethan Hunt',
-      routine: 'Morning Hypertrophy Squat Block',
-      objective: 'Morning Hypertrophy Squat Block',
-      timeBlock: 'Today 07:00 AM',
-      time: 'Today 07:00 AM',
-      shiftCategory: 'Morning Shift',
-      status: 'Ready'
-    },
-    {
-      id: 'ag-2',
-      client: 'Sarah Connor',
-      routine: 'Morning Conditioning & Cardio Sprint',
-      objective: 'Morning Conditioning & Cardio Sprint',
-      timeBlock: 'Today 08:30 AM',
-      time: 'Today 08:30 AM',
-      shiftCategory: 'Morning Shift',
-      status: 'Ready'
-    },
-    {
-      id: 'ag-3',
-      client: 'Alex Mercer',
-      routine: 'Evening Deadlift & Back Power Block',
-      objective: 'Evening Deadlift & Back Power Block',
-      timeBlock: 'Today 05:00 PM',
-      time: 'Today 05:00 PM',
-      shiftCategory: 'Evening Shift',
-      status: 'Ready'
-    },
-    {
-      id: 'ag-4',
-      client: 'John Wick',
-      routine: 'Evening Tactical Conditioning & Core',
-      objective: 'Evening Tactical Conditioning & Core',
-      timeBlock: 'Today 07:30 PM',
-      time: 'Today 07:30 PM',
-      shiftCategory: 'Evening Shift',
-      status: 'Ready'
-    }
-  ];
-
-  const defaultAttendance = [
-    {
-      name: 'Ethan Hunt',
-      code: 'MEM-10892',
-      inTime: '06:52 AM',
-      outTime: '--',
-      duration: 'Active',
-      date: 'Today',
-      status: 'active',
-      scanMethod: 'Manual Keycard'
-    },
-    {
-      name: 'Sarah Connor',
-      code: 'MEM-24901',
-      inTime: '08:15 AM',
-      outTime: '09:45 AM',
-      duration: '1h 30m',
-      date: 'Today',
-      status: 'done',
-      scanMethod: 'Manual Keycard'
-    },
-    {
-      name: 'John Wick',
-      code: 'MEM-31044',
-      inTime: '05:05 PM',
-      outTime: '--',
-      duration: 'Active',
-      date: 'Today',
-      status: 'active',
-      scanMethod: 'Manual Entry (Trainer)'
-    }
-  ];
+  const defaultAgenda = [];
+  const defaultAttendance = [];
 
   const getRegisteredMembers = () => {
-    let baseList = [...defaultMembers];
+    let baseList = [];
 
     const saved = localStorage.getItem('apex_trainer_members');
     if (saved) {
@@ -322,7 +240,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           parsed.forEach((m) => {
-            if (m.name && !baseList.some((b) => b.name.toLowerCase() === m.name.toLowerCase())) {
+            if (m.name && !baseList.some((b) => (b.email && m.email && b.email.toLowerCase() === m.email.toLowerCase()) || b.name.toLowerCase() === m.name.toLowerCase())) {
               baseList.push(m);
             }
           });
@@ -336,14 +254,14 @@ export default function TrainerPanel({ activeView, currentUser }) {
     const memberUsers = registeredUsers.filter((u) => !u.role || u.role.toLowerCase() === 'member');
 
     memberUsers.forEach((u) => {
-      if (u.name && !baseList.some((m) => m.name.toLowerCase() === u.name.toLowerCase())) {
+      if (u.name && !baseList.some((m) => (m.email && u.email && m.email.toLowerCase() === u.email.toLowerCase()) || m.name.toLowerCase() === u.name.toLowerCase())) {
         baseList.push({
-          id: `MEM-${10890 + baseList.length}`,
+          id: u.userId || `MEM-${10890 + baseList.length}`,
           name: u.name,
           email: u.email || 'member@apex.com',
           tier: u.membershipTier || u.plan || 'Pro Member',
           status: 'Active',
-          joined: u.joined || 'Today',
+          joined: u.joinedDate || u.joined || 'Today',
           goal: u.fitnessGoal || u.goal || 'General Fitness & Performance',
           diet: u.diet || 'Prescribed Protocol',
           workout: u.workout || 'Prescribed Program',
@@ -504,7 +422,10 @@ export default function TrainerPanel({ activeView, currentUser }) {
     return [];
   });
 
-  const [selectedChatMember, setSelectedChatMember] = useState('Ethan Hunt');
+  const [selectedChatMember, setSelectedChatMember] = useState(() => {
+    const mems = getRegisteredMembers();
+    return mems[0]?.name || '';
+  });
   const [singleChatInput, setSingleChatInput] = useState('');
   const [memberInputs, setMemberInputs] = useState({});
   const [unreadChatsByMember, setUnreadChatsByMember] = useState({});
@@ -841,18 +762,11 @@ export default function TrainerPanel({ activeView, currentUser }) {
   // Sync state with Node.js Express backend API on mount
   useEffect(() => {
     async function loadTrainerBackendData() {
-      // 1. Members Roster
+      // 1. Members Roster from backend
       const fetchedMembers = await trainerApi.getMembers();
-      if (fetchedMembers && fetchedMembers.length > 0) {
-        setMembers((prev) => {
-          const merged = [...prev];
-          fetchedMembers.forEach((fm) => {
-            if (fm.name && !merged.some((m) => m.name.toLowerCase() === fm.name.toLowerCase())) {
-              merged.push(fm);
-            }
-          });
-          return merged;
-        });
+      if (fetchedMembers && Array.isArray(fetchedMembers)) {
+        setMembers(fetchedMembers);
+        localStorage.setItem('apex_trainer_members', JSON.stringify(fetchedMembers));
       }
 
       // 2. Workout Plans
@@ -873,42 +787,14 @@ export default function TrainerPanel({ activeView, currentUser }) {
 
       // 4. Schedule Agenda
       const fetchedAgenda = await trainerApi.getSchedule();
-      if (fetchedAgenda && fetchedAgenda.length > 0) setAgenda(fetchedAgenda);
+      if (fetchedAgenda && Array.isArray(fetchedAgenda)) setAgenda(fetchedAgenda);
 
       // 5. Attendance Logs
       const fetchedAttendance = await trainerApi.getAttendance();
-      if (fetchedAttendance && fetchedAttendance.length > 0) setAttendanceLogs(fetchedAttendance);
+      if (fetchedAttendance && Array.isArray(fetchedAttendance)) setAttendanceLogs(fetchedAttendance);
     }
     loadTrainerBackendData();
   }, []);
-
-  // Auto-sync client names from schedule agenda into members roster
-  useEffect(() => {
-    if (agenda && agenda.length > 0) {
-      setMembers((prev) => {
-        let changed = false;
-        const updated = [...prev];
-        agenda.forEach((item) => {
-          if (item.client && !updated.some((m) => m.name.toLowerCase() === item.client.toLowerCase())) {
-            updated.push({
-              id: `MEM-${Math.floor(10000 + Math.random() * 90000)}`,
-              name: item.client,
-              email: `${item.client.toLowerCase().replace(/\s+/g, '.')}@apex.com`,
-              tier: 'Pro Member',
-              status: 'Active',
-              joined: 'Recent Schedule',
-              goal: item.objective || item.routine || 'Personal Coaching',
-              diet: 'Prescribed Protocol',
-              workout: item.routine || 'Custom Training Block',
-              attendance: 96
-            });
-            changed = true;
-          }
-        });
-        return changed ? updated : prev;
-      });
-    }
-  }, [agenda]);
 
   // Auto-sync state edits back to localStorage
   useEffect(() => {
@@ -944,7 +830,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
         console.error(err);
       }
     }
-    return defaultMembers[0]?.name || 'Active Member';
+    return members[0]?.name || '';
   });
   const [routine, setRoutine] = useState('');
   const [timeBlock, setTimeBlock] = useState('');
@@ -1364,7 +1250,7 @@ export default function TrainerPanel({ activeView, currentUser }) {
         console.error(err);
       }
     }
-    return defaultMembers[0]?.name || 'Active Member';
+    return members[0]?.name || '';
   });
   const [attAction, setAttAction] = useState('check-in');
   const [attSearch, setAttSearch] = useState('');
@@ -1734,6 +1620,44 @@ export default function TrainerPanel({ activeView, currentUser }) {
     });
   };
 
+  // Remove a client from trainer roster
+  const handleRemoveRosterMember = async (id, email, name) => {
+    const res = await CustomSwal.fire({
+      icon: 'warning',
+      title: 'Remove Client?',
+      text: `Are you sure you want to remove ${name} from your client roster?`,
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Remove',
+      cancelButtonText: 'Cancel'
+    });
+    if (!res.isConfirmed) return;
+
+    try {
+      await fetch(`http://localhost:5000/api/trainer/members/${encodeURIComponent(id || email)}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('apex_auth_token') ? { Authorization: `Bearer ${localStorage.getItem('apex_auth_token')}` } : {})
+        }
+      });
+    } catch (err) {
+      console.warn('Failed to delete member from trainer roster API:', err);
+    }
+
+    const updated = members.filter(m => 
+      (!m.id || m.id !== id) && 
+      (!m.email || (email && m.email.toLowerCase() !== email.toLowerCase()))
+    );
+    setMembers(updated);
+    localStorage.setItem('apex_trainer_members', JSON.stringify(updated));
+
+    CustomSwal.fire({
+      icon: 'success',
+      title: 'Client Removed',
+      text: `${name} has been removed from your client roster.`
+    });
+  };
+
   // Turnstile Manual Log Submission
   const handleManualTurnstileSubmit = async (e) => {
     e.preventDefault();
@@ -1899,6 +1823,279 @@ export default function TrainerPanel({ activeView, currentUser }) {
           </span>
         </div>
       </div>
+
+      {/* --- TAB: CLIENT PROGRESS REVIEW SUB-VIEW --- */}
+      {currentTab === 'progress' && (
+        <div style={{ animation: 'slideTimelineItem 0.4s ease forwards' }}>
+          {/* Header Bar */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '1rem',
+            marginBottom: '1.5rem',
+            padding: '1.4rem 1.8rem',
+            background: 'linear-gradient(135deg, rgba(255, 94, 0, 0.15), rgba(0, 240, 255, 0.08))',
+            borderRadius: '14px',
+            border: '1px solid var(--accent-volt, #ff5e00)'
+          }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.3rem' }}>
+                <span style={{ fontSize: '1.6rem' }}>📈</span>
+                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800, color: '#fff' }}>
+                  CLIENT PROGRESS &amp; DAILY ACTIVITIES REVIEW
+                </h2>
+              </div>
+              <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.85rem' }}>
+                Inspect your assigned athletes' daily workout photos, target vs completed workouts, and provide coaching feedback &amp; ratings.
+              </p>
+            </div>
+
+            {/* Client Filter */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <span style={{ fontSize: '0.82rem', color: 'var(--text-dim)' }}>Filter Athlete:</span>
+              <select
+                value={selectedClientFilter}
+                onChange={(e) => setSelectedClientFilter(e.target.value)}
+                style={{
+                  background: '#0d0d15',
+                  border: '1px solid var(--border-color)',
+                  color: '#fff',
+                  padding: '0.45rem 0.8rem',
+                  borderRadius: '6px',
+                  fontSize: '0.82rem'
+                }}
+              >
+                <option value="all">All Athletes ({clientActivities.length} logs)</option>
+                {Array.from(new Set(clientActivities.map(a => a.memberName))).map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Activities List */}
+          <div style={{ marginBottom: '2.5rem' }}>
+            <h3 style={{ color: 'var(--text-white)', fontSize: '1.2rem', marginBottom: '1rem' }}>
+              🏋️ Recent Athlete Workout Shares
+            </h3>
+
+            {clientActivities.length === 0 ? (
+              <div style={{ padding: '3rem', textAlign: 'center', background: 'var(--bg-card)', borderRadius: '12px', color: 'var(--text-dim)' }}>
+                No athlete workout activities logged yet.
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: '1.5rem' }}>
+                {clientActivities
+                  .filter(a => selectedClientFilter === 'all' || a.memberName === selectedClientFilter)
+                  .map((item) => {
+                    const isReviewing = Boolean(item.trainerFeedback?.comment);
+                    const targetCount = item.targetWorkouts || 5;
+                    const doneCount = item.completedWorkouts || 5;
+                    const ratioPercent = Math.min(100, Math.round((doneCount / targetCount) * 100));
+
+                    return (
+                      <div
+                        key={item.id}
+                        style={{
+                          background: 'var(--bg-card, #12121c)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '12px',
+                          overflow: 'hidden',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          boxShadow: '0 6px 20px rgba(0,0,0,0.3)'
+                        }}
+                      >
+                        {/* Workout Photo Frame */}
+                        <div style={{ position: 'relative', height: '170px', background: '#0a0a10', overflow: 'hidden' }}>
+                          {item.workoutPhoto ? (
+                            <img
+                              src={item.workoutPhoto}
+                              alt={item.workoutTitle}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
+                              onClick={() => setTrainerLightboxPhoto(item.workoutPhoto)}
+                            />
+                          ) : (
+                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <span style={{ fontSize: '3rem', opacity: 0.3 }}>🏋️</span>
+                            </div>
+                          )}
+                          <span style={{ position: 'absolute', top: '10px', left: '10px', background: 'rgba(5,5,8,0.85)', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.72rem', color: 'var(--accent-volt)', fontWeight: 800 }}>
+                            {item.memberName} ({item.date})
+                          </span>
+                        </div>
+
+                        {/* Content */}
+                        <div style={{ padding: '1.2rem', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                          <h4 style={{ margin: '0 0 0.4rem 0', color: 'var(--text-white)', fontSize: '1.1rem', fontWeight: 800 }}>
+                            {item.workoutTitle}
+                          </h4>
+
+                          {/* Target vs Done Indicator */}
+                          <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.6rem', borderRadius: '6px', marginBottom: '0.8rem', fontSize: '0.78rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                              <span style={{ color: 'var(--text-dim)' }}>Workouts Target vs Done:</span>
+                              <strong style={{ color: doneCount >= targetCount ? 'var(--accent-volt)' : '#ffaa00' }}>
+                                {doneCount} / {targetCount} ({ratioPercent}%)
+                              </strong>
+                            </div>
+                            <div style={{ width: '100%', height: '5px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                              <div style={{ width: `${ratioPercent}%`, height: '100%', background: 'var(--accent-volt)' }} />
+                            </div>
+                          </div>
+
+                          {/* Exercises List */}
+                          {item.exercises && item.exercises.length > 0 && (
+                            <div style={{ marginBottom: '0.8rem', fontSize: '0.75rem', maxHeight: '90px', overflowY: 'auto' }}>
+                              {item.exercises.map((ex, i) => (
+                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.15rem 0', color: 'var(--text-dim)' }}>
+                                  <span style={{ color: 'var(--text-white)' }}>✓ {ex.name}</span>
+                                  <span>{ex.sets}x{ex.reps} {ex.weight ? `(${ex.weight})` : ''}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {item.notes && (
+                            <p style={{ margin: '0 0 0.8rem 0', fontSize: '0.78rem', fontStyle: 'italic', color: 'var(--text-dim)', background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '6px', borderLeft: '2px solid var(--accent-volt)' }}>
+                              "{item.notes}"
+                            </p>
+                          )}
+
+                          {/* Coach Review Section */}
+                          <div style={{ marginTop: 'auto', paddingTop: '0.8rem', borderTop: '1px solid var(--border-color)' }}>
+                            {isReviewing && !feedbackInput[item.id] ? (
+                              <div style={{ background: 'rgba(0, 240, 255, 0.08)', border: '1px solid rgba(0, 240, 255, 0.25)', padding: '0.7rem', borderRadius: '6px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+                                  <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', fontWeight: 800 }}>✓ Coach Feedback Sent</span>
+                                  <span style={{ fontSize: '0.72rem', color: '#ffcc00' }}>{'★'.repeat(item.trainerFeedback.rating || 5)}</span>
+                                </div>
+                                <p style={{ margin: '0 0 0.4rem 0', fontSize: '0.75rem', color: 'var(--text-white)' }}>
+                                  "{item.trainerFeedback.comment}"
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => setFeedbackInput(prev => ({ ...prev, [item.id]: item.trainerFeedback.comment }))}
+                                  style={{ background: 'transparent', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.7rem', cursor: 'pointer', padding: 0 }}
+                                >
+                                  ✏️ Edit Feedback
+                                </button>
+                              </div>
+                            ) : (
+                              <div>
+                                <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--accent-volt)', marginBottom: '0.3rem', fontWeight: 800 }}>
+                                  💬 Leave Coach Feedback &amp; Rating:
+                                </label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
+                                  <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Rating:</span>
+                                  <select
+                                    value={ratingInput[item.id] || 5}
+                                    onChange={(e) => setRatingInput(prev => ({ ...prev, [item.id]: Number(e.target.value) }))}
+                                    style={{ background: '#0d0d15', border: '1px solid var(--border-color)', color: '#ffcc00', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}
+                                  >
+                                    <option value={5}>★★★★★ (5 Stars - Excellent)</option>
+                                    <option value={4}>★★★★☆ (4 Stars - Solid)</option>
+                                    <option value={3}>★★★☆☆ (3 Stars - Fair)</option>
+                                  </select>
+                                </div>
+                                <textarea
+                                  rows="2"
+                                  placeholder="e.g. Great squat depth! Make sure to keep your chest up on set 4."
+                                  value={feedbackInput[item.id] !== undefined ? feedbackInput[item.id] : ''}
+                                  onChange={(e) => setFeedbackInput(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                  style={{ width: '100%', padding: '0.45rem', background: '#0d0d15', border: '1px solid var(--border-color)', color: '#fff', borderRadius: '4px', fontSize: '0.75rem', marginBottom: '0.4rem' }}
+                                />
+                                <button
+                                  type="button"
+                                  disabled={isSubmittingFeedback[item.id]}
+                                  onClick={() => handleTrainerFeedbackSubmit(item.id)}
+                                  className="glow-btn"
+                                  style={{ width: '100%', padding: '0.45rem', background: 'var(--accent-volt)', color: '#000', fontWeight: 800, border: 'none', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}
+                                >
+                                  {isSubmittingFeedback[item.id] ? 'Submitting...' : 'Send Review to Athlete 💬'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+
+          {/* Client Weekly Progress Photos */}
+          <div>
+            <h3 style={{ color: 'var(--text-white)', fontSize: '1.2rem', marginBottom: '1rem' }}>
+              📸 Client Weekly Multi-Angle Progress Photos ({clientPhotos.length})
+            </h3>
+            {clientPhotos.length === 0 ? (
+              <div style={{ padding: '2rem', textAlign: 'center', background: 'var(--bg-card)', borderRadius: '12px', color: 'var(--text-dim)' }}>
+                No client progress photos uploaded yet.
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.2rem' }}>
+                {clientPhotos.map(photo => (
+                  <div key={photo.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                      <strong style={{ color: 'var(--text-white)', fontSize: '0.9rem' }}>{photo.memberName}</strong>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)' }}>{photo.weekNumber} ({photo.date})</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem', marginBottom: '0.6rem' }}>
+                      <div style={{ height: '110px', background: '#0a0a10', borderRadius: '4px', overflow: 'hidden' }}>
+                        {photo.frontPhoto && <img src={photo.frontPhoto} alt="Front" style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} onClick={() => setTrainerLightboxPhoto(photo.frontPhoto)} />}
+                      </div>
+                      <div style={{ height: '110px', background: '#0a0a10', borderRadius: '4px', overflow: 'hidden' }}>
+                        {photo.sidePhoto && <img src={photo.sidePhoto} alt="Side" style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} onClick={() => setTrainerLightboxPhoto(photo.sidePhoto)} />}
+                      </div>
+                      <div style={{ height: '110px', background: '#0a0a10', borderRadius: '4px', overflow: 'hidden' }}>
+                        {photo.backPhoto && <img src={photo.backPhoto} alt="Back" style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} onClick={() => setTrainerLightboxPhoto(photo.backPhoto)} />}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Weight: <strong style={{ color: 'var(--text-white)' }}>{photo.bodyWeight ? `${photo.bodyWeight} ${photo.weightUnit || 'lbs'}` : 'N/A'}</strong></span>
+                      {photo.bodyFatPercentage && <span>Fat: <strong style={{ color: '#ffcc00' }}>{photo.bodyFatPercentage}%</strong></span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Lightbox for Coach */}
+          {trainerLightboxPhoto && (
+            <div
+              onClick={() => setTrainerLightboxPhoto(null)}
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                width: '100vw',
+                height: '100vh',
+                background: 'rgba(0,0,0,0.92)',
+                zIndex: 100000,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '2rem',
+                cursor: 'zoom-out'
+              }}
+            >
+              <img src={trainerLightboxPhoto} alt="Expanded" style={{ maxWidth: '90%', maxHeight: '90%', borderRadius: '12px' }} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* --- TAB: COMPETITIONS SUB-VIEW (FOR TRAINER) --- */}
+      {currentTab === 'competitions' && (
+        <div style={{ animation: 'slideTimelineItem 0.4s ease forwards' }}>
+          <CompetitionModule currentUser={currentUser} role="trainer" />
+        </div>
+      )}
 
       {/* --- TAB 1: OVERVIEW SUB-VIEW --- */}
       {currentTab === 'overview' && (
@@ -2651,6 +2848,14 @@ export default function TrainerPanel({ activeView, currentUser }) {
                                     {unreadChatsByMember[m.name]}
                                   </span>
                                 )}
+                              </button>
+                              <button
+                                onClick={() => handleRemoveRosterMember(m.id, m.email, m.name)}
+                                className="outline-btn"
+                                style={{ padding: '0.4rem 0.7rem', fontSize: '0.72rem', textTransform: 'uppercase', borderColor: '#ef4444', color: '#ef4444' }}
+                                title="Remove client from roster"
+                              >
+                                🗑️ Remove
                               </button>
                             </div>
                           </td>

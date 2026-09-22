@@ -411,6 +411,38 @@ export default function DashboardPage({ navigate }) {
 
             )}
 
+            {/* Member progress module link (Member Only) */}
+            {currentUser.role === 'member' && (
+              <li>
+                <a
+                  onClick={() => setActiveSubView('progress')}
+                  className={`sidebar-nav-link ${activeSubView === 'progress' ? 'active' : ''}`}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  </svg>
+                  Progress
+                </a>
+              </li>
+            )}
+
+            {/* Member competitions link (Member Only) */}
+            {currentUser.role === 'member' && (
+              <li>
+                <a
+                  onClick={() => setActiveSubView('competitions')}
+                  className={`sidebar-nav-link ${activeSubView === 'competitions' ? 'active' : ''}`}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                  </svg>
+                  Competitions 🏆
+                </a>
+              </li>
+            )}
+
             {/* Member membership status and pass view (Member Only) */}
             {currentUser.role === 'member' && (
               <li>
@@ -476,6 +508,30 @@ export default function DashboardPage({ navigate }) {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                     Schedule
+                  </a>
+                </li>
+                <li>
+                  <a
+                    onClick={() => setActiveSubView('progress')}
+                    className={`sidebar-nav-link ${activeSubView === 'progress' ? 'active' : ''}`}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                    Client Progress
+                  </a>
+                </li>
+                <li>
+                  <a
+                    onClick={() => setActiveSubView('competitions')}
+                    className={`sidebar-nav-link ${activeSubView === 'competitions' ? 'active' : ''}`}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                    </svg>
+                    Competitions 🏆
                   </a>
                 </li>
               </>
@@ -595,9 +651,18 @@ export default function DashboardPage({ navigate }) {
                     Supplements
                   </a>
                 </li>
-
-                
-
+                <li>
+                  <a
+                    onClick={() => setActiveSubView('competitions')}
+                    className={`sidebar-nav-link ${activeSubView === 'competitions' ? 'active' : ''}`}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                    </svg>
+                    Competitions 🏆
+                  </a>
+                </li>
               </>
             )}
           </ul>

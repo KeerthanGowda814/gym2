@@ -16,6 +16,8 @@ import trainerPanelRoutes from './routes/trainerPanelRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import alertRoutes from './routes/alertRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
+import progressRoutes from './routes/progressRoutes.js';
+import competitionRoutes from './routes/competitionRoutes.js';
 import { connectMongoDB, isMongoConnected } from './config/mongodb.js';
 
 dotenv.config();
@@ -79,6 +81,8 @@ app.use('/api/member/supplements', authMiddleware, supplementRoutes);
 app.use('/api/admin/supplements', supplementRoutes);
 app.use('/api/member/equipment', authMiddleware, equipmentRoutes);
 app.use('/api/trainer', authMiddleware, trainerPanelRoutes);
+app.use('/api/member/progress', authMiddleware, progressRoutes);
+app.use('/api/competitions', authMiddleware, competitionRoutes);
 
 // Global 404 Route
 app.use((req, res) => {

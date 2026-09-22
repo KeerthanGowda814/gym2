@@ -105,7 +105,9 @@ router.post('/checkout', async (req, res) => {
     paymentStatus
   } = req.body;
 
-  if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
+  const rawItems = cartItems || req.body.items;
+
+  if (!rawItems || !Array.isArray(rawItems) || rawItems.length === 0) {
     return res.status(400).json({
       success: false,
       message: 'Cart is empty.'
@@ -119,7 +121,7 @@ router.post('/checkout', async (req, res) => {
   const itemsSummaryList = [];
   const detailedItems = [];
 
-  for (const item of cartItems) {
+  for (const item of rawItems) {
     const prod = Array.isArray(db.supplements?.products)
       ? db.supplements.products.find((p) => p.id === item.productId || p.id === item.id || p.id === item.product?.id || p.name === item.name || p.name === item.product?.name)
       : null;
@@ -151,8 +153,9 @@ router.post('/checkout', async (req, res) => {
   const memberDiscount = subtotal * 0.10; // Automatic 10% Member discount
   const isPromoValid = String(promoCode || '').toUpperCase().trim() === 'APEX10';
   const promoDiscount = isPromoValid ? subtotal * 0.10 : 0;
-  const shippingFee = shippingInfo?.deliveryType === 'express' ? 49.00 : 0.00;
-  const totalBilled = Math.max(0, subtotal - memberDiscount - promoDiscount + shippingFee);
+  // 100% Gym Pickup & Desk Collection: Always Free (₹0 shipping fee)
+  const shippingFee = 0.00;
+  const totalBilled = Math.max(0, subtotal - memberDiscount - promoDiscount);
 
   const txId = paymentId || ('TX-' + Math.floor(1000 + Math.random() * 9000));
   const orderId = `ORD-${Date.now()}`;
@@ -166,23 +169,23 @@ router.post('/checkout', async (req, res) => {
   });
 
   const methodStr = String(paymentMethod || 'online').toLowerCase();
-  const isCod = methodStr.includes('cod') || methodStr === 'cash on delivery';
+  const isPayAtDesk = methodStr.includes('cod') || methodStr.includes('gym') || methodStr.includes('desk') || methodStr.includes('cash') || methodStr === 'pay at gym desk';
   const isAccount = methodStr.includes('account') || methodStr === 'apex member account';
 
-  const normalizedMethod = isCod
-    ? 'Cash on Delivery (COD)'
+  const normalizedMethod = isPayAtDesk
+    ? 'Pay at Gym Desk (Cash/Card/UPI)'
     : isAccount
     ? 'Apex Member Account'
     : 'Online Payment (Razorpay)';
 
-  const normalizedStatus = paymentStatus || (isCod
-    ? 'Pending (COD)'
+  const normalizedStatus = paymentStatus || (isPayAtDesk
+    ? 'Pending (Pay at Gym Desk)'
     : isAccount
     ? 'Billed to Member Account'
     : 'Paid');
 
-  const resolvedReceiptNumber = receiptNumber || (isCod
-    ? `MH-RCP-COD-${Math.floor(100000 + Math.random() * 900000)}`
+  const resolvedReceiptNumber = receiptNumber || (isPayAtDesk
+    ? `MH-RCP-DESK-${Math.floor(100000 + Math.random() * 900000)}`
     : isAccount
     ? `MH-RCP-ACC-${Math.floor(100000 + Math.random() * 900000)}`
     : `MH-RCP-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`);
@@ -191,13 +194,18 @@ router.post('/checkout', async (req, res) => {
     {
       status: 'Pending Confirmation',
       timestamp: orderDate,
-      note: isCod
-        ? 'Order placed with Cash on Delivery. Pending admin verification & dispatch.'
+      note: isPayAtDesk
+        ? `Order placed for Gym Pickup. Payment of ₹${totalBilled.toFixed(2)} due upon collection at Gym Reception Desk.`
         : isAccount
-        ? 'Order placed and charged to Monthly Member Account invoice. Pending admin confirmation.'
-        : 'Payment received & verified via Razorpay. Pending admin packing & dispatch.'
+        ? 'Order placed for Gym Pickup and charged to Monthly Member Account. Awaiting gym staff preparation.'
+        : 'Payment received & verified via Razorpay. Order placed for Gym Pickup at Apex Athletics Front Desk.'
     }
   ];
+
+  const pickupLocation = shippingInfo?.pickupLocation || 'Apex Athletics Front Desk & Nutrition Bar';
+  const pickupDesk = shippingInfo?.pickupDesk || 'Reception Desk - Counter 1';
+  const pickupTimePreference = shippingInfo?.pickupTimePreference || shippingInfo?.preferredPickupTime || 'Next Gym Visit';
+  const pickupNotes = shippingInfo?.pickupNotes || '';
 
   const newOrder = {
     orderId,
@@ -211,23 +219,32 @@ router.post('/checkout', async (req, res) => {
     subtotal,
     memberDiscount,
     promoDiscount,
-    shippingFee,
+    shippingFee: 0,
     total: totalBilled,
     totalAmount: totalBilled,
-    shippingInfo: shippingInfo || {
-      fullName: userName || 'Ethan Hunt',
-      phone: userPhone || '+91 98765 43210',
-      address: '123 Apex Fitness Boulevard',
+    // Gym Pickup Details
+    deliveryType: 'gym_pickup',
+    pickupLocation,
+    pickupDesk,
+    pickupTimePreference,
+    pickupNotes,
+    readyForPickupAt: '',
+    collectedAt: '',
+    collectedByAdmin: '',
+    shippingInfo: {
+      fullName: userName || shippingInfo?.fullName || 'Ethan Hunt',
+      phone: userPhone || shippingInfo?.phone || '+91 98765 43210',
+      address: pickupLocation,
       city: 'Bangalore',
       state: 'Karnataka',
       pincode: '560001',
-      deliveryType: 'standard'
+      deliveryType: 'gym_pickup'
     },
     paymentMethod: normalizedMethod,
     paymentStatus: normalizedStatus,
-    courierName: 'Apex Express Logistics',
-    trackingNumber: '',
-    estimatedDelivery: shippingInfo?.deliveryType === 'express' ? '24 Hours Priority' : '2-3 Business Days',
+    courierName: 'Gym Desk Collection',
+    trackingNumber: 'PICKUP-' + orderId,
+    estimatedDelivery: 'Ready for Collection within 2-4 Hours',
     status: 'Pending Confirmation',
     statusTimeline: initialTimeline,
     date: orderDate
@@ -247,7 +264,7 @@ router.post('/checkout', async (req, res) => {
     desc: `Supp Store: ${itemsSummary.substring(0, 35)}...`,
     amount: `₹${totalBilled.toLocaleString('en-IN')}`,
     numAmount: totalBilled,
-    status: isCod ? 'Pending (COD)' : (isAccount ? 'Billed to Account' : 'Paid'),
+    status: isPayAtDesk ? 'Pending (Pay at Gym Desk)' : (isAccount ? 'Billed to Account' : 'Paid'),
     paymentMethod: normalizedMethod,
     userEmail: userEmail || 'member@apex.com',
     userName: userName || 'Registered Member',
@@ -276,7 +293,7 @@ router.post('/checkout', async (req, res) => {
     title: `MuScLe HuB Store: ${itemsSummary.substring(0, 40)}`,
     amount: numAmount,
     currency: 'INR',
-    status: isCod ? 'pending' : (isAccount ? 'billed_to_account' : 'paid'),
+    status: isPayAtDesk ? 'pending' : (isAccount ? 'billed_to_account' : 'paid'),
     paymentMethod: normalizedMethod,
     bankRrn: `RRN-${Math.floor(100000000000 + Math.random() * 900000000000)}`,
     items: detailedItems.map(d => ({
@@ -345,7 +362,7 @@ router.post('/checkout', async (req, res) => {
  * Fetch all supplement orders or filter by user email from MongoDB Atlas & DB Fallback
  */
 router.get('/orders', async (req, res) => {
-  const { email } = req.query;
+  const email = req.query.email || req.query.userEmail;
   let mongoOrders = [];
 
   if (isMongoConnected()) {
@@ -414,11 +431,18 @@ router.get('/orders/:orderId', async (req, res) => {
 
 /**
  * PUT /api/admin/supplements/orders/:orderId/status
- * Admin update order status, courier info, and append tracking timeline in MongoDB Atlas & DB Fallback
+ * Admin update order pickup status, desk location, payment status, and append timeline in MongoDB Atlas & DB Fallback
  */
 router.put('/orders/:orderId/status', async (req, res) => {
   const { orderId } = req.params;
-  const { status, courierName, trackingNumber, estimatedDelivery, note } = req.body;
+  const {
+    status,
+    pickupDesk,
+    pickupLocation,
+    paymentStatus,
+    adminName,
+    note
+  } = req.body;
 
   const db = getDB();
   const orders = db.supplements.orders || [];
@@ -434,20 +458,53 @@ router.put('/orders/:orderId/status', async (req, res) => {
     minute: '2-digit'
   });
 
+  // Determine intelligent audit note if none explicitly provided
+  let auditNote = note;
+  if (!auditNote) {
+    if (status === 'Preparing Order') {
+      auditNote = 'Gym staff is assembling and packaging your supplement products at the inventory store.';
+    } else if (status === 'Ready for Pickup') {
+      auditNote = `Your order has been assembled and is READY FOR PICKUP at the Gym Desk (${pickupDesk || 'Front Desk - Counter 1'})! Please collect during gym hours (6 AM - 10 PM).`;
+    } else if (status === 'Collected') {
+      auditNote = `Order handed over to member at the Gym Desk. Collection completed.${paymentStatus ? ` Payment: ${paymentStatus}.` : ''}`;
+    } else if (status === 'Cancelled') {
+      auditNote = 'Order was cancelled by Gym Administration.';
+    } else {
+      auditNote = `Status updated to ${status || 'Updated'} by Gym Admin.`;
+    }
+  }
+
+  // Handle payment status auto-progression on collection
+  let resolvedPaymentStatus = paymentStatus;
+  if (!resolvedPaymentStatus && status === 'Collected') {
+    if (targetOrder?.paymentStatus && targetOrder.paymentStatus.includes('Pending')) {
+      resolvedPaymentStatus = 'Paid at Gym Desk';
+    }
+  }
+
+  const updateFields = {
+    ...(status && { status }),
+    ...(pickupDesk !== undefined && { pickupDesk }),
+    ...(pickupLocation !== undefined && { pickupLocation }),
+    ...(resolvedPaymentStatus !== undefined && { paymentStatus: resolvedPaymentStatus }),
+    ...(status === 'Ready for Pickup' && { readyForPickupAt: timestamp }),
+    ...(status === 'Collected' && {
+      collectedAt: timestamp,
+      collectedByAdmin: adminName || 'System Admin'
+    })
+  };
+
   if (isMongoConnected()) {
     try {
       const updatedMongo = await SupplementOrder.findOneAndUpdate(
         { $or: [{ orderId }, { txId: orderId }] },
         {
-          ...(status && { status }),
-          ...(courierName !== undefined && { courierName }),
-          ...(trackingNumber !== undefined && { trackingNumber }),
-          ...(estimatedDelivery !== undefined && { estimatedDelivery }),
+          ...updateFields,
           $push: {
             statusTimeline: {
               status: status || 'Updated',
               timestamp,
-              note: note || `Status updated to ${status || 'Updated'} by Admin`
+              note: auditNote
             }
           }
         },
@@ -463,35 +520,44 @@ router.put('/orders/:orderId/status', async (req, res) => {
   }
 
   if (orderIndex !== -1) {
-    if (status) targetOrder.status = status;
-    if (courierName !== undefined) targetOrder.courierName = courierName;
-    if (trackingNumber !== undefined) targetOrder.trackingNumber = trackingNumber;
-    if (estimatedDelivery !== undefined) targetOrder.estimatedDelivery = estimatedDelivery;
-
+    targetOrder = { ...targetOrder, ...updateFields };
     if (!targetOrder.statusTimeline) targetOrder.statusTimeline = [];
     targetOrder.statusTimeline.push({
       status: status || targetOrder.status,
       timestamp,
-      note: note || `Status updated to ${status || targetOrder.status} by Admin`
+      note: auditNote
     });
 
     orders[orderIndex] = targetOrder;
     db.supplements.orders = orders;
+
+    // If order is collected and payment resolved, update corresponding invoice & receipt
+    if (resolvedPaymentStatus && (resolvedPaymentStatus === 'Paid' || resolvedPaymentStatus === 'Paid at Gym Desk')) {
+      if (Array.isArray(db.invoices)) {
+        const inv = db.invoices.find(i => i.id === targetOrder.receiptNumber || i.receiptNumber === targetOrder.receiptNumber);
+        if (inv) inv.status = 'Paid';
+      }
+      if (Array.isArray(db.receipts)) {
+        const rcp = db.receipts.find(r => r.orderId === targetOrder.orderId || r.receiptNumber === targetOrder.receiptNumber);
+        if (rcp) rcp.status = 'paid';
+      }
+    }
+
     saveDB(db);
   } else if (!targetOrder) {
-    // Upsert order if missing from DB array
     targetOrder = {
       orderId,
       txId: orderId,
-      status: status || 'Confirmed',
-      courierName: courierName || 'Apex Express Logistics',
-      trackingNumber: trackingNumber || '',
-      estimatedDelivery: estimatedDelivery || '2-3 Business Days',
+      status: status || 'Ready for Pickup',
+      deliveryType: 'gym_pickup',
+      pickupLocation: pickupLocation || 'Apex Athletics Front Desk & Nutrition Bar',
+      pickupDesk: pickupDesk || 'Reception Desk - Counter 1',
+      paymentStatus: resolvedPaymentStatus || 'Paid',
       statusTimeline: [
         {
-          status: status || 'Confirmed',
+          status: status || 'Ready for Pickup',
           timestamp,
-          note: note || `Status updated to ${status || 'Confirmed'} by Admin`
+          note: auditNote
         }
       ]
     };
@@ -503,7 +569,8 @@ router.put('/orders/:orderId/status', async (req, res) => {
   res.json({
     success: true,
     message: `Order status updated to ${targetOrder.status}.`,
-    data: targetOrder
+    data: targetOrder,
+    order: targetOrder
   });
 });
 

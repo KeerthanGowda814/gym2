@@ -18,10 +18,11 @@ const SupplementSchema = new mongoose.Schema({
 const OrderSchema = new mongoose.Schema({
   orderId: { type: String, required: true },
   txId: { type: String },
+  receiptNumber: { type: String },
   userEmail: { type: String, default: 'member@apex.com' },
   userName: { type: String, default: 'Registered Member' },
   userPhone: { type: String },
-  items: [{ id: String, name: String, price: Number, quantity: Number, image: String }],
+  items: [{ id: String, name: String, price: Number, quantity: Number, image: String, category: String }],
   itemsSummary: { type: String },
   subtotal: { type: Number },
   memberDiscount: { type: Number, default: 0 },
@@ -29,6 +30,15 @@ const OrderSchema = new mongoose.Schema({
   shippingFee: { type: Number, default: 0 },
   total: { type: Number },
   totalAmount: { type: Number },
+  // Gym Pickup Details (No Home Delivery)
+  deliveryType: { type: String, default: 'gym_pickup' },
+  pickupLocation: { type: String, default: 'Apex Athletics Front Desk & Nutrition Bar' },
+  pickupDesk: { type: String, default: 'Reception Desk - Counter 1' },
+  pickupTimePreference: { type: String, default: 'Next Gym Visit' },
+  pickupNotes: { type: String, default: '' },
+  readyForPickupAt: { type: String, default: '' },
+  collectedAt: { type: String, default: '' },
+  collectedByAdmin: { type: String, default: '' },
   shippingInfo: {
     fullName: String,
     phone: String,
@@ -38,11 +48,8 @@ const OrderSchema = new mongoose.Schema({
     pincode: String,
     deliveryType: String
   },
-  paymentMethod: { type: String, default: 'card' },
+  paymentMethod: { type: String, default: 'Online Payment (Razorpay)' },
   paymentStatus: { type: String, default: 'Paid' },
-  courierName: { type: String, default: '' },
-  trackingNumber: { type: String, default: '' },
-  estimatedDelivery: { type: String, default: '' },
   status: { type: String, default: 'Pending Confirmation' },
   statusTimeline: [{
     status: { type: String },

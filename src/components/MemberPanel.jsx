@@ -6,6 +6,8 @@ import { initiateRazorpayPayment } from '../services/razorpayService';
 import { memberApi } from '../services/memberApi';
 import { CustomSwal } from '../utils/swal';
 import { safeSetItem, safeGetItem, safeRemoveItem, sanitizeForStorage } from '../utils/storage';
+import MemberProgressModule from './MemberProgressModule';
+import CompetitionModule from './CompetitionModule';
 
 
 // Helper to parse weight strings (e.g., "175 lbs", "80 kg", "150")
@@ -402,7 +404,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
             paymentId: o.txId || o.paymentId,
             plan: `Supplement Store: ${o.itemsSummary || 'Products Purchase'}`,
             amount: numTotal,
-            status: o.paymentStatus === 'Pending (COD)' ? 'pending (cod)' : (o.paymentStatus === 'Billed to Member Account' ? 'account' : 'paid'),
+            status: (o.paymentStatus === 'Pending (Pay at Gym Desk)' || o.paymentStatus === 'Pending (COD)') ? 'pending (desk)' : (o.paymentStatus === 'Billed to Member Account' ? 'account' : 'paid'),
             userEmail: o.userEmail || profileData?.email || currentUser?.email,
             userName: o.userName || profileData?.name || currentUser?.name,
             date: o.date || 'Recent',
@@ -2529,6 +2531,20 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
 
   return (
     <div>
+      {/* 0.1 MEMBER PROGRESS MODULE VIEW */}
+      {activeView === 'progress' && (
+        <div className="member-sub-view" id="member-subview-progress" style={{ display: 'block' }}>
+          <MemberProgressModule currentUser={currentUser} onNavigateSubView={onNavigateSubView} />
+        </div>
+      )}
+
+      {/* 0.2 MEMBER COMPETITIONS VIEW */}
+      {activeView === 'competitions' && (
+        <div className="member-sub-view" id="member-subview-competitions" style={{ display: 'block' }}>
+          <CompetitionModule currentUser={currentUser} role="member" />
+        </div>
+      )}
+
       {/* 0. MEMBER PROFILE VIEW */}
       {activeView === 'profile' && (
         <div className="member-sub-view" id="member-subview-profile" style={{ display: 'block' }}>
@@ -5799,6 +5815,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
       )}
 
       {/* 4.5 DEDICATED MEMBER ORDERS & TRACKING VIEW */}
+      {/* 4.5 DEDICATED MEMBER ORDERS & GYM PICKUP TRACKING VIEW */}
       {(activeView === 'orders' || activeView === 'order-tracking') && (
         <div className="member-sub-view" id="member-subview-orders" style={{ display: 'block' }}>
           {/* Header Banner */}
@@ -5806,13 +5823,13 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.2rem' }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                  <span style={{ fontSize: '1.6rem' }}>🚚</span>
+                  <span style={{ fontSize: '1.6rem' }}>🏢</span>
                   <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.35rem', color: 'var(--text-white)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    My Orders & Shipment Tracking
+                    My Supplement Orders & Gym Pickup Status
                   </h3>
                 </div>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0.35rem 0 0 0' }}>
-                  Live packaging updates, courier dispatch tracking, itemized tax invoices & order lifecycle history.
+                  <span style={{ color: 'var(--accent-volt)', fontWeight: 700 }}>In-Person Collection Only</span> — Track gym team preparation, get notified when ready at the reception desk, and collect your items.
                 </p>
               </div>
 
@@ -5839,26 +5856,26 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
               </div>
             </div>
 
-            <div className="orders-stat-card" style={{ borderColor: 'rgba(255, 159, 0, 0.3)' }}>
-              <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(255, 159, 0, 0.12)', border: '1px solid rgba(255, 159, 0, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
-                ⏳
+            <div className="orders-stat-card" style={{ borderColor: 'rgba(0, 240, 255, 0.3)' }}>
+              <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(0, 240, 255, 0.12)', border: '1px solid rgba(0, 240, 255, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                🔄
               </div>
               <div>
-                <span style={{ fontSize: '0.72rem', color: '#ff9f00', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Pending Approval</span>
-                <h4 style={{ color: '#ff9f00', margin: '0.15rem 0 0 0', fontWeight: 800, fontSize: '1.35rem' }}>
-                  {memberOrders.filter(o => o.status === 'Pending Confirmation').length}
+                <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Preparing in Gym</span>
+                <h4 style={{ color: 'var(--accent-cyan)', margin: '0.15rem 0 0 0', fontWeight: 800, fontSize: '1.35rem' }}>
+                  {memberOrders.filter(o => ['Preparing Order', 'Confirmed', 'Processing'].includes(o.status)).length}
                 </h4>
               </div>
             </div>
 
-            <div className="orders-stat-card" style={{ borderColor: 'rgba(0, 240, 255, 0.3)' }}>
-              <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(0, 240, 255, 0.12)', border: '1px solid rgba(0, 240, 255, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
-                🚚
+            <div className="orders-stat-card" style={{ borderColor: memberOrders.filter(o => o.status === 'Ready for Pickup').length > 0 ? 'var(--accent-volt)' : 'rgba(198, 255, 0, 0.3)', boxShadow: memberOrders.filter(o => o.status === 'Ready for Pickup').length > 0 ? '0 0 20px rgba(198, 255, 0, 0.2)' : 'none' }}>
+              <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(198, 255, 0, 0.15)', border: '1px solid rgba(198, 255, 0, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                🔔
               </div>
               <div>
-                <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>In Transit / Processing</span>
-                <h4 style={{ color: 'var(--accent-cyan)', margin: '0.15rem 0 0 0', fontWeight: 800, fontSize: '1.35rem' }}>
-                  {memberOrders.filter(o => ['Confirmed', 'Processing', 'Out for Delivery'].includes(o.status)).length}
+                <span style={{ fontSize: '0.72rem', color: 'var(--accent-volt)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Ready for Pickup</span>
+                <h4 style={{ color: 'var(--accent-volt)', margin: '0.15rem 0 0 0', fontWeight: 800, fontSize: '1.35rem' }}>
+                  {memberOrders.filter(o => o.status === 'Ready for Pickup').length}
                 </h4>
               </div>
             </div>
@@ -5868,9 +5885,9 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                 ✅
               </div>
               <div>
-                <span style={{ fontSize: '0.72rem', color: '#00ff66', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Delivered</span>
+                <span style={{ fontSize: '0.72rem', color: '#00ff66', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Collected</span>
                 <h4 style={{ color: '#00ff66', margin: '0.15rem 0 0 0', fontWeight: 800, fontSize: '1.35rem' }}>
-                  {memberOrders.filter(o => o.status === 'Delivered').length}
+                  {memberOrders.filter(o => ['Collected', 'Delivered'].includes(o.status)).length}
                 </h4>
               </div>
             </div>
@@ -5879,15 +5896,23 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
           {/* Filter & Search Toolbar */}
           <div className="store-filter-bar" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
             <div className="filter-categories" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              {['All', 'Pending Confirmation', 'Confirmed', 'Processing', 'Out for Delivery', 'Delivered', 'Cancelled'].map((st) => (
+              {['All', 'Ready for Pickup', 'Preparing Order', 'Pending Confirmation', 'Collected', 'Cancelled'].map((st) => (
                 <button
                   key={st}
                   type="button"
                   className={`filter-chip ${orderStatusFilter === st ? 'active' : ''}`}
                   onClick={() => setOrderStatusFilter(st)}
-                  style={{ fontSize: '0.78rem', padding: '0.4rem 0.85rem', borderRadius: '20px', cursor: 'pointer' }}
+                  style={{
+                    fontSize: '0.78rem',
+                    padding: '0.4rem 0.85rem',
+                    borderRadius: '20px',
+                    cursor: 'pointer',
+                    background: st === 'Ready for Pickup' && orderStatusFilter === st ? 'var(--accent-volt)' : undefined,
+                    color: st === 'Ready for Pickup' && orderStatusFilter === st ? '#000' : undefined,
+                    fontWeight: st === 'Ready for Pickup' ? 800 : undefined
+                  }}
                 >
-                  {st}
+                  {st === 'Ready for Pickup' ? '🔔 Ready for Pickup' : st}
                 </button>
               ))}
             </div>
@@ -5941,35 +5966,50 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                 {filtered.map((order) => {
                   const statusMap = {
                     'Pending Confirmation': 0,
-                    'Confirmed': 1,
-                    'Processing': 2,
-                    'Out for Delivery': 3,
-                    'Delivered': 4,
+                    'Confirmed': 0,
+                    'Preparing Order': 1,
+                    'Processing': 1,
+                    'Ready for Pickup': 2,
+                    'Collected': 3,
+                    'Delivered': 3,
                     'Cancelled': -1
                   };
                   const currentStep = statusMap[order.status] !== undefined ? statusMap[order.status] : 0;
                   const isCancelled = order.status === 'Cancelled';
+                  const isReadyForPickup = order.status === 'Ready for Pickup';
+                  const isCollected = order.status === 'Collected' || order.status === 'Delivered';
 
                   const steps = [
-                    { title: 'Order Placed', subtitle: 'Submitted' },
-                    { title: 'Confirmed', subtitle: 'Verified' },
-                    { title: 'Packaging', subtitle: 'In Prep' },
-                    { title: 'Out for Delivery', subtitle: 'With Courier' },
-                    { title: 'Delivered', subtitle: 'Received' }
+                    { title: 'Order Placed', subtitle: 'Confirmed' },
+                    { title: 'Preparing in Gym', subtitle: 'Packing Items' },
+                    { title: 'Ready for Pickup', subtitle: 'At Reception' },
+                    { title: 'Collected', subtitle: 'In Person' }
                   ];
 
-                  // Payment badge info
-                  const isRazorpay = String(order.paymentMethod || '').toLowerCase().includes('razorpay') || String(order.paymentMethod || '').toLowerCase().includes('online');
-                  const isCod = String(order.paymentMethod || '').toLowerCase().includes('cod') || String(order.paymentMethod || '').toLowerCase().includes('cash');
+                  // Payment badge logic
+                  const isPayAtDesk = String(order.paymentMethod || '').toLowerCase().includes('desk') ||
+                    String(order.paymentStatus || '').toLowerCase().includes('pay at gym desk') ||
+                    String(order.paymentMethod || '').toLowerCase().includes('cod');
+                  const isDeskPaid = order.paymentStatus === 'Paid at Gym Desk';
+                  const isRazorpay = String(order.paymentMethod || '').toLowerCase().includes('razorpay') ||
+                    String(order.paymentMethod || '').toLowerCase().includes('online') ||
+                    (order.paymentStatus === 'Paid' && !isDeskPaid);
                   const isAccount = String(order.paymentMethod || '').toLowerCase().includes('account');
-
-                  const paymentBadgeColor = isRazorpay ? 'var(--accent-cyan)' : isCod ? '#ff9f00' : 'var(--accent-volt)';
-                  const paymentBadgeBg = isRazorpay ? 'rgba(0, 240, 255, 0.08)' : isCod ? 'rgba(255, 159, 0, 0.08)' : 'rgba(198, 255, 0, 0.08)';
 
                   return (
                     <div
                       key={order.orderId || order.txId}
                       className="orders-card-box"
+                      style={{
+                        border: isReadyForPickup
+                          ? '1px solid var(--accent-volt)'
+                          : isCancelled
+                          ? '1px solid rgba(255, 62, 108, 0.3)'
+                          : '1px solid var(--border-color)',
+                        boxShadow: isReadyForPickup
+                          ? '0 0 25px rgba(198, 255, 0, 0.15)'
+                          : 'none'
+                      }}
                     >
                       {/* Order Card Top Bar */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1.1rem', marginBottom: '1.2rem' }}>
@@ -5986,6 +6026,9 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                                 Tx: {order.txId}
                               </span>
                             )}
+                            <span style={{ background: 'rgba(57,255,20,0.15)', color: 'var(--accent-volt)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 800 }}>
+                              🏢 GYM PICKUP ONLY
+                            </span>
                           </div>
 
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.35rem', flexWrap: 'wrap' }}>
@@ -5993,9 +6036,27 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                               Placed on {order.date}
                             </span>
                             <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>•</span>
-                            <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '4px', background: paymentBadgeBg, color: paymentBadgeColor, border: `1px solid ${paymentBadgeColor}44` }}>
-                              {isRazorpay ? '💳 Paid Online (Razorpay)' : isCod ? '💵 COD (Pending Delivery)' : isAccount ? '🏦 Billed to Member Account' : String(order.paymentMethod || 'Card').toUpperCase()}
-                            </span>
+                            {isPayAtDesk && !isDeskPaid ? (
+                              <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '4px', background: 'rgba(255, 159, 0, 0.15)', color: '#ff9f00', border: '1px solid rgba(255, 159, 0, 0.4)' }}>
+                                ⚠️ Pay ₹{Number(order.total || order.totalAmount || 0).toFixed(2)} at Gym Desk on Pickup
+                              </span>
+                            ) : isDeskPaid ? (
+                              <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '4px', background: 'rgba(0, 255, 102, 0.15)', color: '#00ff66', border: '1px solid rgba(0, 255, 102, 0.4)' }}>
+                                ✅ Paid at Gym Desk (Receipt Cleared)
+                              </span>
+                            ) : isRazorpay ? (
+                              <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '4px', background: 'rgba(0, 240, 255, 0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(0, 240, 255, 0.35)' }}>
+                                💳 Paid Online (Zero Due at Gym Desk)
+                              </span>
+                            ) : isAccount ? (
+                              <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '4px', background: 'rgba(198, 255, 0, 0.12)', color: 'var(--accent-volt)', border: '1px solid rgba(198, 255, 0, 0.35)' }}>
+                                🏦 Billed to Member Account
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '0.2rem 0.6rem', borderRadius: '4px', background: 'rgba(255,255,255,0.08)', color: 'var(--text-white)' }}>
+                                {String(order.paymentStatus || 'Paid').toUpperCase()}
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -6017,14 +6078,18 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                             letterSpacing: '0.05em',
                             background: isCancelled
                               ? 'rgba(255, 62, 108, 0.12)'
-                              : order.status === 'Delivered'
+                              : isReadyForPickup
+                              ? 'rgba(198, 255, 0, 0.2)'
+                              : isCollected
                               ? 'rgba(0, 255, 102, 0.12)'
                               : order.status === 'Pending Confirmation'
                               ? 'rgba(255, 159, 0, 0.12)'
                               : 'rgba(0, 240, 255, 0.12)',
                             color: isCancelled
                               ? '#ff3e6c'
-                              : order.status === 'Delivered'
+                              : isReadyForPickup
+                              ? 'var(--accent-volt)'
+                              : isCollected
                               ? '#00ff66'
                               : order.status === 'Pending Confirmation'
                               ? '#ff9f00'
@@ -6032,30 +6097,69 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                             border: `1px solid ${
                               isCancelled
                                 ? 'rgba(255, 62, 108, 0.4)'
-                                : order.status === 'Delivered'
+                                : isReadyForPickup
+                                ? 'var(--accent-volt)'
+                                : isCollected
                                 ? 'rgba(0, 255, 102, 0.4)'
                                 : order.status === 'Pending Confirmation'
                                 ? 'rgba(255, 159, 0, 0.4)'
                                 : 'rgba(0, 240, 255, 0.4)'
                             }`
                           }}>
-                            {isCancelled ? '✖ Cancelled' : order.status === 'Delivered' ? '✓ Delivered' : order.status === 'Pending Confirmation' ? '⏳ Pending Confirmation' : order.status}
+                            {isCancelled ? '✖ Cancelled' : isReadyForPickup ? '🔔 Ready for Pickup' : isCollected ? '✓ Collected' : order.status === 'Pending Confirmation' ? '⏳ Pending Confirmation' : order.status}
                           </span>
                         </div>
                       </div>
 
-                      {/* E-COMMERCE VISUAL PROGRESS TRACKER */}
+                      {/* SPECIAL CALLOUT BANNER WHEN READY FOR PICKUP */}
+                      {isReadyForPickup && (
+                        <div style={{
+                          background: 'linear-gradient(135deg, rgba(198, 255, 0, 0.15), rgba(0, 240, 255, 0.15))',
+                          border: '2px solid var(--accent-volt)',
+                          borderRadius: '8px',
+                          padding: '1rem 1.2rem',
+                          marginBottom: '1.2rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: '0.8rem',
+                          boxShadow: '0 0 20px rgba(198, 255, 0, 0.25)'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                            <span style={{ fontSize: '2rem' }}>🔔</span>
+                            <div>
+                              <div style={{ color: 'var(--accent-volt)', fontWeight: 800, fontSize: '0.98rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                Your Order is Ready for Pickup at Gym Desk!
+                              </div>
+                              <div style={{ color: 'var(--text-white)', fontSize: '0.82rem', marginTop: '0.2rem' }}>
+                                Items are packaged and waiting at: <strong>{order.pickupDesk || order.pickupLocation || 'Main Reception Desk & Nutrition Station'}</strong>.
+                              </div>
+                              {isPayAtDesk && !isDeskPaid && (
+                                <div style={{ color: '#ff9f00', fontSize: '0.8rem', fontWeight: 700, marginTop: '0.25rem' }}>
+                                  💵 Please have ₹{Number(order.total || order.totalAmount || 0).toFixed(2)} ready to pay at the desk upon collection.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{ fontSize: '0.78rem', background: 'rgba(0,0,0,0.5)', padding: '0.45rem 0.9rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--accent-cyan)' }}>
+                            ⏰ Gym Counter Hours: <strong>6:00 AM – 10:00 PM</strong>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* GYM PICKUP PROGRESS TRACKER */}
                       {!isCancelled ? (
                         <div className="orders-tracker-box">
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                               <span style={{ fontSize: '0.9rem' }}>📍</span>
                               <span style={{ color: 'var(--text-white)', fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                Live Dispatch & Delivery Stepper
+                                Gym Counter Collection Stepper
                               </span>
                             </div>
                             <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                              Estimated Delivery: <strong style={{ color: 'var(--accent-volt)' }}>{order.estimatedDelivery || '2-3 Business Days Priority'}</strong>
+                              Collection Mode: <strong style={{ color: 'var(--accent-volt)' }}>Self-Pickup at Gym Desk (No Delivery)</strong>
                             </span>
                           </div>
 
@@ -6069,7 +6173,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                               position: 'absolute',
                               top: '20px',
                               left: '10%',
-                              width: `${Math.min(80, Math.max(0, (currentStep / 4) * 80))}%`,
+                              width: `${Math.min(80, Math.max(0, (currentStep / 3) * 80))}%`,
                               height: '3px',
                               background: 'linear-gradient(90deg, var(--accent-cyan) 0%, var(--accent-volt) 100%)',
                               boxShadow: '0 0 8px var(--accent-volt)',
@@ -6083,7 +6187,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                               const isCurrent = sIdx === currentStep;
 
                               return (
-                                <div key={sIdx} style={{ position: 'relative', zIndex: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: '18%' }}>
+                                <div key={sIdx} style={{ position: 'relative', zIndex: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: '22%' }}>
                                   <div style={{
                                     width: '32px',
                                     height: '32px',
@@ -6111,14 +6215,6 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                               );
                             })}
                           </div>
-
-                          {/* Courier details badge if available */}
-                          {order.trackingNumber && (
-                            <div style={{ background: 'rgba(0, 240, 255, 0.06)', border: '1px solid rgba(0, 240, 255, 0.25)', borderRadius: '6px', padding: '0.6rem 1rem', marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem' }}>
-                              <span>Courier Logistics: <strong style={{ color: 'var(--text-white)' }}>{order.courierName || 'Apex Express Logistics'}</strong></span>
-                              <span>Tracking AWB: <strong style={{ fontFamily: 'monospace', color: 'var(--accent-cyan)' }}>{order.trackingNumber}</strong></span>
-                            </div>
-                          )}
                         </div>
                       ) : (
                         <div style={{ background: 'rgba(255, 62, 108, 0.08)', border: '1px solid rgba(255, 62, 108, 0.25)', borderRadius: '8px', padding: '0.9rem 1.2rem', marginBottom: '1.2rem', color: '#ff3e6c', fontSize: '0.82rem', textAlign: 'center' }}>
@@ -6126,7 +6222,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                         </div>
                       )}
 
-                      {/* Items & Shipping Detail Grid */}
+                      {/* Items & Pickup Point Detail Grid */}
                       <div className="orders-details-grid">
                         {/* Purchased Items List */}
                         <div>
@@ -6168,32 +6264,38 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                           </div>
                         </div>
 
-                        {/* Shipping Destination */}
+                        {/* Gym Collection Point Destination */}
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.6rem' }}>
-                            <span style={{ fontSize: '0.85rem' }}>📍</span>
+                            <span style={{ fontSize: '0.85rem' }}>🏢</span>
                             <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
-                              Delivery Destination
+                              Gym Counter Pickup Details
                             </span>
                           </div>
 
                           <div style={{ padding: '0.7rem 0.9rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '6px' }}>
-                            {order.shippingInfo ? (
-                              <div style={{ fontSize: '0.8rem', color: 'var(--text-white)', lineHeight: 1.45 }}>
-                                <div style={{ fontWeight: 800 }}>{order.shippingInfo.fullName}</div>
-                                <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem' }}>📞 {order.shippingInfo.phone}</div>
-                                <div style={{ color: 'var(--text-muted)', marginTop: '0.35rem', fontSize: '0.76rem' }}>
-                                  {order.shippingInfo.address}, {order.shippingInfo.city}, {order.shippingInfo.state} - <strong>{order.shippingInfo.pincode}</strong>
-                                </div>
-                                <div style={{ marginTop: '0.45rem', display: 'inline-block', fontSize: '0.7rem', padding: '0.15rem 0.5rem', borderRadius: '4px', background: order.shippingInfo.deliveryType === 'express' ? 'rgba(255, 94, 0, 0.12)' : 'rgba(0, 240, 255, 0.08)', color: order.shippingInfo.deliveryType === 'express' ? 'var(--accent-orange)' : 'var(--accent-cyan)', border: `1px solid ${order.shippingInfo.deliveryType === 'express' ? 'rgba(255, 94, 0, 0.3)' : 'rgba(0, 240, 255, 0.2)'}` }}>
-                                  {order.shippingInfo.deliveryType === 'express' ? '⚡ VIP Fast-Track Delivery' : '📦 Standard Priority Delivery'}
-                                </div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-white)', lineHeight: 1.45 }}>
+                              <div style={{ fontWeight: 800, color: 'var(--accent-volt)' }}>
+                                📍 {order.pickupLocation || order.shippingInfo?.address || 'Apex Athletics Front Desk & Nutrition Bar'}
                               </div>
-                            ) : (
-                              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                                Default Gym Member Reception Pickup / Delivery
+                              <div style={{ color: 'var(--accent-cyan)', fontSize: '0.74rem', marginTop: '0.2rem' }}>
+                                🏷️ <strong>Counter / Shelf:</strong> {order.pickupDesk || 'Main Reception Desk / Nutrition Bar'}
                               </div>
-                            )}
+                              <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem', marginTop: '0.2rem' }}>
+                                ⏰ <strong>Pickup Time:</strong> {order.pickupTimePreference || 'During Gym Hours (6:00 AM - 10:00 PM)'}
+                              </div>
+                              <div style={{ color: 'var(--text-muted)', marginTop: '0.25rem', fontSize: '0.74rem' }}>
+                                👤 <strong>Member Contact:</strong> {order.userName || (order.shippingInfo && order.shippingInfo.fullName)} {order.userPhone ? `(${order.userPhone})` : ''}
+                              </div>
+                              {order.pickupNotes && (
+                                <div style={{ color: 'var(--text-dim)', marginTop: '0.25rem', fontSize: '0.72rem', fontStyle: 'italic' }}>
+                                  📝 Notes: {order.pickupNotes}
+                                </div>
+                              )}
+                              <div style={{ marginTop: '0.5rem', display: 'inline-block', fontSize: '0.7rem', padding: '0.2rem 0.6rem', borderRadius: '4px', background: 'rgba(57, 255, 20, 0.12)', color: 'var(--accent-volt)', border: '1px solid rgba(57, 255, 20, 0.3)' }}>
+                                🚫 No Courier Home Delivery — Collect in Person
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -6219,7 +6321,7 @@ export default function MemberPanel({ activeView, currentUser, addActivity, onUp
                                 userPhone: order.userPhone || (order.shippingInfo && order.shippingInfo.phone) || '+91 98765 43210',
                                 paymentMethod: order.paymentMethod || 'Online Payment (Razorpay)',
                                 paymentType: 'supplement_order',
-                                status: order.paymentStatus === 'Pending (COD)' ? 'pending' : (order.paymentStatus === 'Billed to Member Account' ? 'billed_to_account' : 'paid'),
+                                status: (order.paymentStatus === 'Pending (Pay at Gym Desk)' || order.paymentStatus === 'Pending (COD)') ? 'pending' : (order.paymentStatus === 'Billed to Member Account' ? 'billed_to_account' : 'paid'),
                                 createdAt: new Date().toISOString(),
                                 items: (order.items && order.items.length > 0)
                                   ? order.items.map(i => ({ name: i.name, qty: i.quantity || i.qty || 1, unitPrice: Number(i.price), total: Number(i.price) * Number(i.quantity || i.qty || 1) }))

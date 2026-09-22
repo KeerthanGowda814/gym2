@@ -2,6 +2,8 @@ import express from 'express';
 import { getDB, saveDB } from '../config/db.js';
 import { sendBroadcastEmail } from '../config/emailService.js';
 import User from '../models/User.js';
+import Member from '../models/Member.js';
+import TrainerData from '../models/TrainerData.js';
 import { isMongoConnected } from '../config/mongodb.js';
 
 const router = express.Router();
@@ -127,36 +129,83 @@ router.get('/members', (req, res) => {
 
 /**
  * DELETE /api/alerts/members/:email
- * Remove a registered member completely from the database (db.users)
+ * Remove a registered member completely from database and MongoDB Atlas
  */
-router.delete('/members/:email', (req, res) => {
+router.delete('/members/:email', async (req, res) => {
   const { email } = req.params;
   const db = getDB();
+  const cleanEmail = (email || '').trim().toLowerCase();
 
-  if (!Array.isArray(db.users)) {
-    return res.status(404).json({ success: false, message: 'Users table not found.' });
-  }
-
-  const initialLength = db.users.length;
-  db.users = db.users.filter((u) => !u.email || u.email.toLowerCase() !== email.toLowerCase());
-
-  if (db.users.length === initialLength) {
-    return res.status(404).json({
-      success: false,
-      message: 'Member user not found in database.'
-    });
+  if (Array.isArray(db.users)) {
+    db.users = db.users.filter((u) => !u.email || u.email.trim().toLowerCase() !== cleanEmail);
   }
 
   // Also remove from trainer client roster if they are there
   if (db.trainer && Array.isArray(db.trainer.members)) {
-    db.trainer.members = db.trainer.members.filter((m) => !m.email || m.email.toLowerCase() !== email.toLowerCase());
+    db.trainer.members = db.trainer.members.filter((m) => !m.email || m.email.trim().toLowerCase() !== cleanEmail);
   }
 
   saveDB(db);
 
+  // Directly remove from MongoDB Atlas collections
+  if (isMongoConnected()) {
+    try {
+      await User.deleteMany({ email: new RegExp(`^${cleanEmail}$`, 'i') });
+      await Member.deleteMany({ email: new RegExp(`^${cleanEmail}$`, 'i') });
+      await TrainerData.updateMany(
+        {},
+        { $pull: { members: { email: new RegExp(`^${cleanEmail}$`, 'i') } } }
+      );
+    } catch (mongoErr) {
+      console.warn('Error deleting member from MongoDB Atlas:', mongoErr.message);
+    }
+  }
+
   res.json({
     success: true,
-    message: `Member with email ${email} successfully deleted from backend database.`
+    message: `Member with email ${email} successfully deleted from backend database and MongoDB Atlas.`
+  });
+});
+
+/**
+ * DELETE /api/alerts/trainers/:email
+ * Remove a registered trainer completely from database and MongoDB Atlas
+ */
+router.delete('/trainers/:email', async (req, res) => {
+  const { email } = req.params;
+  const db = getDB();
+  const cleanEmail = (email || '').trim().toLowerCase();
+
+  let trainerName = '';
+  if (Array.isArray(db.users)) {
+    const found = db.users.find((u) => u.email && u.email.trim().toLowerCase() === cleanEmail);
+    if (found) trainerName = found.name;
+    db.users = db.users.filter((u) => !u.email || u.email.trim().toLowerCase() !== cleanEmail);
+  }
+
+  if (Array.isArray(db.trainerApplications)) {
+    db.trainerApplications = db.trainerApplications.filter((a) => !a.email || a.email.trim().toLowerCase() !== cleanEmail);
+  }
+
+  saveDB(db);
+
+  // Directly delete from MongoDB Atlas collections
+  if (isMongoConnected()) {
+    try {
+      await User.deleteMany({ email: new RegExp(`^${cleanEmail}$`, 'i') });
+      if (trainerName) {
+        await TrainerData.deleteMany({
+          coachName: new RegExp(`^${trainerName.trim()}$`, 'i')
+        });
+      }
+    } catch (mongoErr) {
+      console.warn('Error deleting trainer from MongoDB Atlas:', mongoErr.message);
+    }
+  }
+
+  res.json({
+    success: true,
+    message: `Trainer with email ${email} successfully deleted from backend database and MongoDB Atlas.`
   });
 });
 

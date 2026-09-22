@@ -4,8 +4,9 @@ import { memberApi } from '../services/memberApi';
 import ReceiptModal from './ReceiptModal';
 import { sendEmailJSBroadcastAlert } from '../services/emailService';
 import Swal from 'sweetalert2';
+import AdminCompetitionManagement from './AdminCompetitionManagement';
 
-export default function AdminPanel({ activeView, activities, addActivity, onNavigateSubView }) {
+export default function AdminPanel({ activeView, currentUser, activities, addActivity, onNavigateSubView }) {
   // Financial Accounts & Razorpay Transaction States
   const [accountsSummary, setAccountsSummary] = useState({
     totalRevenue: 0,
@@ -405,60 +406,11 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
 
   const [membersList, setMembersList] = useState(getRegisteredOnlyMembers);
 
-  const defaultTrainersSeed = [
-    {
-      id: 'TRN-VISHWAMBHARA',
-      name: 'Coach Vishwambhara',
-      email: 'vishwambhara@apex.com',
-      role: 'trainer',
-      specialty: 'hiit',
-      certifications: 'NASM-CPT, Kettlebell & Functional Master',
-      status: 'Active'
-    },
-    {
-      id: 'TRN-KEERTHU',
-      name: 'Coach Keerthu',
-      email: 'keerthu@apex.com',
-      role: 'trainer',
-      specialty: 'strength',
-      certifications: 'CSCS, Master of Sports Physiology',
-      status: 'Active'
-    },
-    {
-      id: 'tr-marcus',
-      name: 'Marcus Vance',
-      email: 'trainer@apex.com',
-      role: 'trainer',
-      specialty: 'strength',
-      certifications: 'CSCS Certified, 8+ Years Experience',
-      status: 'Active'
-    },
-    {
-      id: 'tr-sarah',
-      name: 'Sarah Connor',
-      email: 'sarah.c@apex.com',
-      role: 'trainer',
-      specialty: 'hiit',
-      certifications: 'NASM-CPT, Kettlebell Level 2',
-      status: 'Active'
-    },
-    {
-      id: 'tr-goggins',
-      name: 'David Goggins',
-      email: 'goggins@apex.com',
-      role: 'trainer',
-      specialty: 'combat',
-      certifications: 'Ex-Navy SEAL, Ultra-endurance Coach',
-      status: 'Active'
-    }
-  ];
-
   const getRegisteredTrainers = () => {
     const registeredUsers = JSON.parse(localStorage.getItem('apex_registered_users')) || [];
     const trainers = registeredUsers.filter(u => u.role === 'trainer' && u.name);
 
     const combinedMap = new Map();
-    defaultTrainersSeed.forEach(t => combinedMap.set(t.email.toLowerCase(), t));
     trainers.forEach(t => combinedMap.set(t.email.toLowerCase(), t));
 
     return Array.from(combinedMap.values());
@@ -505,10 +457,6 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
     }));
 
     const combinedMap = new Map();
-
-    defaultTrainersSeed.forEach(t => {
-      if (t && t.email) combinedMap.set(t.email.toLowerCase(), t);
-    });
 
     apiTrainers.forEach(t => {
       if (t && t.email) combinedMap.set(t.email.toLowerCase(), t);
@@ -880,13 +828,30 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
     }
   };
 
-  const handleDeleteTrainer = (email, name) => {
-    if (confirm(`Are you sure you want to remove trainer "${name}"?`)) {
+  const handleDeleteTrainer = async (email, name) => {
+    if (confirm(`Are you sure you want to remove trainer "${name}"? This will permanently delete them from the database.`)) {
+      if (email) {
+        try {
+          const res = await fetch(`http://localhost:5000/api/alerts/trainers/${encodeURIComponent(email)}`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(localStorage.getItem('apex_auth_token') ? { Authorization: `Bearer ${localStorage.getItem('apex_auth_token')}` } : {})
+            }
+          });
+          if (!res.ok) {
+            console.warn('Failed to delete trainer from backend API.');
+          }
+        } catch (err) {
+          console.warn('Backend trainer deletion error:', err);
+        }
+      }
+
       const registeredUsers = JSON.parse(localStorage.getItem('apex_registered_users')) || [];
       const updated = registeredUsers.filter(u => !(u.role === 'trainer' && u.email.toLowerCase() === email.toLowerCase()));
       localStorage.setItem('apex_registered_users', JSON.stringify(updated));
       
-      setTrainersList(updated.filter(u => u.role === 'trainer'));
+      setTrainersList(prev => prev.filter(t => t.email.toLowerCase() !== email.toLowerCase()));
       addActivity(`Removed trainer <strong>${name}</strong> from database`, 'orange');
       alert(`Trainer "${name}" removed successfully.`);
     }
@@ -1174,16 +1139,16 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
     }
   };
 
-  // Supplement Orders Management States (Admin)
+  // Supplement Orders Management States (Admin - Gym Pickup Fulfillment)
   const [adminOrders, setAdminOrders] = useState([]);
   const [adminOrderFilter, setAdminOrderFilter] = useState('All');
   const [adminOrderSearch, setAdminOrderSearch] = useState('');
   const [selectedAdminOrder, setSelectedAdminOrder] = useState(null);
   const [editingOrderModal, setEditingOrderModal] = useState(null);
-  const [editStatus, setEditStatus] = useState('Confirmed');
-  const [editCourier, setEditCourier] = useState('Apex Express Logistics');
-  const [editTracking, setEditTracking] = useState('');
-  const [editEstDelivery, setEditEstDelivery] = useState('2-3 Business Days');
+  const [editStatus, setEditStatus] = useState('Preparing Order');
+  const [editPickupDesk, setEditPickupDesk] = useState('Reception Desk - Counter 1');
+  const [editPickupLocation, setEditPickupLocation] = useState('Apex Athletics Front Desk & Nutrition Bar');
+  const [editPaymentStatus, setEditPaymentStatus] = useState('Paid');
   const [editNote, setEditNote] = useState('');
 
   const fetchAdminOrders = async () => {
@@ -1214,43 +1179,148 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
     return () => window.removeEventListener('storage', fetchAdminOrders);
   }, []);
 
-  const handleAdminConfirmOrder = async (order) => {
+  // Quick Action 1: Start Preparing Order
+  const handleAdminStartPreparing = async (order) => {
     const targetId = order.orderId || order.txId;
     if (!targetId) return;
 
-    // 1. Instant state update for immediate user visual confirmation
-    setAdminOrders(prev => prev.map(o => (o.orderId === targetId || o.txId === targetId) ? { ...o, status: 'Confirmed' } : o));
+    const note = 'Gym staff is assembling and packaging your supplement products at the inventory store.';
+    setAdminOrders(prev => prev.map(o => (o.orderId === targetId || o.txId === targetId) ? { ...o, status: 'Preparing Order' } : o));
 
-    // 2. Update local storage
     try {
       const localOrders = JSON.parse(localStorage.getItem('apex_supplement_orders') || '[]');
       const idx = localOrders.findIndex(o => o.orderId === targetId || o.txId === targetId);
       if (idx !== -1) {
-        localOrders[idx].status = 'Confirmed';
+        localOrders[idx].status = 'Preparing Order';
         if (!localOrders[idx].statusTimeline) localOrders[idx].statusTimeline = [];
         localOrders[idx].statusTimeline.push({
-          status: 'Confirmed',
+          status: 'Preparing Order',
           timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-          note: 'Order confirmed by Admin'
+          note
         });
         localStorage.setItem('apex_supplement_orders', JSON.stringify(localOrders));
         window.dispatchEvent(new Event('storage'));
       }
     } catch (e) {}
 
-    // 3. Call Express backend endpoint
     await memberApi.updateSupplementOrderStatus(targetId, {
-      status: 'Confirmed',
-      note: 'Order confirmed by Admin'
+      status: 'Preparing Order',
+      note
     });
 
     await fetchAdminOrders();
     if (addActivity) {
-      addActivity(`Admin confirmed supplement order <strong>${targetId}</strong> (${order.userName || 'Member'})`, 'green');
+      addActivity(`Admin began preparing order <strong>${targetId}</strong> for member ${order.userName || 'Member'}`, 'cyan');
     }
-    alert(`Order ${targetId} confirmed successfully!`);
+    alert(`Order ${targetId} is now marked as Preparing Order!`);
   };
 
+  // Quick Action 2: Mark Ready for Pickup at Gym Desk
+  const handleAdminMarkReady = async (order) => {
+    const targetId = order.orderId || order.txId;
+    if (!targetId) return;
+
+    const desk = order.pickupDesk || 'Reception Desk - Counter 1';
+    const note = `Your order has been assembled and is READY FOR PICKUP at the Gym Desk (${desk})! Please collect during gym hours (6 AM - 10 PM).`;
+    const timestamp = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+    setAdminOrders(prev => prev.map(o => (o.orderId === targetId || o.txId === targetId) ? {
+      ...o,
+      status: 'Ready for Pickup',
+      readyForPickupAt: timestamp
+    } : o));
+
+    try {
+      const localOrders = JSON.parse(localStorage.getItem('apex_supplement_orders') || '[]');
+      const idx = localOrders.findIndex(o => o.orderId === targetId || o.txId === targetId);
+      if (idx !== -1) {
+        localOrders[idx].status = 'Ready for Pickup';
+        localOrders[idx].readyForPickupAt = timestamp;
+        if (!localOrders[idx].statusTimeline) localOrders[idx].statusTimeline = [];
+        localOrders[idx].statusTimeline.push({
+          status: 'Ready for Pickup',
+          timestamp,
+          note
+        });
+        localStorage.setItem('apex_supplement_orders', JSON.stringify(localOrders));
+        window.dispatchEvent(new Event('storage'));
+      }
+    } catch (e) {}
+
+    await memberApi.updateSupplementOrderStatus(targetId, {
+      status: 'Ready for Pickup',
+      pickupDesk: desk,
+      note
+    });
+
+    await fetchAdminOrders();
+    if (addActivity) {
+      addActivity(`Order <strong>${targetId}</strong> marked READY FOR PICKUP at Gym Desk! (${order.userName || 'Member'})`, 'volt');
+    }
+    alert(`Order ${targetId} marked READY FOR PICKUP at Gym Desk! Member has been notified.`);
+  };
+
+  // Quick Action 3: Complete Collection (Handle Payment at Desk if unpaid)
+  const handleAdminCompleteCollection = async (order) => {
+    const targetId = order.orderId || order.txId;
+    if (!targetId) return;
+
+    const isPendingPayment = order.paymentStatus && order.paymentStatus.includes('Pending');
+    const billedTotal = Number(order.total || order.totalAmount || 0).toFixed(2);
+
+    let confirmMsg = `Hand over Order ${targetId} to ${order.userName || 'Member'} and mark as Collected?`;
+    if (isPendingPayment) {
+      confirmMsg = `MEMBER DESK COLLECTION:\nPlease collect ₹${billedTotal} (Cash/Card/UPI) from ${order.userName || 'Member'}.\n\nConfirm payment received and mark order as Paid & Collected?`;
+    }
+
+    if (!window.confirm(confirmMsg)) return;
+
+    const resolvedPayment = isPendingPayment ? 'Paid at Gym Desk' : (order.paymentStatus || 'Paid');
+    const timestamp = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const note = `Order handed over to member at the Gym Desk. Collection completed. Payment: ${resolvedPayment}.`;
+
+    setAdminOrders(prev => prev.map(o => (o.orderId === targetId || o.txId === targetId) ? {
+      ...o,
+      status: 'Collected',
+      paymentStatus: resolvedPayment,
+      collectedAt: timestamp,
+      collectedByAdmin: adminProfile?.name || 'System Admin'
+    } : o));
+
+    try {
+      const localOrders = JSON.parse(localStorage.getItem('apex_supplement_orders') || '[]');
+      const idx = localOrders.findIndex(o => o.orderId === targetId || o.txId === targetId);
+      if (idx !== -1) {
+        localOrders[idx].status = 'Collected';
+        localOrders[idx].paymentStatus = resolvedPayment;
+        localOrders[idx].collectedAt = timestamp;
+        localOrders[idx].collectedByAdmin = adminProfile?.name || 'System Admin';
+        if (!localOrders[idx].statusTimeline) localOrders[idx].statusTimeline = [];
+        localOrders[idx].statusTimeline.push({
+          status: 'Collected',
+          timestamp,
+          note
+        });
+        localStorage.setItem('apex_supplement_orders', JSON.stringify(localOrders));
+        window.dispatchEvent(new Event('storage'));
+      }
+    } catch (e) {}
+
+    await memberApi.updateSupplementOrderStatus(targetId, {
+      status: 'Collected',
+      paymentStatus: resolvedPayment,
+      adminName: adminProfile?.name || 'System Admin',
+      note
+    });
+
+    await fetchAdminOrders();
+    if (addActivity) {
+      addActivity(`Order <strong>${targetId}</strong> successfully COLLECTED & completed by ${order.userName || 'Member'}`, 'green');
+    }
+    alert(`Order ${targetId} successfully completed! Order marked as Collected (${resolvedPayment}).`);
+  };
+
+  // Full Status Modal Save Handler
   const handleAdminSaveOrderStatus = async (e) => {
     e.preventDefault();
     if (!editingOrderModal) return;
@@ -1258,13 +1328,25 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
     const targetId = editingOrderModal.orderId || editingOrderModal.txId;
     if (!targetId) return;
 
-    // 1. Instant state update for immediate visual confirmation
+    const timestamp = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    let autoNote = editNote;
+    if (!autoNote) {
+      if (editStatus === 'Preparing Order') autoNote = 'Gym staff is assembling and packaging products at the inventory store.';
+      else if (editStatus === 'Ready for Pickup') autoNote = `Your order is READY FOR PICKUP at the Gym Desk (${editPickupDesk})! Please collect during gym hours.`;
+      else if (editStatus === 'Collected') autoNote = `Order handed over to member at the Gym Desk. Collection completed (${editPaymentStatus}).`;
+      else if (editStatus === 'Cancelled') autoNote = 'Order cancelled by Gym Administration.';
+      else autoNote = `Order status updated to ${editStatus} by Admin`;
+    }
+
+    // 1. Instant state update
     setAdminOrders(prev => prev.map(o => (o.orderId === targetId || o.txId === targetId) ? {
       ...o,
       status: editStatus,
-      courierName: editCourier,
-      trackingNumber: editTracking,
-      estimatedDelivery: editEstDelivery
+      pickupDesk: editPickupDesk,
+      pickupLocation: editPickupLocation,
+      paymentStatus: editPaymentStatus,
+      ...(editStatus === 'Ready for Pickup' && { readyForPickupAt: timestamp }),
+      ...(editStatus === 'Collected' && { collectedAt: timestamp, collectedByAdmin: adminProfile?.name || 'System Admin' })
     } : o));
 
     // 2. Update local storage
@@ -1273,14 +1355,19 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
       const idx = localOrders.findIndex(o => o.orderId === targetId || o.txId === targetId);
       if (idx !== -1) {
         localOrders[idx].status = editStatus;
-        if (editCourier) localOrders[idx].courierName = editCourier;
-        if (editTracking) localOrders[idx].trackingNumber = editTracking;
-        if (editEstDelivery) localOrders[idx].estimatedDelivery = editEstDelivery;
+        localOrders[idx].pickupDesk = editPickupDesk;
+        localOrders[idx].pickupLocation = editPickupLocation;
+        localOrders[idx].paymentStatus = editPaymentStatus;
+        if (editStatus === 'Ready for Pickup') localOrders[idx].readyForPickupAt = timestamp;
+        if (editStatus === 'Collected') {
+          localOrders[idx].collectedAt = timestamp;
+          localOrders[idx].collectedByAdmin = adminProfile?.name || 'System Admin';
+        }
         if (!localOrders[idx].statusTimeline) localOrders[idx].statusTimeline = [];
         localOrders[idx].statusTimeline.push({
           status: editStatus,
-          timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-          note: editNote || `Status updated to ${editStatus} by Admin`
+          timestamp,
+          note: autoNote
         });
         localStorage.setItem('apex_supplement_orders', JSON.stringify(localOrders));
         window.dispatchEvent(new Event('storage'));
@@ -1290,10 +1377,11 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
     // 3. Call Express backend endpoint
     await memberApi.updateSupplementOrderStatus(targetId, {
       status: editStatus,
-      courierName: editCourier,
-      trackingNumber: editTracking,
-      estimatedDelivery: editEstDelivery,
-      note: editNote || `Status updated to ${editStatus} by Admin`
+      pickupDesk: editPickupDesk,
+      pickupLocation: editPickupLocation,
+      paymentStatus: editPaymentStatus,
+      adminName: adminProfile?.name || 'System Admin',
+      note: autoNote
     });
 
     await fetchAdminOrders();
@@ -1772,6 +1860,13 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
 
   return (
     <div>
+      {/* 0. ADMIN COMPETITION MANAGEMENT VIEW */}
+      {activeView === 'competitions' && (
+        <div className="admin-sub-view" id="admin-subview-competitions" style={{ display: 'block' }}>
+          <AdminCompetitionManagement currentUser={currentUser} onNavigateSubView={onNavigateSubView} />
+        </div>
+      )}
+
       {/* 1. ADMIN HOME VIEW */}
       {activeView === 'home' && (
         <div className="admin-sub-view" id="admin-subview-home" style={{ display: 'block' }}>
@@ -2649,13 +2744,13 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                  <span style={{ fontSize: '1.5rem' }}>🛒</span>
+                  <span style={{ fontSize: '1.5rem' }}>🏋️</span>
                   <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.3rem', color: 'var(--text-white)', margin: 0, textTransform: 'uppercase' }}>
-                    Supplement Orders & Fulfillment Management
+                    Supplement Orders & Gym Pickup Fulfillment
                   </h3>
                 </div>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: '0.3rem 0 0 0' }}>
-                  Review member purchases, confirm pending orders, assign courier tracking numbers, and update delivery status.
+                  Review member purchases, assemble items, mark orders <strong>Ready for Pickup</strong> at Gym Desk, and complete handovers with on-site payment collection. (No Home Delivery).
                 </p>
               </div>
 
@@ -2687,16 +2782,23 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
             </div>
 
             <div style={{ background: 'rgba(0, 240, 255, 0.05)', border: '1px solid rgba(0, 240, 255, 0.2)', borderRadius: '8px', padding: '1rem' }}>
-              <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', textTransform: 'uppercase' }}>Confirmed & In-Transit</span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', textTransform: 'uppercase' }}>Preparing in Store 🔄</span>
               <h4 style={{ color: 'var(--accent-cyan)', margin: '0.3rem 0 0 0', fontWeight: 800, fontSize: '1.25rem' }}>
-                {adminOrders.filter(o => ['Confirmed', 'Processing', 'Out for Delivery'].includes(o.status)).length}
+                {adminOrders.filter(o => o.status === 'Preparing Order' || o.status === 'Confirmed').length}
+              </h4>
+            </div>
+
+            <div style={{ background: 'rgba(198, 255, 0, 0.08)', border: '1px solid rgba(198, 255, 0, 0.3)', borderRadius: '8px', padding: '1rem', boxShadow: '0 0 15px rgba(198, 255, 0, 0.1)' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--accent-volt)', textTransform: 'uppercase', fontWeight: 700 }}>Ready for Pickup 🔔</span>
+              <h4 style={{ color: 'var(--accent-volt)', margin: '0.3rem 0 0 0', fontWeight: 800, fontSize: '1.3rem' }}>
+                {adminOrders.filter(o => o.status === 'Ready for Pickup').length}
               </h4>
             </div>
 
             <div style={{ background: 'rgba(0, 255, 102, 0.05)', border: '1px solid rgba(0, 255, 102, 0.2)', borderRadius: '8px', padding: '1rem' }}>
-              <span style={{ fontSize: '0.72rem', color: '#00ff66', textTransform: 'uppercase' }}>Delivered</span>
+              <span style={{ fontSize: '0.72rem', color: '#00ff66', textTransform: 'uppercase' }}>Collected & Completed ✅</span>
               <h4 style={{ color: '#00ff66', margin: '0.3rem 0 0 0', fontWeight: 800, fontSize: '1.25rem' }}>
-                {adminOrders.filter(o => o.status === 'Delivered').length}
+                {adminOrders.filter(o => o.status === 'Collected' || o.status === 'Delivered').length}
               </h4>
             </div>
           </div>
@@ -2704,7 +2806,7 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
           {/* Filter Chips and Search Bar */}
           <div className="store-filter-bar" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
             <div className="filter-categories">
-              {['All', 'Pending Confirmation', 'Confirmed', 'Processing', 'Out for Delivery', 'Delivered', 'Cancelled'].map((st) => (
+              {['All', 'Pending Confirmation', 'Preparing Order', 'Ready for Pickup', 'Collected', 'Pending Payment', 'Cancelled'].map((st) => (
                 <button
                   key={st}
                   className={`filter-chip ${adminOrderFilter === st ? 'active' : ''}`}
@@ -2719,10 +2821,10 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
             <input
               type="text"
               className="form-input"
-              placeholder="Search Order ID, Member Name, Email..."
+              placeholder="Search Order ID, Member Name, Phone..."
               value={adminOrderSearch}
               onChange={(e) => setAdminOrderSearch(e.target.value)}
-              style={{ width: '250px', padding: '0.45rem 0.8rem', fontSize: '0.78rem' }}
+              style={{ width: '260px', padding: '0.45rem 0.8rem', fontSize: '0.78rem' }}
             />
           </div>
 
@@ -2733,23 +2835,27 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                 <thead>
                   <tr>
                     <th>Order ID / TxID</th>
-                    <th>Customer Member</th>
+                    <th>Member (Customer)</th>
                     <th>Items Summary</th>
-                    <th>Billed Total</th>
+                    <th>Total & Payment</th>
                     <th>Date</th>
-                    <th>Status</th>
+                    <th>Pickup Status</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(() => {
                     const filtered = adminOrders.filter((o) => {
-                      const matchesFilter = adminOrderFilter === 'All' || o.status === adminOrderFilter;
+                      let matchesFilter = adminOrderFilter === 'All' || o.status === adminOrderFilter;
+                      if (adminOrderFilter === 'Pending Payment') {
+                        matchesFilter = o.paymentStatus && o.paymentStatus.includes('Pending');
+                      }
                       const q = adminOrderSearch.toLowerCase();
                       const matchesSearch = !q ||
                         (o.orderId && o.orderId.toLowerCase().includes(q)) ||
                         (o.txId && o.txId.toLowerCase().includes(q)) ||
                         (o.userName && o.userName.toLowerCase().includes(q)) ||
+                        (o.userPhone && o.userPhone.toLowerCase().includes(q)) ||
                         (o.userEmail && o.userEmail.toLowerCase().includes(q)) ||
                         (o.itemsSummary && o.itemsSummary.toLowerCase().includes(q));
                       return matchesFilter && matchesSearch;
@@ -2767,58 +2873,85 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
 
                     return filtered.map((order) => {
                       const isPending = order.status === 'Pending Confirmation';
+                      const isPreparing = order.status === 'Preparing Order' || order.status === 'Confirmed';
+                      const isReady = order.status === 'Ready for Pickup';
+                      const isCollected = order.status === 'Collected' || order.status === 'Delivered';
                       const isCancelled = order.status === 'Cancelled';
+                      const isPendingPayment = order.paymentStatus && order.paymentStatus.includes('Pending');
 
                       return (
                         <tr key={order.orderId || order.txId}>
                           <td>
                             <strong style={{ fontFamily: 'monospace', color: 'var(--accent-cyan)', display: 'block' }}>{order.orderId}</strong>
                             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>Tx: {order.txId}</span>
+                            <span style={{ fontSize: '0.68rem', color: 'var(--accent-volt)', display: 'block', marginTop: '0.2rem' }}>
+                              📍 {order.pickupDesk || 'Front Desk - Counter 1'}
+                            </span>
                           </td>
                           <td>
                             <strong style={{ color: 'var(--text-white)', display: 'block' }}>{order.userName || 'Member'}</strong>
-                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{order.userEmail}</span>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>📞 {order.userPhone || 'N/A'}</span>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>{order.userEmail}</span>
                           </td>
                           <td style={{ maxWidth: '200px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                             {order.itemsSummary}
                           </td>
                           <td>
-                            <strong style={{ color: 'var(--accent-volt)', fontSize: '0.9rem' }}>₹{Number(order.total || order.totalAmount || 0).toFixed(2)}</strong>
-                            <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)', display: 'block', textTransform: 'uppercase' }}>{order.paymentMethod || 'card'}</span>
+                            <strong style={{ color: 'var(--accent-volt)', fontSize: '0.9rem', fontFamily: 'monospace' }}>₹{Number(order.total || order.totalAmount || 0).toFixed(2)}</strong>
+                            <span style={{
+                              display: 'inline-block',
+                              fontSize: '0.68rem',
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              marginTop: '0.2rem',
+                              padding: '0.15rem 0.45rem',
+                              borderRadius: '4px',
+                              background: isPendingPayment ? 'rgba(255, 159, 0, 0.12)' : 'rgba(0, 255, 102, 0.12)',
+                              color: isPendingPayment ? '#ff9f00' : '#00ff66',
+                              border: `1px solid ${isPendingPayment ? 'rgba(255, 159, 0, 0.3)' : 'rgba(0, 255, 102, 0.3)'}`
+                            }}>
+                              {order.paymentStatus || 'Paid'}
+                            </span>
                           </td>
                           <td style={{ fontSize: '0.78rem' }}>{order.date}</td>
                           <td>
                             <span style={{
-                              padding: '0.25rem 0.6rem',
+                              padding: '0.3rem 0.7rem',
                               borderRadius: '12px',
                               fontWeight: 800,
                               fontSize: '0.68rem',
                               textTransform: 'uppercase',
                               background: isCancelled
                                 ? 'rgba(255, 62, 108, 0.15)'
-                                : order.status === 'Delivered'
+                                : isCollected
                                 ? 'rgba(0, 255, 102, 0.15)'
+                                : isReady
+                                ? 'rgba(198, 255, 0, 0.15)'
                                 : isPending
                                 ? 'rgba(255, 159, 0, 0.15)'
                                 : 'rgba(0, 240, 255, 0.15)',
                               color: isCancelled
                                 ? '#ff3e6c'
-                                : order.status === 'Delivered'
+                                : isCollected
                                 ? '#00ff66'
+                                : isReady
+                                ? 'var(--accent-volt)'
                                 : isPending
                                 ? '#ff9f00'
                                 : 'var(--accent-cyan)',
                               border: `1px solid ${
                                 isCancelled
                                   ? '#ff3e6c'
-                                  : order.status === 'Delivered'
+                                  : isCollected
                                   ? '#00ff66'
+                                  : isReady
+                                  ? 'var(--accent-volt)'
                                   : isPending
                                   ? '#ff9f00'
                                   : 'var(--accent-cyan)'
                               }`
                             }}>
-                              {order.status}
+                              {isReady ? '🔔 Ready for Pickup' : isCollected ? '✓ Collected' : order.status}
                             </span>
                           </td>
                           <td>
@@ -2827,10 +2960,32 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                                 <button
                                   type="button"
                                   className="glow-btn"
-                                  onClick={() => handleAdminConfirmOrder(order)}
+                                  onClick={() => handleAdminStartPreparing(order)}
+                                  style={{ padding: '0.25rem 0.6rem', fontSize: '0.7rem', background: 'var(--accent-cyan)', color: '#000', fontWeight: 800, border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                >
+                                  🔄 Start Preparing
+                                </button>
+                              )}
+
+                              {isPreparing && (
+                                <button
+                                  type="button"
+                                  className="glow-btn"
+                                  onClick={() => handleAdminMarkReady(order)}
+                                  style={{ padding: '0.25rem 0.6rem', fontSize: '0.7rem', background: 'var(--accent-volt)', color: '#000', fontWeight: 800, border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                >
+                                  🔔 Mark Ready for Pickup
+                                </button>
+                              )}
+
+                              {isReady && (
+                                <button
+                                  type="button"
+                                  className="glow-btn"
+                                  onClick={() => handleAdminCompleteCollection(order)}
                                   style={{ padding: '0.25rem 0.6rem', fontSize: '0.7rem', background: '#00ff66', color: '#000', fontWeight: 800, border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                                 >
-                                  ✓ Confirm Order
+                                  🤝 Complete Collection
                                 </button>
                               )}
 
@@ -2839,10 +2994,10 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                                 className="outline-btn"
                                 onClick={() => {
                                   setEditingOrderModal(order);
-                                  setEditStatus(order.status || 'Confirmed');
-                                  setEditCourier(order.courierName || 'Apex Express Logistics');
-                                  setEditTracking(order.trackingNumber || '');
-                                  setEditEstDelivery(order.estimatedDelivery || '2-3 Business Days');
+                                  setEditStatus(order.status || 'Preparing Order');
+                                  setEditPickupDesk(order.pickupDesk || 'Reception Desk - Counter 1');
+                                  setEditPickupLocation(order.pickupLocation || 'Apex Athletics Front Desk & Nutrition Bar');
+                                  setEditPaymentStatus(order.paymentStatus || 'Paid');
                                   setEditNote('');
                                 }}
                                 style={{ padding: '0.25rem 0.6rem', fontSize: '0.7rem', color: 'var(--accent-volt)', borderColor: 'rgba(198, 255, 0, 0.4)' }}
@@ -2869,7 +3024,7 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
             </div>
           </div>
 
-          {/* EDIT STATUS & COURIER MODAL */}
+          {/* EDIT STATUS & PICKUP DESK MODAL */}
           {editingOrderModal && (
             <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.88)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div className="db-card" style={{ maxWidth: '540px', width: '90%', background: 'var(--bg-card)', border: '1px solid var(--accent-volt)', borderRadius: '10px', padding: '1.8rem', position: 'relative' }}>
@@ -2882,16 +3037,16 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                 </button>
 
                 <h4 style={{ color: 'var(--text-white)', margin: '0 0 0.3rem 0', fontSize: '1.15rem', fontWeight: 800 }}>
-                  Update Order Fulfillment Status
+                  Update Gym Pickup Fulfillment Status
                 </h4>
                 <p style={{ color: 'var(--accent-cyan)', fontFamily: 'monospace', fontSize: '0.8rem', margin: '0 0 1.2rem 0' }}>
-                  {editingOrderModal.orderId} — Customer: {editingOrderModal.userName}
+                  {editingOrderModal.orderId} — Customer: {editingOrderModal.userName} (📞 {editingOrderModal.userPhone || 'N/A'})
                 </p>
 
                 <form onSubmit={handleAdminSaveOrderStatus} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   <div>
                     <label style={{ fontSize: '0.75rem', color: 'var(--text-white)', display: 'block', marginBottom: '0.3rem', fontWeight: 700 }}>
-                      Order Status *
+                      Order Pickup Status *
                     </label>
                     <select
                       value={editStatus}
@@ -2900,10 +3055,9 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                       style={{ background: 'var(--bg-dark)', border: '1px solid var(--border-color)', color: 'var(--text-white)', width: '100%', padding: '0.6rem' }}
                     >
                       <option value="Pending Confirmation">Pending Confirmation</option>
-                      <option value="Confirmed">Confirmed (Order Approved)</option>
-                      <option value="Processing">Processing (Packing Parcel)</option>
-                      <option value="Out for Delivery">Out for Delivery (Dispatched to Courier)</option>
-                      <option value="Delivered">Delivered (Handed to Customer)</option>
+                      <option value="Preparing Order">Preparing Order (Staff assembling at gym store)</option>
+                      <option value="Ready for Pickup">Ready for Pickup (Items waiting at Gym Desk)</option>
+                      <option value="Collected">Collected (Handed over to member at Desk)</option>
                       <option value="Cancelled">Cancelled / Refunded</option>
                     </select>
                   </div>
@@ -2911,53 +3065,57 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
                     <div>
                       <label style={{ fontSize: '0.75rem', color: 'var(--text-white)', display: 'block', marginBottom: '0.3rem', fontWeight: 700 }}>
-                        Courier Logistics Name
+                        Pickup Counter / Desk
                       </label>
                       <input
                         type="text"
                         className="form-input"
-                        value={editCourier}
-                        onChange={(e) => setEditCourier(e.target.value)}
-                        placeholder="e.g. Apex Express, BlueDart, FedEx"
+                        value={editPickupDesk}
+                        onChange={(e) => setEditPickupDesk(e.target.value)}
+                        placeholder="e.g. Reception Desk - Counter 1"
                       />
                     </div>
                     <div>
                       <label style={{ fontSize: '0.75rem', color: 'var(--text-white)', display: 'block', marginBottom: '0.3rem', fontWeight: 700 }}>
-                        Tracking Number
+                        Payment Status
                       </label>
-                      <input
-                        type="text"
+                      <select
+                        value={editPaymentStatus}
+                        onChange={(e) => setEditPaymentStatus(e.target.value)}
                         className="form-input"
-                        value={editTracking}
-                        onChange={(e) => setEditTracking(e.target.value)}
-                        placeholder="e.g. APX-98214-IN"
-                      />
+                        style={{ background: 'var(--bg-dark)', border: '1px solid var(--border-color)', color: 'var(--text-white)' }}
+                      >
+                        <option value="Paid">Paid (Online / Card)</option>
+                        <option value="Pending (Pay at Gym Desk)">Pending (Pay at Gym Desk)</option>
+                        <option value="Paid at Gym Desk">Paid at Gym Desk (Cash/Card/UPI)</option>
+                        <option value="Billed to Member Account">Billed to Member Account</option>
+                      </select>
                     </div>
                   </div>
 
                   <div>
                     <label style={{ fontSize: '0.75rem', color: 'var(--text-white)', display: 'block', marginBottom: '0.3rem', fontWeight: 700 }}>
-                      Estimated Delivery Window
+                      Gym Pickup Facility Location
                     </label>
                     <input
                       type="text"
                       className="form-input"
-                      value={editEstDelivery}
-                      onChange={(e) => setEditEstDelivery(e.target.value)}
-                      placeholder="e.g. 2-3 Business Days or Tomorrow 4 PM"
+                      value={editPickupLocation}
+                      onChange={(e) => setEditPickupLocation(e.target.value)}
+                      placeholder="e.g. Apex Athletics Front Desk & Nutrition Bar"
                     />
                   </div>
 
                   <div>
                     <label style={{ fontSize: '0.75rem', color: 'var(--text-white)', display: 'block', marginBottom: '0.3rem', fontWeight: 700 }}>
-                      Admin Audit Note (Visible in User Status Timeline)
+                      Admin Audit Note (Visible to Member in Tracking Timeline)
                     </label>
                     <input
                       type="text"
                       className="form-input"
                       value={editNote}
                       onChange={(e) => setEditNote(e.target.value)}
-                      placeholder="e.g. Verified payment & packed with fragile bubble wrap"
+                      placeholder="e.g. Items packed in locker #3. Ready for collection during gym hours."
                     />
                   </div>
 
@@ -2973,7 +3131,7 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                     <button
                       type="submit"
                       className="glow-btn"
-                      style={{ padding: '0.6rem 1.5rem', fontSize: '0.8rem' }}
+                      style={{ padding: '0.6rem 1.5rem', fontSize: '0.8rem', fontWeight: 800 }}
                     >
                       Save Status Update ✓
                     </button>
@@ -3002,15 +3160,24 @@ export default function AdminPanel({ activeView, activities, addActivity, onNavi
                   {selectedAdminOrder.orderId} (Tx: {selectedAdminOrder.txId})
                 </p>
 
-                {/* Customer & Shipping Summary */}
+                {/* Customer & Gym Pickup Summary */}
                 <div style={{ background: 'var(--bg-dark)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '0.9rem', marginBottom: '1rem', fontSize: '0.8rem' }}>
-                  <strong style={{ color: 'var(--accent-volt)', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', marginBottom: '0.3rem' }}>Customer & Delivery Info:</strong>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+                    <strong style={{ color: 'var(--accent-volt)', fontSize: '0.72rem', textTransform: 'uppercase' }}>Member & Collection Info:</strong>
+                    <span style={{ background: 'rgba(57,255,20,0.15)', color: 'var(--accent-volt)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700 }}>
+                      🏢 GYM COUNTER PICKUP (NO HOME DELIVERY)
+                    </span>
+                  </div>
                   <div style={{ color: 'var(--text-white)' }}><strong>{selectedAdminOrder.userName}</strong> ({selectedAdminOrder.userPhone || 'N/A'}) — {selectedAdminOrder.userEmail}</div>
-                  {selectedAdminOrder.shippingInfo && (
-                    <div style={{ color: 'var(--text-muted)', marginTop: '0.3rem' }}>
-                      Address: {selectedAdminOrder.shippingInfo.address}, {selectedAdminOrder.shippingInfo.city}, {selectedAdminOrder.shippingInfo.state} - {selectedAdminOrder.shippingInfo.pincode}
-                    </div>
-                  )}
+                  <div style={{ color: 'var(--accent-cyan)', marginTop: '0.4rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                    <div>📍 <strong>Collection Point:</strong> {selectedAdminOrder.pickupLocation || selectedAdminOrder.shippingInfo?.address || 'Apex Athletics Front Desk & Nutrition Bar'}</div>
+                    {selectedAdminOrder.pickupDesk && <div>🏷️ <strong>Counter/Shelf:</strong> {selectedAdminOrder.pickupDesk}</div>}
+                    {selectedAdminOrder.pickupTimePreference && <div>⏰ <strong>Preferred Time:</strong> {selectedAdminOrder.pickupTimePreference}</div>}
+                    {selectedAdminOrder.pickupNotes && <div>📝 <strong>Pickup Notes:</strong> {selectedAdminOrder.pickupNotes}</div>}
+                    {selectedAdminOrder.shippingInfo?.city && !selectedAdminOrder.pickupLocation && (
+                      <div style={{ color: 'var(--text-muted)' }}>City: {selectedAdminOrder.shippingInfo.city} ({selectedAdminOrder.shippingInfo.pincode})</div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Items List */}

@@ -22,28 +22,7 @@ const getTrainersHandler = async (req, res) => {
       }
     }
 
-    if (trainersList.length === 0) {
-      trainersList = [
-        {
-          userId: 'TRN-KEERTHU',
-          name: 'Coach Keerthu',
-          email: 'keerthu@apex.com',
-          phone: '+91 98765 11111',
-          specialty: 'Barbell Biomechanics, Strength & Hypertrophy Master',
-          credentials: 'CSCS, Master of Sports Physiology',
-          bio: 'Master strength coach specializing in periodized hypertrophy, powerlifting biomechanics, and elite athletic performance.'
-        },
-        {
-          userId: 'TRN-VISHWAMBHARA',
-          name: 'Coach Vishwambhara',
-          email: 'vishwambhara@apex.com',
-          phone: '+91 98765 22222',
-          specialty: 'HIIT, Functional Endurance & Combat Conditioning',
-          credentials: 'NASM-CPT, Kettlebell & Functional Master',
-          bio: 'High-performance conditioning specialist focusing on athletic VO2 max, functional core strength, and mobility.'
-        }
-      ];
-    }
+
 
     res.json({
       success: true,
